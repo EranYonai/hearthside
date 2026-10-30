@@ -16,5 +16,11 @@
       "matchDatasources": ["docker", "node-version"],
       "groupName": "runtime images"
     }
-  ]
+  ],
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "schedule": ["at any time"],
+    "minimumReleaseAge": null
+  }
 }
