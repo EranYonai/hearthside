@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   commitImport,
+  commitPlan,
+  planImport,
   createAccount,
   findBatchByHash,
   getOwnAccount,
@@ -246,6 +248,50 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
     expect(await listTransactions(db, sam, { month: '2026-10' })).toHaveLength(2)
     await undoBatch(db, sam, own.id)
     expect(await listTransactions(db, sam, { month: '2026-10' })).toHaveLength(0)
+  })
+
+  it('detects accounts, creates them once and splits multi-card files', async () => {
+    const { alex, robin } = await home()
+    const rows = [
+      ['תאריך עסקה', 'שם בית העסק', '4 ספרות אחרונות של כרטיס האשראי', 'סכום חיוב'],
+      ['01/10/2026', 'Shop A', '1111', '10'],
+      ['02/10/2026', 'Shop B', '2222', '20'],
+      ['03/10/2026', 'Shop C', '1111', '30'],
+    ]
+    const parsed = parseStatement([{ name: 'S', rows }], { spendingIsPositive: true }).transactions
+    const source = { provider: 'max' as const, kind: 'card' as const, network: null, last4: null }
+
+    const plan = await planImport(db, alex, source, parsed)
+    expect(plan.map((g) => [g.account, g.proposed.name, g.rows.length])).toEqual([
+      [null, 'Max ·1111', 2],
+      [null, 'Max ·2222', 1],
+    ])
+    const done = await commitPlan(db, alex, plan, { fileName: 'm.xlsx', fileHash: 'm', skipped: 2 })
+    expect(
+      done.map((d) => [d.account.name, d.account.last4, d.batch.added, d.batch.skipped]),
+    ).toEqual([
+      ['Max ·1111', '1111', 2, 2],
+      ['Max ·2222', '2222', 1, 0],
+    ])
+
+    // The next file finds the same accounts and its rows are duplicates.
+    const again = await planImport(db, alex, source, parsed)
+    expect(again.map((g) => [g.account?.name, g.rows.every((r) => r.duplicate)])).toEqual([
+      ['Max ·1111', true],
+      ['Max ·2222', true],
+    ])
+    expect((await listAccounts(db, alex)).filter((a) => a.provider === 'max')).toHaveLength(2)
+
+    // An explicit account takes every row.
+    const target = done[1]!.account
+    const forced = await planImport(db, alex, source, parsed, target.id)
+    expect(forced).toHaveLength(1)
+    expect(forced[0]!.account?.id).toBe(target.id)
+    expect(forced[0]!.rows.map((r) => r.duplicate)).toEqual([false, true, false])
+
+    await expect(planImport(db, robin, source, parsed)).rejects.toBeInstanceOf(AuthError)
+    const empty = await planImport(db, alex, { ...source, last4: '9' }, [])
+    expect(empty[0]!.proposed.name).toBe('Max ·9')
   })
 
   it('validates months', () => {

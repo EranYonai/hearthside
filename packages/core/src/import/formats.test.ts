@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makePdf, makeXlsx, type PdfText } from './fixtures'
 import { wordsToRows } from './pdf'
+import { detectSource, suggestAccountName, providerLabel } from './detect'
 import { parseStatement } from './statement'
 import { ImportFormatError, readStatementFile } from './table'
 
@@ -143,6 +144,29 @@ describe('card export with three sheets and a preamble', () => {
     expect(result.transactions[1]!.installment).toEqual({ n: 1, total: 6 })
     expect(result.transactions[3]!.original).toEqual({ minor: 9900, currency: 'USD' })
     expect(result.skipped).toEqual([])
+    expect(result.transactions.every((t) => t.last4 === '1234')).toBe(true)
+    expect(
+      detectSource(await readStatementFile(bytes), result, 'transaction-details_export_1.xlsx'),
+    ).toEqual({
+      provider: 'max',
+      kind: 'card',
+      network: null,
+      last4: '1234',
+    })
+  })
+
+  it('splits a file that lists several cards', () => {
+    const rows = [
+      header,
+      ['05-10-2026', 'Shop A', '', '1111', '', 10, '₪', 10, '₪', '', '', '', '', '', '', ''],
+      ['06-10-2026', 'Shop B', '', '2222', '', 20, '₪', 20, '₪', '', '', '', '', '', '', ''],
+    ].map((r) => r.map(String))
+    const result = parseStatement([{ name: 'S', rows }], { spendingIsPositive: true })
+    expect(result.transactions.map((t) => t.last4)).toEqual(['1111', '2222'])
+    expect(detectSource([{ name: 'S', rows }], result, 'x.xlsx')).toMatchObject({
+      provider: 'max',
+      last4: null,
+    })
   })
 })
 
@@ -167,6 +191,13 @@ describe('card export with a title, merged rows and multi-line headers', () => {
     ])
     expect(result.transactions[1]!.installment).toEqual({ n: 1, total: 3 })
     expect(result.skipped).toEqual([])
+    expect(
+      detectSource(
+        await readStatementFile(bytes),
+        result,
+        'פירוט חיובים לכרטיס מאסטרקארד 4321 - 10.26.xlsx',
+      ),
+    ).toEqual({ provider: 'cal', kind: 'card', network: 'mastercard', last4: '4321' })
   })
 })
 
@@ -197,6 +228,8 @@ describe('bank statement PDF', () => {
   it('splits columns by position and continues wrapped text', async () => {
     const sheets = await readStatementFile(makePdf([page1, page2]), 'ops.pdf')
     expect(sheets[0]!.rows).toEqual([
+      ['Account 99-999-999999'],
+      ['For the period 01/10/2026 - 31/10/2026'],
       ['Date', 'Transaction', 'Debit', 'Credit', 'Balance (NIS)'],
       ['01/10/2026', 'Salary Example Ltd', '', '16,200.00', '20,000.00'],
       ['03/10/2026', 'Rent', '5,500.00', '', '14,500.00'],
@@ -204,6 +237,12 @@ describe('bank statement PDF', () => {
       ['05/10/2026', 'Interest', '', '1.20', '14,377.75'],
     ])
     const result = parseStatement(sheets, { spendingIsPositive: true })
+    expect(detectSource(sheets, result, 'current_account_operations_2026.pdf')).toEqual({
+      provider: 'hapoalim',
+      kind: 'bank',
+      network: null,
+      last4: '9999',
+    })
     expect(result.transactions.map((t) => [t.occurredOn, t.amountMinor])).toEqual([
       ['2026-10-01', 1620000],
       ['2026-10-03', -550000],
@@ -212,13 +251,67 @@ describe('bank statement PDF', () => {
     ])
   })
 
-  it('ignores lines before the first header', () => {
-    expect(wordsToRows([[{ text: 'Hello', x: 1, right: 20, y: 5 }]])).toEqual([])
+  it('keeps lines before the first header as plain text rows', () => {
+    expect(wordsToRows([[{ text: 'Hello', x: 1, right: 20, y: 5 }]])).toEqual([['Hello']])
   })
 
   it('reports unreadable PDFs', async () => {
     await expect(
       readStatementFile(new TextEncoder().encode('%PDF-1.4 garbage')),
     ).rejects.toBeInstanceOf(ImportFormatError)
+  })
+})
+
+describe('detectSource fallbacks', () => {
+  it('guesses bank or card from the columns when the provider is unknown', () => {
+    const bank = [
+      {
+        name: 'S',
+        rows: [
+          ['date', 'description', 'debit', 'credit'],
+          ['01/10/2026', 'X', '5', ''],
+        ],
+      },
+    ]
+    const card = [
+      {
+        name: 'S',
+        rows: [
+          ['Statement for card ending 7777'],
+          ['date', 'description', 'amount'],
+          ['01/10/2026', 'X', '5'],
+        ],
+      },
+    ]
+    const opts = { spendingIsPositive: true }
+    expect(detectSource(bank, parseStatement(bank, opts), 'a.csv')).toEqual({
+      provider: null,
+      kind: 'bank',
+      network: null,
+      last4: null,
+    })
+    expect(detectSource(card, parseStatement(card, opts), 'visa.csv')).toEqual({
+      provider: null,
+      kind: 'card',
+      network: 'visa',
+      last4: '7777',
+    })
+    expect(detectSource(card, undefined, 'ישראכרט.xlsx').provider).toBe('isracard')
+    expect(detectSource(card, undefined, 'American Express.xlsx')).toMatchObject({
+      provider: 'amex',
+      network: 'amex',
+    })
+  })
+
+  it('names accounts', () => {
+    expect(suggestAccountName({ provider: 'max', kind: 'card', last4: '1234' })).toBe('Max ·1234')
+    expect(suggestAccountName({ provider: 'hapoalim', kind: 'bank', last4: '9999' })).toBe(
+      'Hapoalim account ·9999',
+    )
+    expect(suggestAccountName({ provider: null, kind: 'bank', last4: null })).toBe('Bank account')
+    expect(suggestAccountName({ provider: null, kind: 'card', last4: '1' })).toBe('Card ·1')
+    expect(providerLabel('cal')).toBe('Cal')
+    expect(providerLabel('nope')).toBeNull()
+    expect(providerLabel(null)).toBeNull()
   })
 })

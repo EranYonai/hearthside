@@ -23,6 +23,8 @@ export interface ParsedTransaction {
   installment?: Installment
   reference?: string
   notes?: string
+  /** Last four digits of the card, when the file lists several cards. */
+  last4?: string
   sheet: string
   /** 1-based row number in the sheet, for error messages. */
   row: number
@@ -94,6 +96,7 @@ function readRow(
     parseInstallment(cell(row, map.installments)) ?? (notes ? parseInstallment(notes) : undefined)
   const postedOn = parseDate(cell(row, map.postedDate))
   const reference = cell(row, map.reference) || undefined
+  const last4 = /(\d{4})\D*$/.exec(cell(row, map.last4))?.[1]
   return {
     occurredOn,
     ...(postedOn && postedOn !== occurredOn ? { postedOn } : {}),
@@ -105,6 +108,7 @@ function readRow(
     ...(installment ? { installment } : {}),
     ...(reference ? { reference } : {}),
     ...(notes ? { notes } : {}),
+    ...(last4 ? { last4 } : {}),
   }
 }
 

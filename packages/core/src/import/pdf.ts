@@ -121,7 +121,11 @@ export function wordsToRows(pages: readonly (readonly Word[])[]): string[][] {
         headerEmitted = true
         continue
       }
-      if (!cols) continue
+      if (!cols) {
+        // Keep the title block as plain text rows; it names the account.
+        if (!headerEmitted) rows.push([line.map((w) => w.text).join(' ')])
+        continue
+      }
       const cells = cols.map(() => '')
       for (const w of line) {
         const i = columnFor(cols, w)
@@ -133,7 +137,12 @@ export function wordsToRows(pages: readonly (readonly Word[])[]): string[][] {
         // A wrapped description: add the text to the row above, ignore stray marks.
         const prev = rows.at(-1)
         const textCol = 1
-        if (prev && rows.length > 1 && cells[textCol] && cells.filter(Boolean).length === 1)
+        if (
+          prev &&
+          DATE_RE.test(prev[0] ?? '') &&
+          cells[textCol] &&
+          cells.filter(Boolean).length === 1
+        )
           prev[textCol] = `${prev[textCol]} ${cells[textCol]}`.trim()
       }
     }

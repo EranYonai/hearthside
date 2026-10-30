@@ -1,5 +1,7 @@
 import { Card, Label, Notice } from '@hearthside/ui'
 import type { Metadata } from 'next'
+import { providerLabel } from '@hearthside/core'
+import { AccountCard } from '@/components/AccountCard'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
 import { canEdit, listAccounts, listBatches } from '@/server/ledger'
@@ -40,20 +42,34 @@ export default async function ImportPage() {
 
       <Card aria-labelledby="accounts-title">
         <Label id="accounts-title">Your accounts</Label>
-        {mine.length > 0 && (
-          <ul className="grid divide-y divide-line" data-testid="account-list">
+        {mine.length > 0 ? (
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3" data-testid="account-list">
             {mine.map((a) => (
-              <li key={a.id} className="py-2">
-                <span className="text-body-strong">{a.name}</span>
-                <span className="block text-caption text-ink-muted">
-                  {a.kind === 'card' ? 'Card' : a.kind === 'bank' ? 'Current account' : 'Other'} ·{' '}
-                  {a.visibility === 'private' ? 'Only you' : 'Everyone in the home'}
-                </span>
+              <li key={a.id}>
+                <AccountCard
+                  name={a.name}
+                  kind={a.kind}
+                  provider={providerLabel(a.provider)}
+                  network={a.network}
+                  last4={a.last4}
+                  {...(a.visibility === 'private' ? { note: 'Only you' } : {})}
+                />
               </li>
             ))}
           </ul>
+        ) : (
+          <p className="text-ink-muted">
+            None yet. Import a statement and its account is added for you.
+          </p>
         )}
-        <AccountForm />
+        <details>
+          <summary className="cursor-pointer text-body-strong text-brand-ink">
+            Add an account by hand
+          </summary>
+          <div className="pt-3">
+            <AccountForm />
+          </div>
+        </details>
       </Card>
 
       {batches.length > 0 && (

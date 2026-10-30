@@ -1,4 +1,5 @@
 export * from './columns'
+export * from './detect'
 export * from './statement'
 export * from './table'
 export * from './values'

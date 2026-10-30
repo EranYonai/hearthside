@@ -1,6 +1,8 @@
 import {
   countsAsSpending,
   duplicateKeys,
+  suggestAccountName,
+  type DetectedSource,
   isCategory,
   normalizeDescription,
   type CategorySlug,
@@ -45,7 +47,14 @@ export async function listAccounts(db: Conn, member: MemberRow) {
 export async function createAccount(
   db: Conn,
   member: MemberRow,
-  input: { name: string; kind: AccountKind; visibility: AccountVisibility },
+  input: {
+    name: string
+    kind: AccountKind
+    visibility: AccountVisibility
+    provider?: string | null
+    network?: string | null
+    last4?: string | null
+  },
 ) {
   assertEditor(member)
   const [row] = await db
@@ -56,7 +65,7 @@ export async function createAccount(
     householdId: member.householdId,
     memberId: member.id,
     action: 'account.created',
-    detail: { accountId: row!.id, kind: input.kind },
+    detail: { accountId: row!.id, kind: input.kind, provider: input.provider ?? null },
   })
   return row!
 }
@@ -89,12 +98,12 @@ export interface PreparedRow extends ParsedTransaction {
 /** Hash the parser's duplicate keys and mark rows already stored for this account. */
 export async function prepareImport(
   db: Conn,
-  account: AccountRow,
+  account: AccountRow | null,
   parsed: readonly ParsedTransaction[],
 ): Promise<PreparedRow[]> {
   const keys = duplicateKeys(parsed).map(sha256)
   const existing = new Set<string>()
-  for (let i = 0; i < keys.length; i += 1000) {
+  for (let i = 0; account && i < keys.length; i += 1000) {
     const chunk = keys.slice(i, i + 1000)
     const rows = await db
       .select({ key: transactions.dedupKey })
@@ -103,6 +112,91 @@ export async function prepareImport(
     for (const r of rows) existing.add(r.key)
   }
   return parsed.map((t, i) => ({ ...t, dedupKey: keys[i]!, duplicate: existing.has(keys[i]!) }))
+}
+
+export interface ProposedAccount {
+  name: string
+  kind: AccountKind
+  provider: string | null
+  network: string | null
+  last4: string | null
+}
+
+export interface ImportGroup {
+  /** The member's existing account, or null when one will be created from `proposed`. */
+  account: AccountRow | null
+  proposed: ProposedAccount
+  rows: PreparedRow[]
+}
+
+/**
+ * Decide which of the member's accounts each row goes to. Files that list several cards
+ * are split by card. Without an explicit account, a matching one (same provider and last
+ * four digits) is picked, or a new one is proposed.
+ */
+export async function planImport(
+  db: Conn,
+  member: MemberRow,
+  source: DetectedSource,
+  parsed: readonly ParsedTransaction[],
+  accountId?: string,
+): Promise<ImportGroup[]> {
+  assertEditor(member)
+  if (accountId) {
+    const account = await getOwnAccount(db, member, accountId)
+    return [
+      {
+        account,
+        proposed: { ...account, name: account.name },
+        rows: await prepareImport(db, account, parsed),
+      },
+    ]
+  }
+  const groups = new Map<string, ParsedTransaction[]>()
+  for (const t of parsed) {
+    const key = t.last4 ?? source.last4 ?? ''
+    groups.set(key, [...(groups.get(key) ?? []), t])
+  }
+  if (groups.size === 0) groups.set(source.last4 ?? '', [])
+  const own = (await listAccounts(db, member)).filter((a) => a.ownerId === member.id)
+  const result: ImportGroup[] = []
+  for (const [key, rows] of groups) {
+    const last4 = key || null
+    const proposed: ProposedAccount = {
+      name: suggestAccountName({ provider: source.provider, kind: source.kind, last4 }),
+      kind: source.kind,
+      provider: source.provider,
+      network: source.network,
+      last4,
+    }
+    const account =
+      own.find(
+        (a) => a.provider === source.provider && a.last4 === last4 && a.kind === source.kind,
+      ) ?? null
+    result.push({ account, proposed, rows: await prepareImport(db, account, rows) })
+  }
+  return result
+}
+
+/** Create any proposed accounts and import every group. */
+export async function commitPlan(
+  db: Conn,
+  member: MemberRow,
+  groups: readonly ImportGroup[],
+  input: { fileName: string; fileHash: string; skipped: number },
+) {
+  const batches = []
+  for (const [i, g] of groups.entries()) {
+    const account =
+      g.account ?? (await createAccount(db, member, { ...g.proposed, visibility: 'household' }))
+    const batch = await commitImport(db, member, account, {
+      ...input,
+      rows: g.rows,
+      skipped: i === 0 ? input.skipped : 0,
+    })
+    batches.push({ batch, account })
+  }
+  return batches
 }
 
 export async function findBatchByHash(db: Conn, accountId: string, fileHash: string) {

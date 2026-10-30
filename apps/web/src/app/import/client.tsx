@@ -4,16 +4,17 @@ import type { Minor } from '@hearthside/core'
 import {
   Button,
   Card,
-  Label,
   Notice,
   TextField,
   TransactionList,
   TransactionRow,
+  cx,
 } from '@hearthside/ui'
 import { FileUp, Plus, Undo2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { AccountCard } from '@/components/AccountCard'
 import { useAction } from '@/lib/use-action'
 import { createAccountAction, undoImportAction } from './actions'
 
@@ -25,13 +26,15 @@ export interface AccountOption {
   kind: 'card' | 'bank' | 'other'
 }
 
-interface Preview {
+interface Group {
+  account: { id: string | null; name: string; isNew: boolean }
+  kind: 'card' | 'bank' | 'other'
+  provider: string | null
+  network: string | null
+  last4: string | null
   total: number
   fresh: number
   duplicates: number
-  skippedCount: number
-  skipped: { sheet: string; row: number; reason: string }[]
-  alreadyImported: string | null
   sample: {
     occurredOn: string
     description: string
@@ -40,6 +43,21 @@ interface Preview {
     installment: { n: number; total: number } | null
     duplicate: boolean
   }[]
+}
+
+interface Preview {
+  fileName: string
+  groups: Group[]
+  skippedCount: number
+  skipped: { sheet: string; row: number; reason: string }[]
+  alreadyImported: string | null
+}
+
+interface Done {
+  added: number
+  duplicates: number
+  accounts: string[]
+  month: string | null
 }
 
 const day = new Intl.DateTimeFormat('en-GB', {
@@ -56,150 +74,147 @@ async function post(form: FormData) {
   return body
 }
 
+/**
+ * Drop a statement (or pick one): the file is checked right away, its account is
+ * recognised or created, and one click imports it.
+ */
 export function ImportForm({ accounts }: { accounts: AccountOption[] }) {
   const router = useRouter()
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '')
+  const input = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File>()
-  const [flip, setFlip] = useState(false)
+  const [accountId, setAccountId] = useState('')
+  const [dragging, setDragging] = useState(false)
   const [preview, setPreview] = useState<Preview>()
-  const [done, setDone] = useState<{ added: number; duplicates: number; month: string | null }>()
+  const [done, setDone] = useState<Done>()
   const [error, setError] = useState<string>()
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<'check' | 'import'>()
 
-  const send = async (commit: boolean, flipSigns = flip) => {
-    if (!file || !accountId) return
+  const send = async (f: File, target: string, commit: boolean) => {
     const form = new FormData()
-    form.set('accountId', accountId)
-    form.set('file', file)
-    if (flipSigns) form.set('flip', '1')
+    form.set('file', f)
+    if (target) form.set('accountId', target)
     if (commit) form.set('commit', '1')
-    setBusy(true)
+    setBusy(commit ? 'import' : 'check')
     setError(undefined)
     try {
       const body = await post(form)
       if (commit) {
-        const { batch, month } = body as {
-          batch: { added: number; duplicates: number }
-          month: string | null
-        }
-        setDone({ added: batch.added, duplicates: batch.duplicates, month })
+        setDone(body as unknown as Done)
         setPreview(undefined)
+        setFile(undefined)
+        setAccountId('')
+        if (input.current) input.current.value = ''
         router.refresh()
-      } else setPreview(body as Preview)
+      } else setPreview(body as unknown as Preview)
     } catch (err) {
       setError((err as Error).message)
+      if (!commit) setPreview(undefined)
     } finally {
-      setBusy(false)
+      setBusy(undefined)
     }
   }
 
-  if (accounts.length === 0)
-    return <p className="text-ink-muted">Add an account below first, then import its statement.</p>
+  const pick = (f: File | undefined) => {
+    if (!f) return
+    setFile(f)
+    setDone(undefined)
+    setAccountId('')
+    void send(f, '', false)
+  }
+
+  const fresh = preview?.groups.reduce((n, g) => n + g.fresh, 0) ?? 0
+  const created = preview?.groups.filter((g) => g.account.isNew).map((g) => g.account.name) ?? []
 
   return (
     <div className="grid gap-4">
-      <form
-        className="grid gap-4"
-        onSubmit={(e) => {
+      <label
+        onDragOver={(e) => {
           e.preventDefault()
-          setDone(undefined)
-          void send(false)
+          setDragging(true)
         }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragging(false)
+          pick(e.dataTransfer.files[0])
+        }}
+        className={cx(
+          'grid cursor-pointer place-items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center',
+          'focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus',
+          dragging ? 'border-brand bg-brand-soft' : 'border-line bg-surface-2',
+        )}
       >
-        <label className="grid gap-1">
-          <span className="text-body-strong">Account</span>
-          <select
-            className={selectClass}
-            value={accountId}
-            onChange={(e) => {
-              setAccountId(e.target.value)
-              setPreview(undefined)
-            }}
-          >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1">
-          <span className="text-body-strong">Statement file</span>
-          <input
-            type="file"
-            name="file"
-            required
-            accept=".xlsx,.csv,.xls,.pdf,.txt"
-            className="min-h-11 rounded-md border border-line bg-surface-2 px-3 py-2 file:me-3 file:rounded-sm file:border-0 file:bg-surface-1 file:px-2"
-            onChange={(e) => {
-              setFile(e.target.files?.[0])
-              setPreview(undefined)
-              setDone(undefined)
-            }}
-          />
-          <span className="text-caption text-ink-muted">
-            Excel (.xlsx), CSV or a text PDF, up to 10 MB. The file is read and then thrown away.
-          </span>
-        </label>
-        <Button
-          type="submit"
-          disabled={busy || !file}
-          icon={<FileUp aria-hidden />}
-          className="justify-self-start"
-        >
-          {busy && !preview ? 'Reading…' : 'Check file'}
-        </Button>
-      </form>
+        <FileUp size={28} aria-hidden className="text-brand-ink" />
+        <span className="text-body-strong">
+          {busy === 'check' ? 'Reading…' : file ? file.name : 'Drop a statement here'}
+        </span>
+        <span className="text-caption text-ink-muted">
+          or tap to choose · Excel, CSV or PDF, up to 10 MB · read once, never stored
+        </span>
+        <input
+          ref={input}
+          type="file"
+          aria-label="Statement file"
+          accept=".xlsx,.csv,.xls,.pdf,.txt"
+          className="sr-only"
+          onChange={(e) => pick(e.target.files?.[0])}
+        />
+      </label>
 
       {error && <Notice tone="negative">{error}</Notice>}
 
-      {preview && (
-        <Card aria-labelledby="preview-title" data-testid="import-preview">
-          <Label id="preview-title">Preview</Label>
-          <p>
-            <span className="text-body-strong">{preview.fresh} new</span>
-            {preview.duplicates > 0 && ` · ${preview.duplicates} already here`}
-            {preview.skippedCount > 0 && ` · ${preview.skippedCount} rows skipped`}
-          </p>
+      {preview && file && (
+        <div className="grid gap-4" data-testid="import-preview">
           {preview.alreadyImported && (
             <Notice tone="warning">
               You imported this exact file on {day.format(new Date(preview.alreadyImported))}. Its
               rows are already here.
             </Notice>
           )}
-          <label className="flex min-h-11 items-center gap-2">
-            <input
-              type="checkbox"
-              checked={flip}
-              onChange={(e) => {
-                setFlip(e.target.checked)
-                void send(false, e.target.checked)
-              }}
-            />
-            Spending shows as money in. Flip the signs.
-          </label>
-          <TransactionList>
-            {preview.sample.map((t, i) => (
-              <TransactionRow
-                key={i}
-                category="other"
-                merchant={t.description}
-                meta={`${t.duplicate ? 'Already here · ' : ''}${day.format(new Date(t.occurredOn))}`}
-                minor={t.amountMinor}
-                {...(t.original ? { original: t.original } : {})}
-                {...(t.installment ? { installment: t.installment } : {})}
-                className={t.duplicate ? 'opacity-60' : undefined}
-              />
-            ))}
-          </TransactionList>
-          {preview.total > preview.sample.length && (
-            <p className="text-caption text-ink-muted">
-              Showing the first {preview.sample.length} of {preview.total}.
-            </p>
-          )}
+          {preview.groups.map((g, i) => (
+            <Card key={i} aria-label={`Into ${g.account.name}`}>
+              <div className="grid grid-cols-[minmax(0,14rem)_1fr] items-center gap-3">
+                <AccountCard
+                  name={g.account.name}
+                  kind={g.kind}
+                  provider={g.provider}
+                  network={g.network}
+                  last4={g.last4}
+                  {...(g.account.isNew ? { note: 'New' } : {})}
+                />
+                <p>
+                  <span className="text-body-strong">{g.fresh} new</span>
+                  {g.duplicates > 0 && ` · ${g.duplicates} already here`}
+                  <span className="block text-caption text-ink-muted">
+                    {g.account.isNew ? `Creates ${g.account.name}` : `Into ${g.account.name}`}
+                  </span>
+                </p>
+              </div>
+              <TransactionList>
+                {g.sample.map((t, j) => (
+                  <TransactionRow
+                    key={j}
+                    category="other"
+                    merchant={t.description}
+                    meta={`${t.duplicate ? 'Already here · ' : ''}${day.format(new Date(t.occurredOn))}`}
+                    minor={t.amountMinor}
+                    {...(t.original ? { original: t.original } : {})}
+                    {...(t.installment ? { installment: t.installment } : {})}
+                    className={t.duplicate ? 'opacity-60' : undefined}
+                  />
+                ))}
+              </TransactionList>
+              {g.total > g.sample.length && (
+                <p className="text-caption text-ink-muted">
+                  Showing the first {g.sample.length} of {g.total}.
+                </p>
+              )}
+            </Card>
+          ))}
+
           {preview.skipped.length > 0 && (
             <details className="text-caption text-ink-muted">
-              <summary>Skipped rows</summary>
+              <summary>{preview.skippedCount} rows skipped</summary>
               <ul>
                 {preview.skipped.map((s) => (
                   <li key={`${s.sheet}-${s.row}`}>
@@ -209,19 +224,47 @@ export function ImportForm({ accounts }: { accounts: AccountOption[] }) {
               </ul>
             </details>
           )}
-          <Button
-            disabled={busy || preview.fresh === 0}
-            onClick={() => void send(true)}
-            className="justify-self-start"
-          >
-            {busy ? 'Importing…' : `Import ${preview.fresh} transactions`}
-          </Button>
-        </Card>
+
+          {accounts.length > 0 && (
+            <label className="grid gap-1">
+              <span className="text-caption text-ink-muted">Import into</span>
+              <select
+                className={selectClass}
+                value={accountId}
+                onChange={(e) => {
+                  setAccountId(e.target.value)
+                  void send(file, e.target.value, false)
+                }}
+              >
+                <option value="">Detected automatically</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              disabled={!!busy || fresh === 0}
+              onClick={() => void send(file, accountId, true)}
+            >
+              {busy === 'import'
+                ? 'Importing…'
+                : `Import ${fresh} ${fresh === 1 ? 'transaction' : 'transactions'}`}
+            </Button>
+            {created.length > 0 && (
+              <span className="text-caption text-ink-muted">Adds {created.join(', ')}</span>
+            )}
+          </div>
+        </div>
       )}
 
       {done && (
         <Notice tone="positive">
-          Added {done.added} transactions
+          Added {done.added} transactions to {done.accounts.join(', ')}
           {done.duplicates > 0 ? `, skipped ${done.duplicates} already here` : ''}.{' '}
           <Link
             className="text-body-strong underline"
@@ -235,6 +278,7 @@ export function ImportForm({ accounts }: { accounts: AccountOption[] }) {
   )
 }
 
+/** For accounts with no statement file yet; most people never need it. */
 export function AccountForm() {
   const [name, setName] = useState('')
   const [kind, setKind] = useState<AccountOption['kind']>('card')
@@ -268,8 +312,8 @@ export function AccountForm() {
           value={kind}
           onChange={(e) => setKind(e.target.value as AccountOption['kind'])}
         >
-          <option value="card">Card (purchases listed as positive amounts)</option>
-          <option value="bank">Current account (money out listed as debit or negative)</option>
+          <option value="card">Card</option>
+          <option value="bank">Current account</option>
           <option value="other">Other</option>
         </select>
       </label>

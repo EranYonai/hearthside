@@ -3,7 +3,6 @@ import { FileUp, House, ReceiptText, Settings } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { VersionTag } from '@/lib/VersionTag'
-import { SignOutButton } from './SignOutButton'
 
 const NAV = [
   { href: '/', label: 'Home', icon: House },
@@ -26,8 +25,7 @@ export function AppShell({
     <div className="min-h-dvh pb-24">
       <header className="mx-auto flex max-w-3xl items-center gap-3 px-4 pt-6">
         <Logo size={32} />
-        <span className="flex-1 font-display text-heading">{household}</span>
-        <SignOutButton compact />
+        <span className="font-display text-heading">{household}</span>
       </header>
       <main className="mx-auto grid max-w-3xl gap-6 px-4 py-6">{children}</main>
       <footer className="pb-4 text-center">

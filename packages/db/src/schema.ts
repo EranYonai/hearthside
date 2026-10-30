@@ -160,6 +160,12 @@ export const accounts = pgTable(
       .references(() => members.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     kind: text('kind', { enum: ['card', 'bank', 'other'] }).notNull(),
+    /** Where statements come from (see PROVIDERS in core); null when unknown. */
+    provider: text('provider'),
+    /** Card network for card styling, e.g. visa or mastercard. */
+    network: text('network'),
+    /** Last four digits of the card or account number. */
+    last4: text('last4'),
     /** household: everyone sees it; private: only the owner. */
     visibility: text('visibility', { enum: ['household', 'private'] })
       .notNull()
@@ -168,6 +174,7 @@ export const accounts = pgTable(
   },
   (t) => [
     index('accounts_household_idx').on(t.householdId),
+    index('accounts_source_idx').on(t.ownerId, t.provider, t.last4),
     check('accounts_kind_check', sql`${t.kind} in ('card', 'bank', 'other')`),
     check('accounts_visibility_check', sql`${t.visibility} in ('household', 'private')`),
   ],
