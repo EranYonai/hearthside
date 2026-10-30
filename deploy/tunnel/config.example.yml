@@ -1,0 +1,10 @@
+# Example tunnel ingress. The tunnel daemon runs on the host, not in Compose,
+# and forwards to the web container published on the host's loopback.
+# Copy to the daemon's config directory and fill in your own values.
+tunnel: <tunnel-id>
+credentials-file: <path-to-credentials>.json
+
+ingress:
+  - hostname: <your-hostname>
+    service: http://localhost:3000
+  - service: http_status:404

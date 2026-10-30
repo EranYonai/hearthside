@@ -1,0 +1,28 @@
+{
+  "name": "@hearthside/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme.css": "./src/theme.css",
+    "./tokens.json": "./src/tokens.json"
+  },
+  "scripts": {
+    "tokens": "node scripts/build-tokens.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "react": "^19.3.0"
+  },
+  "dependencies": {
+    "@hearthside/core": "workspace:*",
+    "lucide-react": "1.65.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}

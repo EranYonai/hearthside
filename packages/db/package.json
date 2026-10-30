@@ -1,0 +1,16 @@
+{
+  "name": "@hearthside/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.4",
+    "postgres": "4.0.0"
+  }
+}

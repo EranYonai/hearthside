@@ -1,0 +1,42 @@
+# Throwaway stack for e2e tests and local development. No secrets, no volumes.
+#   docker compose -f compose.test.yml up -d --build --wait
+name: hearthside-test
+
+services:
+  db:
+    image: postgres:18.6-trixie
+    environment:
+      POSTGRES_DB: hearthside
+      POSTGRES_USER: hearthside
+      POSTGRES_PASSWORD: hearthside
+    tmpfs: [/var/lib/postgresql]
+    ports:
+      - 127.0.0.1:5433:5432
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hearthside -d hearthside']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  web:
+    build:
+      context: .
+      target: web
+    environment:
+      DATABASE_URL: postgres://hearthside:hearthside@db:5432/hearthside
+    ports:
+      - 127.0.0.1:3000:3000
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      target: worker
+    environment:
+      WEB_URL: http://web:3000
+      HEARTBEAT_MS: '2000'
+    depends_on:
+      web:
+        condition: service_healthy

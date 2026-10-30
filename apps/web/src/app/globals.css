@@ -1,0 +1,22 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/rubik';
+@import '@fontsource-variable/heebo';
+@import '@hearthside/ui/theme.css';
+
+@source '../../../../packages/ui/src';
+
+@layer base {
+  html {
+    background: var(--color-surface-0);
+  }
+  body {
+    @apply bg-surface-0 font-body text-body text-ink antialiased;
+    min-height: 100dvh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
