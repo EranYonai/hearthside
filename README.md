@@ -5,61 +5,33 @@
 <h1 align="center">Hearthside</h1>
 
 <p align="center">
-  A private, self-hosted finance hub for a household of two.<br/>
+  A private finance hub for you and your partner.<br/>
   One home, one clear picture.
 </p>
 
 ---
 
-> **Status:** early development. The plan and design system are in place; the app itself is being built. Expect breaking changes.
+> **Status:** early development.
 
 ## What it is
 
-Hearthside brings a couple's bank accounts and credit cards into one place, so you can see spending, income, recurring expenses and overall financial health without juggling bank apps or spreadsheets. It runs on your own hardware, and your data never leaves it.
+Hearthside brings all your household's bank accounts and credit cards into one place. See your spending, income, recurring expenses and how you're doing over time, without juggling bank apps or spreadsheets.
 
-It is built first for Israeli households: bank and card data comes from [israeli-bank-scrapers](https://github.com/eshaham/israeli-bank-scrapers), with Excel/CSV import as a fallback and for backfilling history.
+## Highlights
 
-## Features (planned)
+- **Everything in one place.** All your accounts and cards, synced automatically.
+- **Monthly and yearly views.** Spot trends and see where the money goes.
+- **Built for two.** A shared picture for the household, with room for privacy.
+- **Works on any phone.** Install it like an app on iPhone or Android.
+- **Yours alone.** Self-hosted on your own server, so your data stays with you.
 
-- **Unified dashboard** of all household accounts and cards
-- **Automatic daily sync** with Israeli banks and card issuers, plus manual Excel/CSV import
-- **Categories and recurring expenses** detected across accounts, with card lump debits treated as transfers so nothing is counted twice
-- **Monthly and yearly views** with trends over time
-- **Budgets and net worth**, including pension clearing-house imports
-- **Private flag** for transactions only one partner should see
-- **Installable PWA** for iPhone and Android, with light and dark themes and Hebrew/RTL support
+## Security
 
-## Security model
-
-Financial data is sensitive, so the design is conservative:
-
-- Self-hosted only. No third-party cloud stores your data.
-- Exposed through a Cloudflare Tunnel; no open inbound ports.
-- Passkey login (WebAuthn) with recovery codes, limited to the household's two users.
-- Bank credentials encrypted at rest with libsodium; the master key is a Docker secret.
-- A security audit and self-pentest are planned before any wider release.
-
-Found a security issue? Please report it privately rather than opening a public issue.
-
-## Architecture (proposed)
-
-| Part | Tech |
-| --- | --- |
-| Web app | React + Vite, PWA |
-| API | TypeScript (Fastify or Hono) + Drizzle |
-| Worker | Bank sync jobs via israeli-bank-scrapers, scheduled with pg-boss |
-| Database | PostgreSQL |
-| Deployment | Docker Compose behind Cloudflare Tunnel |
-
-The repo will be a pnpm monorepo: `apps/web`, `apps/api`, `apps/worker`, `packages/core`.
+Your financial data is sensitive. Hearthside runs on your own hardware, uses passkey login, and keeps bank credentials encrypted. Found a security issue? Please report it privately rather than opening a public issue.
 
 ## Getting started
 
-Setup instructions will land here once the first runnable version is in. The target is a single `docker compose up` on a home server.
-
-## Project tracking
-
-Features, tickets and tasks are tracked in [GitHub Issues](https://github.com/EranYonai/hearthside/issues).
+Setup instructions are coming once the first version is ready.
 
 ## License
 
