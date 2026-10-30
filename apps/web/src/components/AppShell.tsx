@@ -1,11 +1,13 @@
 import { Logo } from '@hearthside/ui'
-import { House, Settings } from 'lucide-react'
+import { FileUp, House, ReceiptText, Settings } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { VersionTag } from '@/lib/VersionTag'
 
 const NAV = [
   { href: '/', label: 'Home', icon: House },
+  { href: '/transactions', label: 'Transactions', icon: ReceiptText },
+  { href: '/import', label: 'Import', icon: FileUp },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -41,7 +43,7 @@ export function AppShell({
                 <Link
                   href={href}
                   aria-current={active ? 'page' : undefined}
-                  className={`flex min-h-14 min-w-20 flex-col items-center justify-center gap-0.5 text-caption ${active ? 'text-brand-ink' : 'text-ink-muted'}`}
+                  className={`flex min-h-14 min-w-18 flex-col items-center justify-center gap-0.5 text-caption ${active ? 'text-brand-ink' : 'text-ink-muted'}`}
                 >
                   <Icon size={24} strokeWidth={2} aria-hidden />
                   {label}

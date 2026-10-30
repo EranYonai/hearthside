@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test'
+import { makePdf } from '../../../packages/core/src/import/fixtures'
 
 // One household per deployment, so these steps share state and run in order
 // against a fresh database. Chromium only: it has a virtual passkey device.
@@ -155,6 +156,102 @@ test('a recovery code signs in once and asks for a new passkey', async ({ browse
   await other.getByRole('button', { name: 'Continue' }).click()
   await expect(other.getByRole('alert').filter({ hasText: /\S/ })).toBeVisible()
   await other.context().close()
+})
+
+const csv = [
+  'תאריך עסקה,שם בית העסק,סכום חיוב,פירוט נוסף',
+  '05/10/2026,Corner Bakery,42.50,',
+  '06/10/2026,Corner Bakery,18.00,',
+  '07/10/2026,Home Store,100.00,תשלום 1 מתוך 6',
+  '',
+  ',סה"כ,160.50,',
+].join('\n')
+
+async function upload(page: Page, account: string, name: string, buffer: Buffer, mimeType: string) {
+  await page.goto('/import')
+  await page
+    .getByRole('combobox', { name: 'Account', exact: true })
+    .selectOption({ label: account })
+  await page.getByLabel('Statement file').setInputFiles({ name, mimeType, buffer })
+  await page.getByRole('button', { name: 'Check file' }).click()
+  return page.getByTestId('import-preview')
+}
+
+test('the owner imports a card statement and files it by category', async () => {
+  await owner.goto('/')
+  await owner.getByRole('link', { name: 'Import a statement' }).click()
+  await owner.getByLabel('Account name').fill('Alex card')
+  await owner.getByRole('button', { name: 'Add account' }).click()
+  await expect(owner.getByTestId('account-list')).toContainText('Alex card')
+
+  const preview = await upload(owner, 'Alex card', 'october.csv', Buffer.from(csv), 'text/csv')
+  await expect(preview).toContainText('3 new')
+  await expect(preview.getByRole('listitem')).toHaveCount(3)
+  await owner.getByRole('button', { name: 'Import 3 transactions' }).click()
+  await expect(owner.getByText('Added 3 transactions')).toBeVisible()
+
+  // The same file again adds nothing.
+  const again = await upload(owner, 'Alex card', 'october.csv', Buffer.from(csv), 'text/csv')
+  await expect(again).toContainText('0 new · 3 already here')
+  await expect(again).toContainText('You imported this exact file')
+  await expect(owner.getByRole('button', { name: 'Import 0 transactions' })).toBeDisabled()
+
+  await owner.goto('/transactions?month=2026-10')
+  await expect(owner.getByRole('heading', { name: 'October 2026' })).toBeVisible()
+  await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(3)
+  await expect(owner.getByLabel('Spent in October 2026')).toContainText('₪161')
+
+  await owner
+    .getByRole('button', { name: /^Corner Bakery, Uncategorized/ })
+    .first()
+    .click()
+  await owner.getByRole('dialog').getByRole('button', { name: 'Groceries' }).click()
+  await expect(owner.getByText('Also filed 1 other “Corner Bakery” transactions.')).toBeVisible()
+  await owner.getByRole('combobox', { name: 'Category', exact: true }).selectOption('groceries')
+  await owner.getByRole('button', { name: 'Filter' }).click()
+  await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(2)
+
+  await owner.goto('/')
+  await expect(owner.getByLabel('Spent in October')).toContainText('Groceries')
+})
+
+test('a bank statement PDF imports by column position', async () => {
+  await owner.goto('/import')
+  await owner.getByLabel('Account name').fill('Joint account')
+  await owner.getByRole('combobox', { name: 'Type' }).selectOption('bank')
+  await owner.getByRole('button', { name: 'Add account' }).click()
+  await expect(owner.getByTestId('account-list')).toContainText('Joint account')
+
+  const xs = [40, 110, 330, 400, 480]
+  const row = (y: number, cells: string[]) =>
+    cells.flatMap((text, i) => (text ? [{ x: xs[i]!, y, text }] : []))
+  const pdf = makePdf([
+    [
+      ...row(750, ['Date', 'Transaction', 'Debit', 'Credit', 'Balance (NIS)']),
+      ...row(735, ['01/10/2026', 'Salary', '', '16,200.00', '20,000.00']),
+      ...row(720, ['03/10/2026', 'Rent', '5,500.00', '', '14,500.00']),
+    ],
+  ])
+  const preview = await upload(
+    owner,
+    'Joint account',
+    'ops.pdf',
+    Buffer.from(pdf),
+    'application/pdf',
+  )
+  await expect(preview).toContainText('2 new')
+  await expect(preview.getByLabel('received 16200 shekels')).toBeVisible()
+  await expect(preview.getByLabel('spent 5500 shekels')).toBeVisible()
+  await owner.getByRole('button', { name: 'Import 2 transactions' }).click()
+  await expect(owner.getByText('Added 2 transactions')).toBeVisible()
+
+  // Undo removes what that import added.
+  await owner.goto('/import')
+  await owner.getByRole('button', { name: 'Undo import ops.pdf' }).click()
+  await owner.getByRole('button', { name: 'Remove its transactions' }).click()
+  await expect(owner.getByRole('button', { name: 'Undo import ops.pdf' })).toHaveCount(0)
+  await owner.goto('/transactions?month=2026-10')
+  await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(3)
 })
 
 test('settings show the app version and sign-in activity', async () => {

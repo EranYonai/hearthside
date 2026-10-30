@@ -23,6 +23,8 @@ const config: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: fileURLToPath(root),
   transpilePackages: ['@hearthside/ui', '@hearthside/core', '@hearthside/db'],
+  // pdf.js loads its worker module at runtime; keep it out of the bundle.
+  serverExternalPackages: ['pdfjs-dist'],
   poweredByHeader: false,
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }]

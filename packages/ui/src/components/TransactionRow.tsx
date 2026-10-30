@@ -1,5 +1,5 @@
 import type { Minor } from '@hearthside/core'
-import type { ReactNode } from 'react'
+import type { HTMLAttributes, ReactNode } from 'react'
 import { cx } from '../cx'
 import { Amount } from './Amount'
 import { CategoryIcon, type Category } from './CategoryIcon'
@@ -14,6 +14,12 @@ export interface TransactionRowProps {
   original?: { minor: Minor; currency: string }
   installment?: { n: number; total: number }
   pending?: boolean
+  /** Makes the row a button, e.g. to change its category. */
+  onSelect?: () => void
+  /** Accessible name for the button. */
+  selectLabel?: string
+  /** Rendered inside the row after it, e.g. a dialog or a notice. */
+  children?: ReactNode
   className?: string
 }
 
@@ -25,13 +31,13 @@ export function TransactionRow({
   original,
   installment,
   pending = false,
+  onSelect,
+  selectLabel,
+  children,
   className,
 }: TransactionRowProps) {
-  return (
-    <li
-      data-pending={pending || undefined}
-      className={cx('flex min-h-11 items-center gap-3 py-2', className)}
-    >
+  const body = (
+    <>
       <CategoryIcon category={category} />
       <div className="grid min-w-0 flex-1">
         <span className="flex items-center gap-1 overflow-hidden text-body-strong text-ellipsis whitespace-nowrap">
@@ -49,6 +55,34 @@ export function TransactionRow({
       <div className="text-end">
         <Amount minor={minor} signed original={original} muted={pending} />
       </div>
+    </>
+  )
+  const row = 'flex min-h-11 items-center gap-3 py-2'
+  return (
+    <li
+      data-pending={pending || undefined}
+      className={cx(!onSelect && !children && row, className)}
+    >
+      {onSelect || children ? (
+        onSelect ? (
+          <button
+            type="button"
+            onClick={onSelect}
+            aria-label={selectLabel}
+            className={cx(
+              row,
+              'w-full rounded-md text-start hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+            )}
+          >
+            {body}
+          </button>
+        ) : (
+          <div className={row}>{body}</div>
+        )
+      ) : (
+        body
+      )}
+      {children}
     </li>
   )
 }
@@ -56,9 +90,11 @@ export function TransactionRow({
 export function TransactionList({
   children,
   className,
-}: {
-  children: ReactNode
-  className?: string
-}) {
-  return <ul className={cx('grid divide-y divide-line', className)}>{children}</ul>
+  ...rest
+}: { children: ReactNode } & HTMLAttributes<HTMLUListElement>) {
+  return (
+    <ul className={cx('grid divide-y divide-line', className)} {...rest}>
+      {children}
+    </ul>
+  )
 }
