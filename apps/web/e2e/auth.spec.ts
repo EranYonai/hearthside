@@ -58,8 +58,9 @@ test('setup is closed once the home exists', async ({ page }) => {
 })
 
 test('signing out and back in with the same passkey', async () => {
-  await owner.goto('/settings')
-  await owner.getByRole('button', { name: 'Sign out' }).click()
+  // Sign out sits in the header on every screen, and in Settings.
+  await owner.goto('/')
+  await owner.getByRole('banner').getByRole('button', { name: 'Sign out' }).click()
   await expect(owner).toHaveURL(/\/login$/)
 
   await owner.goto('/settings')
