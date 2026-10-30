@@ -34,7 +34,7 @@ COPY --from=build-web --chown=node:node /repo/apps/web/.next/static ./apps/web/.
 COPY --from=build-web --chown=node:node /repo/apps/web/public ./apps/web/public
 USER node
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --start-interval=2s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 CMD ["node", "apps/web/server.js"]
 
