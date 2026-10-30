@@ -6,7 +6,7 @@ Images build natively on the host, including ARM64 machines.
 ```sh
 mkdir -p secrets
 [ -f secrets/db_password.txt ] || openssl rand -base64 32 > secrets/db_password.txt
-docker compose up -d --build
+pnpm stack       # or: GIT_SHA=$(git rev-parse --short HEAD) docker compose up -d --build
 ```
 
 - The web app is published on `127.0.0.1:3300` only (set `WEB_PORT` to change it; 3300
@@ -20,7 +20,7 @@ docker compose up -d --build
 - Logs are JSON with rotation (10 MB × 5 per container): `docker compose logs -f`.
 - Health: `curl -s localhost:3300/api/health`.
 
-Upgrade with `git pull && docker compose up -d --build`.
+Upgrade with `git pull && pnpm stack`.
 
 ## Changing the database password
 

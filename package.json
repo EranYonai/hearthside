@@ -1,5 +1,6 @@
 {
   "name": "hearthside",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.16.1",
@@ -16,7 +17,9 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "pnpm --filter @hearthside/web test:e2e",
-    "tokens": "pnpm --filter @hearthside/ui tokens"
+    "tokens": "pnpm --filter @hearthside/ui tokens",
+    "stack": "sh scripts/up.sh",
+    "release": "npm version --no-git-tag-version"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",

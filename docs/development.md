@@ -54,3 +54,13 @@ if the generated file drifts. The theme follows the system setting, and `data-th
 
 `tsc` and `next build` use TypeScript 7. typescript-eslint still needs the TypeScript 6 API,
 so `.pnpmfile.cjs` gives the lint packages their own TypeScript 6 copy.
+
+## Versions and releases
+
+The app version is `version` in the root `package.json` (semver). To release, bump it in a PR
+with `pnpm release patch` (or `minor` / `major`). When that PR merges, the Release workflow tags
+`v<version>` and publishes a GitHub release with notes generated from the merged PRs.
+
+The version and the short commit are baked into the web image at build time. They show at the
+bottom of the app and in `/api/health`. `pnpm stack` builds and starts the stack with the current
+commit filled in.

@@ -1,6 +1,7 @@
 import { buttonClasses, Card, Logo } from '@hearthside/ui'
 import { Palette } from 'lucide-react'
 import Link from 'next/link'
+import { VersionTag } from '@/lib/VersionTag'
 
 export default function Home() {
   return (
@@ -17,6 +18,9 @@ export default function Home() {
           Design system
         </Link>
       </Card>
+      <footer className="pt-4 text-center">
+        <VersionTag />
+      </footer>
     </main>
   )
 }

@@ -15,6 +15,7 @@ import {
 import { Download, RefreshCw } from 'lucide-react'
 import type { Metadata } from 'next'
 import { ThemeToggle } from '@/lib/ThemeToggle'
+import { VersionTag } from '@/lib/VersionTag'
 
 export const metadata: Metadata = { title: 'Design system · Hearthside' }
 
@@ -157,6 +158,9 @@ export default function DesignPage() {
           <Amount minor={-90000} problem />
         </div>
       </Card>
+      <footer className="pt-4 text-center">
+        <VersionTag />
+      </footer>
     </main>
   )
 }

@@ -40,7 +40,7 @@ services:
       context: .
       target: web
       args:
-        APP_VERSION: ${APP_VERSION:-dev}
+        GIT_SHA: ${GIT_SHA:-unknown}
     image: hearthside-web
     restart: unless-stopped
     <<: *hardening

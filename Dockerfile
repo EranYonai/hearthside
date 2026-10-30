@@ -18,6 +18,8 @@ COPY packages/ui/package.json packages/ui/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile
 
 FROM deps AS build-web
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
 COPY . .
 RUN pnpm --filter @hearthside/web build
 
@@ -26,8 +28,7 @@ COPY . .
 RUN pnpm --filter @hearthside/worker deploy --prod --legacy /out
 
 FROM ${NODE_IMAGE} AS web
-ARG APP_VERSION=dev
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 APP_VERSION=${APP_VERSION}
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 WORKDIR /app
 COPY --from=build-web --chown=node:node /repo/apps/web/.next/standalone ./
 COPY --from=build-web --chown=node:node /repo/apps/web/.next/static ./apps/web/.next/static
