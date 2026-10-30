@@ -69,9 +69,7 @@ so `.pnpmfile.cjs` gives the lint packages their own TypeScript 6 copy.
 
 ## Versions and releases
 
-The app version is `version` in the root `package.json` (semver). To release, bump it in a PR
-with `pnpm release patch` (or `minor` / `major`). When that PR merges, the Release workflow tags
-`v<version>` and publishes a GitHub release with notes generated from the merged PRs.
+The app version is `version` in the root `package.json` (semver). See [Releases](releases.md).
 
 The version and the short commit are baked into the web image at build time. They show at the
 bottom of the app and in `/api/health`. `pnpm stack` builds and starts the stack with the current
@@ -85,3 +83,10 @@ placed into columns by position, via pdf.js). It finds header rows by their labe
 preambles, several tables per sheet and totals rows are fine. Duplicates are matched per
 account by a hash of date, amount, description and installment (or the reference number when
 the file has one). Test fixtures are synthetic; never commit a real export.
+
+## QA checklist for a PR
+
+1. `pnpm install`, then `pnpm lint`, `pnpm typecheck` and `pnpm test`.
+2. `pnpm test:e2e` for flows that touch the UI.
+3. `pnpm stack` and check the change in a browser, on desktop and phone widths.
+4. Add a line to `CHANGELOG.md` under Unreleased (see [Releases](releases.md)).
