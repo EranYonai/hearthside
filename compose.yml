@@ -47,6 +47,8 @@ services:
     environment:
       DATABASE_URL: postgres://hearthside@db:5432/hearthside
       DATABASE_PASSWORD_FILE: /run/secrets/db_password
+      # The exact address you open the app at. Passkeys are bound to it.
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3300}
     secrets: [db_password]
     ports:
       # Loopback only by default. WEB_BIND=0.0.0.0 in .env opens it to the LAN for testing.

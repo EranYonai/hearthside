@@ -1,0 +1,153 @@
+import { Card, Label, Notice } from '@hearthside/ui'
+import type { Metadata } from 'next'
+import { AddPasskeyButton } from '@/components/AddPasskeyButton'
+import { AppShell } from '@/components/AppShell'
+import { ThemeToggle } from '@/lib/ThemeToggle'
+import { requireDb } from '@/lib/db'
+import {
+  listMembers,
+  listOpenInvites,
+  listPasskeys,
+  recentAudit,
+  unusedRecoveryCodeCount,
+} from '@/server/repo'
+import { requireSession } from '@/server/session'
+import {
+  InviteCreator,
+  MemberControls,
+  RegenerateCodes,
+  RemovePasskey,
+  RevokeInvite,
+  SignOutButton,
+} from './client'
+
+export const metadata: Metadata = { title: 'Settings · Hearthside' }
+export const dynamic = 'force-dynamic'
+
+const ROLE_LABEL = { owner: 'Owner', adult: 'Adult', viewer: 'Viewer' }
+const date = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+
+export default async function SettingsPage() {
+  const { member, household } = await requireSession()
+  const db = requireDb()
+  const isOwner = member.role === 'owner'
+  const [people, keys, codesLeft, invites, activity] = await Promise.all([
+    listMembers(db, household.id),
+    listPasskeys(db, member.id),
+    unusedRecoveryCodeCount(db, member.id),
+    isOwner ? listOpenInvites(db, household.id) : Promise.resolve([]),
+    isOwner ? recentAudit(db, household.id, 15) : Promise.resolve([]),
+  ])
+
+  return (
+    <AppShell household={household.name} current="/settings">
+      <h1 className="font-display text-title">Settings</h1>
+
+      <Card aria-labelledby="you">
+        <Label id="you">You</Label>
+        <p>
+          <span className="text-body-strong">{member.name}</span> · {ROLE_LABEL[member.role]}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <ThemeToggle />
+          <SignOutButton />
+        </div>
+      </Card>
+
+      <Card aria-labelledby="passkeys">
+        <Label id="passkeys">Passkeys</Label>
+        {keys.length < 2 && (
+          <Notice tone="warning">
+            Add a second passkey, on another device, so losing one phone doesn’t lock you out.
+          </Notice>
+        )}
+        <ul className="grid divide-y divide-line">
+          {keys.map((k) => (
+            <li key={k.id} className="flex min-h-11 items-center justify-between gap-2 py-2">
+              <span>
+                <span className="text-body-strong">{k.name}</span>
+                <span className="block text-caption text-ink-muted">
+                  Added {date.format(k.createdAt)}
+                  {k.lastUsedAt ? ` · last used ${date.format(k.lastUsedAt)}` : ''}
+                </span>
+              </span>
+              {keys.length > 1 && <RemovePasskey id={k.id} name={k.name} />}
+            </li>
+          ))}
+        </ul>
+        <AddPasskeyButton />
+      </Card>
+
+      <Card aria-labelledby="recovery">
+        <Label id="recovery">Recovery codes</Label>
+        <p>
+          {codesLeft} of 10 unused.
+          {codesLeft <= 3 && ' Make new ones soon.'}
+        </p>
+        <RegenerateCodes />
+      </Card>
+
+      <Card aria-labelledby="members-title" id="members">
+        <Label id="members-title">Members</Label>
+        <ul className="grid divide-y divide-line" data-testid="member-list">
+          {people.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span>
+                <span className="text-body-strong">{p.name}</span>
+                <span className="block text-caption text-ink-muted">
+                  {ROLE_LABEL[p.role]}
+                  {p.id === member.id ? ' · you' : ''}
+                </span>
+              </span>
+              {isOwner && p.role !== 'owner' && (
+                <MemberControls id={p.id} name={p.name} role={p.role} />
+              )}
+            </li>
+          ))}
+        </ul>
+        {isOwner && (
+          <>
+            <InviteCreator />
+            {invites.length > 0 && (
+              <div className="grid gap-1">
+                <span className="text-body-strong">Open invites</span>
+                <ul className="grid divide-y divide-line">
+                  {invites.map((i) => (
+                    <li
+                      key={i.id}
+                      className="flex items-center justify-between gap-2 py-1 text-caption"
+                    >
+                      <span>
+                        {ROLE_LABEL[i.role]} · expires {date.format(i.expiresAt)}
+                      </span>
+                      <RevokeInvite id={i.id} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </Card>
+
+      {isOwner && (
+        <Card aria-labelledby="activity">
+          <Label id="activity">Recent sign-in activity</Label>
+          <ul className="grid gap-1 text-caption">
+            {activity.map(({ entry, memberName }) => (
+              <li key={entry.id} className="flex justify-between gap-2">
+                <span>
+                  {entry.action}
+                  {memberName ? ` · ${memberName}` : ''}
+                </span>
+                <time className="text-ink-muted" dateTime={entry.createdAt.toISOString()}>
+                  {date.format(entry.createdAt)}
+                </time>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </AppShell>
+  )
+}

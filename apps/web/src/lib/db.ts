@@ -8,3 +8,10 @@ const handle = createDbHandle(() => databaseUrl(process.env, (path) => readFileS
 
 export const getDb = handle.get
 export const dbPinger = handle.pinger
+
+/** For code paths that can't work without a database. */
+export function requireDb() {
+  const client = handle.get()
+  if (!client) throw new Error('DATABASE_URL is not set')
+  return client.db
+}

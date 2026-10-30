@@ -23,6 +23,9 @@ docker compose -f compose.test.yml up -d db     # Postgres on 127.0.0.1:5433
 DATABASE_URL=postgres://hearthside:hearthside@localhost:5433/hearthside pnpm dev
 ```
 
+Migrations run when the app starts. Passkeys need a secure context, which `localhost`
+counts as, so sign-in works on `http://localhost:3000` without HTTPS.
+
 The component gallery lives at `/design`.
 
 | Command                     | Does                                                                                        |
@@ -32,9 +35,18 @@ The component gallery lives at `/design`.
 | `pnpm test`                 | Unit tests (Vitest)                                                                         |
 | `pnpm test:coverage`        | Unit tests with coverage gates (90% on `packages/core`, 75% overall)                        |
 | `pnpm test:e2e`             | Playwright. Builds and starts the app itself, or set `E2E_BASE_URL` to test a running stack |
+| `pnpm db:generate`          | Write a new SQL migration after changing `packages/db/src/schema.ts`                        |
 | `pnpm tokens`               | Regenerate `packages/ui/src/theme.css` from `tokens.json`                                   |
 
-To run e2e the way CI does:
+Database tests (`*.int.test.ts`) run against a real Postgres and are skipped unless
+`TEST_DATABASE_URL` is set:
+
+```sh
+docker compose -f compose.test.yml up -d db --wait
+TEST_DATABASE_URL=postgres://hearthside:hearthside@localhost:5433/hearthside pnpm test
+```
+
+To run e2e the way CI does (start from a fresh database, since a home can only be set up once):
 
 ```sh
 docker compose -f compose.test.yml up -d --build --wait

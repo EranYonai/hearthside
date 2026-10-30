@@ -1,12 +1,24 @@
 import { drizzle } from 'drizzle-orm/postgres-js'
+import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
+import * as schema from './schema'
+
+export * as schema from './schema'
+export type * from './schema'
 
 export type Sql = ReturnType<typeof postgres>
 
 /** One pooled connection per process. Schema and migrations arrive with the first tables. */
 export function createDb(url: string, options: { max?: number } = {}) {
   const sql = postgres(url, { max: options.max ?? 5, idle_timeout: 30, connect_timeout: 5 })
-  return { sql, db: drizzle(sql) }
+  return { sql, db: drizzle(sql, { schema }) }
+}
+
+export type Db = ReturnType<typeof createDb>['db']
+
+/** Apply pending migrations. Safe to run on every start. */
+export async function migrateDb(db: Db, migrationsFolder: string): Promise<void> {
+  await migrate(db, { migrationsFolder })
 }
 
 export type PingResult = { ok: true; latencyMs: number } | { ok: false; error: string }

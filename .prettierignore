@@ -8,3 +8,4 @@ packages/ui/src/theme.css
 packages/ui/src/tokens.json
 LICENSE
 README.md
+packages/db/migrations

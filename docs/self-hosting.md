@@ -20,6 +20,17 @@ pnpm stack       # or: GIT_SHA=$(git rev-parse --short HEAD) docker compose up -
 - Logs are JSON with rotation (10 MB × 5 per container): `docker compose logs -f`.
 - Health: `curl -s localhost:3300/api/health`.
 
+## Signing in
+
+Sign-in uses passkeys, which browsers only allow on HTTPS or `localhost`. Set `APP_ORIGIN`
+in `.env` to the exact address people use, for example `APP_ORIGIN=https://home.example.com`.
+It defaults to `http://localhost:3300`. A LAN address like `http://192.168.1.20:3300` will
+load the app but cannot sign in, so phones need the HTTPS address.
+
+The first visit opens `/setup`, which creates the home and its owner. After that, setup is
+closed and new members join with an invite link from Settings. Each member gets 10 single-use
+recovery codes for when they lose every device with their passkey.
+
 Upgrade with `git pull && pnpm stack`.
 
 ## Changing the database password

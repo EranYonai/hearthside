@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   description: 'One home, one clear picture.',
   applicationName: 'Hearthside',
   robots: { index: false, follow: false },
+  appleWebApp: { capable: true, title: 'Hearthside', statusBarStyle: 'default' },
   icons: {
     icon: [
       { url: '/favicon.svg', type: 'image/svg+xml' },
