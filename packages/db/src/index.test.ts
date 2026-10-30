@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { createDb, databaseUrl, ping } from './index'
+import { describe, expect, it, vi } from 'vitest'
+import { createDb, createDbHandle, databaseUrl, ping } from './index'
 
 describe('ping', () => {
   it('reports latency on success', async () => {
@@ -41,5 +41,53 @@ describe('databaseUrl', () => {
       read,
     )
     expect(url).toBe('postgres://u:s3cr%2Ft@db:5432/x')
+  })
+})
+
+describe('createDbHandle', () => {
+  function fakeClient(results: (() => Promise<unknown>)[]) {
+    const end = vi.fn(async () => {})
+    return { sql: { unsafe: () => results.shift()!(), end }, db: {} } as never as ReturnType<
+      typeof createDb
+    > & {
+      sql: { end: typeof end }
+    }
+  }
+
+  it('reports no database when no URL resolves', () => {
+    const handle = createDbHandle(() => undefined)
+    expect(handle.get()).toBeUndefined()
+    expect(handle.pinger()).toBeUndefined()
+  })
+
+  it('reuses the client while pings succeed', async () => {
+    const client = fakeClient([async () => [], async () => []])
+    const factory = vi.fn(() => client)
+    const handle = createDbHandle(() => 'postgres://x', factory)
+    expect((await handle.pinger()!()).ok).toBe(true)
+    expect((await handle.pinger()!()).ok).toBe(true)
+    expect(factory).toHaveBeenCalledOnce()
+  })
+
+  it('rebuilds the client with a fresh URL after a failed ping', async () => {
+    const broken = fakeClient([() => Promise.reject(new Error('auth failed'))])
+    const healthy = fakeClient([async () => []])
+    const urls = ['postgres://old', 'postgres://new']
+    const factory = vi.fn().mockReturnValueOnce(broken).mockReturnValueOnce(healthy)
+    const handle = createDbHandle(() => urls.shift(), factory)
+    expect(await handle.pinger()!()).toEqual({ ok: false, error: 'auth failed' })
+    expect(broken.sql.end).toHaveBeenCalledOnce()
+    expect((await handle.pinger()!()).ok).toBe(true)
+    expect(factory.mock.calls).toEqual([['postgres://old'], ['postgres://new']])
+  })
+
+  it('ignores errors while closing a broken client', async () => {
+    const broken = fakeClient([() => Promise.reject(new Error('down'))])
+    broken.sql.end.mockRejectedValueOnce(new Error('already closed'))
+    const handle = createDbHandle(
+      () => 'postgres://x',
+      () => broken,
+    )
+    expect((await handle.pinger()!()).ok).toBe(false)
   })
 })

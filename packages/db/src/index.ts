@@ -39,3 +39,46 @@ export function databaseUrl(
   url.password = encodeURIComponent(readFile(env.DATABASE_PASSWORD_FILE).trim())
   return url.toString()
 }
+
+type Client = ReturnType<typeof createDb>
+
+/**
+ * Holds one client and rebuilds it after a failed ping, re-resolving the URL.
+ * That way a database restart or a password rotation recovers without
+ * restarting the app.
+ */
+export function createDbHandle(
+  resolveUrl: () => string | undefined,
+  factory: (url: string) => Client = createDb,
+) {
+  let client: Client | undefined
+
+  function get(): Client | undefined {
+    if (client) return client
+    const url = resolveUrl()
+    if (!url) return undefined
+    client = factory(url)
+    return client
+  }
+
+  async function reset(): Promise<void> {
+    const old = client
+    client = undefined
+    await old?.sql.end({ timeout: 0 }).catch(() => {})
+  }
+
+  return {
+    get,
+    reset,
+    /** undefined when no database is configured. */
+    pinger(): (() => Promise<PingResult>) | undefined {
+      const current = get()
+      if (!current) return undefined
+      return async () => {
+        const result = await ping(current.sql)
+        if (!result.ok) await reset()
+        return result
+      }
+    },
+  }
+}

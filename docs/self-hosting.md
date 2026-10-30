@@ -4,7 +4,8 @@ Hearthside runs as three containers: the web app, a background worker and Postgr
 Images build natively on the host, including ARM64 machines.
 
 ```sh
-mkdir -p secrets && openssl rand -base64 32 > secrets/db_password.txt
+mkdir -p secrets
+[ -f secrets/db_password.txt ] || openssl rand -base64 32 > secrets/db_password.txt
 docker compose up -d --build
 ```
 
@@ -20,3 +21,18 @@ docker compose up -d --build
 - Health: `curl -s localhost:3300/api/health`.
 
 Upgrade with `git pull && docker compose up -d --build`.
+
+## Changing the database password
+
+Postgres only reads `secrets/db_password.txt` when it creates the database volume. Rewriting
+the file later does not change the password inside the database, so the web app can no longer
+connect. To rotate it, set the new password in the database first, then update the file:
+
+```sh
+docker compose exec db psql -U hearthside -d hearthside \
+  -c "ALTER USER hearthside PASSWORD '<new password>'"
+printf '%s' '<new password>' > secrets/db_password.txt
+```
+
+The web app picks up the new password on its next health check; no restart is needed.
+(`docker compose down -v` also works, but it deletes all data.)
