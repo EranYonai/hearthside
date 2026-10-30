@@ -6,6 +6,8 @@ import {
   Button,
   buttonClasses,
   Logo,
+  Notice,
+  TextField,
   CATEGORY_ICONS,
   CategoryIcon,
   SummaryCard,
@@ -175,5 +177,21 @@ describe('buttonClasses', () => {
   it('styles non-button elements', () => {
     expect(buttonClasses('ghost', true)).toContain('text-brand-ink')
     expect(buttonClasses()).toContain('bg-brand')
+  })
+})
+
+describe('TextField and Notice', () => {
+  it('labels the input and links the hint', () => {
+    render(<TextField label="Your name" hint="Shown to your household" defaultValue="Alex" />)
+    const input = screen.getByLabelText('Your name')
+    expect(input).toHaveValue('Alex')
+    expect(input).toHaveAccessibleDescription('Shown to your household')
+  })
+
+  it('announces problems as alerts and the rest as status', () => {
+    const { rerender } = render(<Notice tone="negative">Failed</Notice>)
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed')
+    rerender(<Notice>Saved</Notice>)
+    expect(screen.getByRole('status')).toHaveTextContent('Saved')
   })
 })

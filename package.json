@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "pnpm --filter @hearthside/web test:e2e",
+    "db:generate": "pnpm --filter @hearthside/db db:generate",
     "tokens": "pnpm --filter @hearthside/ui tokens",
     "stack": "sh scripts/up.sh",
     "release": "npm version --no-git-tag-version"

@@ -33,6 +33,8 @@ WORKDIR /app
 COPY --from=build-web --chown=node:node /repo/apps/web/.next/standalone ./
 COPY --from=build-web --chown=node:node /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build-web --chown=node:node /repo/apps/web/public ./apps/web/public
+COPY --from=build-web --chown=node:node /repo/packages/db/migrations ./migrations
+ENV MIGRATIONS_DIR=/app/migrations
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --start-interval=2s --retries=3 \

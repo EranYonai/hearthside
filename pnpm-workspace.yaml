@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
 allowBuilds:
+  esbuild: false
   unrs-resolver: false
 minimumReleaseAgeExclude:
   - lucide-react@1.65.0

@@ -1,20 +1,27 @@
 import { expect, test } from '@playwright/test'
 
-test('home page shows the mark and the name', async ({ page }) => {
+test('home sends visitors to setup or sign-in, with the mark and version', async ({ page }) => {
   await page.goto('/')
-  await expect(page).toHaveTitle('Hearthside')
+  await expect(page).toHaveURL(/\/(setup|login)$/)
   await expect(page.getByRole('img', { name: 'Hearthside' })).toBeVisible()
-  await expect(page.getByRole('heading', { level: 1, name: 'Hearthside' })).toBeVisible()
   await expect(page.getByTestId('app-version')).toHaveText(/^Hearthside v\d+\.\d+\.\d+ · \S+$/)
   await expect(page.getByTestId('app-version')).not.toContainText('v0.0.0')
 })
 
-test('home links to the design system', async ({ page }) => {
-  await page.goto('/')
-  await page.getByRole('link', { name: 'Design system' }).click()
+test('design system page renders the components', async ({ page }) => {
+  await page.goto('/design')
   await expect(page.getByRole('heading', { level: 1, name: 'Design system' })).toBeVisible()
   await expect(page.getByRole('status').first()).toContainText('Synced')
   await expect(page.getByLabel('spent 412 shekels 30').first()).toHaveText('−₪412.30')
+})
+
+test('manifest makes the app installable', async ({ request }) => {
+  const res = await request.get('/manifest.webmanifest')
+  expect(res.ok()).toBe(true)
+  const body = await res.json()
+  expect(body.name).toBe('Hearthside')
+  expect(body.display).toBe('standalone')
+  expect(body.icons.length).toBeGreaterThanOrEqual(2)
 })
 
 test('theme choice applies and survives a reload', async ({ page }) => {

@@ -25,8 +25,29 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: 'server',
+          include: ['apps/web/src/server/**/*.test.ts'],
+          exclude: ['**/*.int.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        // Needs Postgres: TEST_DATABASE_URL (compose.test.yml exposes one on 5433).
+        extends: true,
+        test: {
+          name: 'integration',
+          include: ['**/src/**/*.int.test.ts'],
+          exclude: ['**/node_modules/**'],
+          environment: 'node',
+          fileParallelism: false,
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: 'web',
           include: ['apps/web/src/**/*.test.{ts,tsx}'],
+          exclude: ['apps/web/src/server/**'],
           environment: 'jsdom',
           setupFiles: ['./vitest.setup.ts'],
         },
@@ -42,9 +63,14 @@ export default defineConfig({
       exclude: [
         '**/*.test.*',
         '**/index.ts',
-        'apps/web/src/app/**/page.tsx',
-        'apps/web/src/app/**/layout.tsx',
         'apps/worker/src/main.ts',
+        // Pages, route handlers and browser glue are covered by the Playwright suite.
+        'apps/web/src/app/**',
+        'apps/web/src/components/**',
+        'apps/web/src/instrumentation.ts',
+        'apps/web/src/lib/{auth-client,db}.ts',
+        'apps/web/src/server/{session,route,migrate}.ts',
+        'packages/db/src/schema.ts',
       ],
       thresholds: {
         lines: 75,

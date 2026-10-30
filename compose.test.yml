@@ -26,6 +26,7 @@ services:
         GIT_SHA: ${GIT_SHA:-test}
     environment:
       DATABASE_URL: postgres://hearthside:hearthside@db:5432/hearthside
+      APP_ORIGIN: http://localhost:${WEB_PORT:-3300}
     ports:
       - 127.0.0.1:${WEB_PORT:-3300}:3000
     depends_on:

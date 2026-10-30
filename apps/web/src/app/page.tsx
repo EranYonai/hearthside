@@ -1,26 +1,39 @@
-import { buttonClasses, Card, Logo } from '@hearthside/ui'
-import { Palette } from 'lucide-react'
+import { Card, Label, buttonClasses } from '@hearthside/ui'
+import { UserPlus } from 'lucide-react'
 import Link from 'next/link'
-import { VersionTag } from '@/lib/VersionTag'
+import { redirect } from 'next/navigation'
+import { AppShell } from '@/components/AppShell'
+import { requireDb } from '@/lib/db'
+import { getHousehold, listMembers } from '@/server/repo'
+import { currentSession, requireSession } from '@/server/session'
 
-export default function Home() {
+export const dynamic = 'force-dynamic'
+
+export default async function Home() {
+  if (!(await currentSession()) && !(await getHousehold(requireDb()))) redirect('/setup')
+  const { member, household } = await requireSession()
+  const people = await listMembers(requireDb(), household.id)
+  const solo = people.length === 1
   return (
-    <main className="mx-auto grid min-h-dvh max-w-md place-content-center gap-6 px-4 py-8 text-center">
-      <Logo size={96} className="mx-auto" />
-      <div className="grid gap-2">
-        <h1 className="font-display text-title">Hearthside</h1>
-        <p className="text-ink-muted">One home, one clear picture.</p>
-      </div>
-      <Card className="text-start">
-        <p>The foundation is in place. Sign-in and your home&apos;s overview come next.</p>
-        <Link href="/design" className={`${buttonClasses('secondary')} justify-self-start`}>
-          <Palette aria-hidden />
-          Design system
-        </Link>
+    <AppShell household={household.name} current="/">
+      <h1 className="font-display text-title">Hi {member.name}</h1>
+      <Card>
+        <Label>{solo ? 'Your home' : 'Our home'}</Label>
+        <p>
+          {solo
+            ? 'You’re all set up. Your overview arrives here once your data is in.'
+            : `${people.map((p) => p.name).join(', ')} share this home. Your overview arrives here once your data is in.`}
+        </p>
+        {member.role === 'owner' && (
+          <Link
+            href="/settings#members"
+            className={`${buttonClasses('secondary')} justify-self-start`}
+          >
+            <UserPlus aria-hidden />
+            {solo ? 'Invite someone' : 'Manage members'}
+          </Link>
+        )}
       </Card>
-      <footer className="pt-4 text-center">
-        <VersionTag />
-      </footer>
-    </main>
+    </AppShell>
   )
 }
