@@ -20,7 +20,7 @@
     "db:generate": "pnpm --filter @hearthside/db db:generate",
     "tokens": "pnpm --filter @hearthside/ui tokens",
     "stack": "sh scripts/up.sh",
-    "release": "npm version --no-git-tag-version"
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",

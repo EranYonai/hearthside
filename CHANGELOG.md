@@ -1,0 +1,27 @@
+# Changelog
+
+All notable changes to Hearthside are listed here.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
+uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html). `pnpm release <patch|minor|major>`
+moves the Unreleased notes under the new version.
+
+## [Unreleased]
+
+### Added
+
+- Importing household records and a transactions view (#39).
+
+## [0.1.0] - 2026-10-30
+
+### Added
+
+- Passkey sign-in and households of any size, with owner, adult and viewer roles (#38).
+- Dependency audit in CI (#36).
+- App foundation: pnpm workspace, web app and worker, containers, CI, design tokens and version
+  display (#24).
+- Project README (#10).
+- Logo and icon set (#1).
+
+[Unreleased]: https://github.com/EranYonai/hearthside/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/EranYonai/hearthside/releases/tag/v0.1.0
