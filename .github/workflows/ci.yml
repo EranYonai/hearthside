@@ -28,6 +28,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check
+      - name: Dependency audit
+        run: pnpm audit --audit-level high
 
   unit:
     name: Unit tests and coverage
