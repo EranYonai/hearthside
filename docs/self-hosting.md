@@ -11,6 +11,8 @@ docker compose up -d --build
 - The web app is published on `127.0.0.1:3300` only (set `WEB_PORT` to change it; 3300
   avoids clashing with other local apps on 3000). Put a tunnel or reverse proxy on the
   host in front of it; see `deploy/tunnel/config.example.yml`.
+- To test from a phone on the same network, put `WEB_BIND=0.0.0.0` in `.env` and browse to
+  the host's LAN address on that port.
 - The database sits on an internal network. The worker cannot reach it.
 - The database password is a Compose secret, never an environment variable.
 - `web` and `worker` run read-only, as a non-root user, with all capabilities dropped.
