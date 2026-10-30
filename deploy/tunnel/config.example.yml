@@ -6,5 +6,5 @@ credentials-file: <path-to-credentials>.json
 
 ingress:
   - hostname: <your-hostname>
-    service: http://localhost:3000
+    service: http://localhost:3300
   - service: http_status:404

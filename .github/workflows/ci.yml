@@ -68,7 +68,7 @@ jobs:
       - name: Run Playwright
         run: pnpm test:e2e
         env:
-          E2E_BASE_URL: http://localhost:3000
+          E2E_BASE_URL: http://localhost:3300
           E2E_EXPECT_DB: '1'
       - name: Worker reaches the web app
         run: docker compose -f compose.test.yml logs worker | grep -q '"web":"ok"'

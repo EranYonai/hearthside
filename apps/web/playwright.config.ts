@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// Against a running stack (CI uses compose.test.yml): E2E_BASE_URL=http://localhost:3000
+// Against a running stack (CI uses compose.test.yml): E2E_BASE_URL=http://localhost:3300
 // Otherwise Playwright starts the built app itself.
 const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3100'
 

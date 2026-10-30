@@ -38,7 +38,7 @@ To run e2e the way CI does:
 
 ```sh
 docker compose -f compose.test.yml up -d --build --wait
-E2E_BASE_URL=http://localhost:3000 E2E_EXPECT_DB=1 pnpm test:e2e
+E2E_BASE_URL=http://localhost:3300 E2E_EXPECT_DB=1 pnpm test:e2e
 docker compose -f compose.test.yml down -v
 ```
 
