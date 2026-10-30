@@ -2,6 +2,7 @@ import { Card, Label, Notice } from '@hearthside/ui'
 import type { Metadata } from 'next'
 import { AddPasskeyButton } from '@/components/AddPasskeyButton'
 import { AppShell } from '@/components/AppShell'
+import { SignOutButton } from '@/components/SignOutButton'
 import { ThemeToggle } from '@/lib/ThemeToggle'
 import { requireDb } from '@/lib/db'
 import {
@@ -18,7 +19,6 @@ import {
   RegenerateCodes,
   RemovePasskey,
   RevokeInvite,
-  SignOutButton,
 } from './client'
 
 export const metadata: Metadata = { title: 'Settings · Hearthside' }

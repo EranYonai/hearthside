@@ -65,6 +65,22 @@ describe('Amount', () => {
     rerender(<Amount minor={-100} muted />)
     expect(screen.getByLabelText('spent 1 shekel').className).toContain('text-ink-muted')
   })
+
+  it('becomes a button when selectable', async () => {
+    const onSelect = vi.fn()
+    render(
+      <TransactionRow
+        category="other"
+        merchant="Shop"
+        meta="Uncategorized"
+        minor={-100}
+        onSelect={onSelect}
+        selectLabel="Change category for Shop"
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Change category for Shop' }))
+    expect(onSelect).toHaveBeenCalledOnce()
+  })
 })
 
 describe('CategoryIcon', () => {

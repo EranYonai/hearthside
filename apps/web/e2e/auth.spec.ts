@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test'
+import { makePdf } from '../../../packages/core/src/import/fixtures'
 
 // One household per deployment, so these steps share state and run in order
 // against a fresh database. Chromium only: it has a virtual passkey device.
@@ -155,6 +156,90 @@ test('a recovery code signs in once and asks for a new passkey', async ({ browse
   await other.getByRole('button', { name: 'Continue' }).click()
   await expect(other.getByRole('alert').filter({ hasText: /\S/ })).toBeVisible()
   await other.context().close()
+})
+
+const csv = [
+  'Card statement for card ending 4821',
+  'תאריך עסקה,שם בית העסק,סכום חיוב,פירוט נוסף',
+  '05/10/2026,Corner Bakery,42.50,',
+  '06/10/2026,Corner Bakery,18.00,',
+  '07/10/2026,Home Store,100.00,תשלום 1 מתוך 6',
+  '',
+  ',סה"כ,160.50,',
+].join('\n')
+
+async function drop(page: Page, name: string, buffer: Buffer, mimeType: string) {
+  await page.goto('/import')
+  await page.getByLabel('Statement file').setInputFiles({ name, mimeType, buffer })
+  return page.getByTestId('import-preview')
+}
+
+test('dropping a card statement picks or creates its account and imports it', async () => {
+  await owner.goto('/')
+  await owner.getByRole('link', { name: 'Import a statement' }).click()
+  await expect(owner.getByText('None yet.')).toBeVisible()
+
+  const preview = await drop(owner, 'visa-october.csv', Buffer.from(csv), 'text/csv')
+  await expect(preview.getByRole('region', { name: 'Into Card ·4821' })).toContainText('3 new')
+  await expect(preview).toContainText('Creates Card ·4821')
+  await expect(preview.getByLabel('spent 42 shekels 50')).toBeVisible()
+  await owner.getByRole('button', { name: 'Import 3 transactions' }).click()
+  await expect(owner.getByText('Added 3 transactions to Card ·4821')).toBeVisible()
+  await expect(owner.getByTestId('account-list')).toContainText('•••• 4821')
+  await expect(owner.getByTestId('account-list')).toContainText('VISA')
+
+  // The same file again finds the account and adds nothing.
+  const again = await drop(owner, 'visa-october.csv', Buffer.from(csv), 'text/csv')
+  await expect(again).toContainText('0 new · 3 already here')
+  await expect(again).toContainText('Into Card ·4821')
+  await expect(again).toContainText('You imported this exact file')
+  await expect(owner.getByRole('button', { name: 'Import 0 transactions' })).toBeDisabled()
+
+  await owner.goto('/transactions?month=2026-10')
+  await expect(owner.getByRole('heading', { name: 'October 2026' })).toBeVisible()
+  await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(3)
+  await expect(owner.getByLabel('Spent in October 2026')).toContainText('₪161')
+
+  await owner
+    .getByRole('button', { name: /^Corner Bakery, Uncategorized/ })
+    .first()
+    .click()
+  await owner.getByRole('dialog').getByRole('button', { name: 'Groceries' }).click()
+  await expect(owner.getByText('Also filed 1 other “Corner Bakery” transactions.')).toBeVisible()
+  await owner.getByRole('combobox', { name: 'Category', exact: true }).selectOption('groceries')
+  await owner.getByRole('button', { name: 'Filter' }).click()
+  await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(2)
+
+  await owner.goto('/')
+  await expect(owner.getByLabel('Spent in October')).toContainText('Groceries')
+})
+
+test('a bank statement PDF imports by column position', async () => {
+  const xs = [40, 110, 330, 400, 480]
+  const row = (y: number, cells: string[]) =>
+    cells.flatMap((text, i) => (text ? [{ x: xs[i]!, y, text }] : []))
+  const pdf = makePdf([
+    [
+      { x: 40, y: 790, text: 'Account 12-345-678901' },
+      ...row(750, ['Date', 'Transaction', 'Debit', 'Credit', 'Balance (NIS)']),
+      ...row(735, ['01/10/2026', 'Salary', '', '16,200.00', '20,000.00']),
+      ...row(720, ['03/10/2026', 'Rent', '5,500.00', '', '14,500.00']),
+    ],
+  ])
+  const preview = await drop(owner, 'ops.pdf', Buffer.from(pdf), 'application/pdf')
+  await expect(preview).toContainText('Creates Bank account ·8901')
+  await expect(preview.getByLabel('received 16200 shekels')).toBeVisible()
+  await expect(preview.getByLabel('spent 5500 shekels')).toBeVisible()
+  await owner.getByRole('button', { name: 'Import 2 transactions' }).click()
+  await expect(owner.getByText('Added 2 transactions to Bank account ·8901')).toBeVisible()
+
+  // Undo removes what that import added.
+  await owner.goto('/import')
+  await owner.getByRole('button', { name: 'Undo import ops.pdf' }).click()
+  await owner.getByRole('button', { name: 'Remove its transactions' }).click()
+  await expect(owner.getByRole('button', { name: 'Undo import ops.pdf' })).toHaveCount(0)
+  await owner.goto('/transactions?month=2026-10')
+  await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(3)
 })
 
 test('settings show the app version and sign-in activity', async () => {

@@ -1,11 +1,10 @@
 'use client'
 
 import { Button, Notice } from '@hearthside/ui'
-import { Copy, LogOut, Trash2, UserPlus } from 'lucide-react'
+import { Copy, Trash2, UserPlus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { RecoveryCodes } from '@/components/RecoveryCodes'
-import { signOut } from '@/lib/auth-client'
 import {
   changeRoleAction,
   createInviteAction,
@@ -221,26 +220,5 @@ export function RegenerateCodes() {
       <p className="text-caption text-ink-muted">Your old codes stop working.</p>
       {error && <Notice tone="negative">{error}</Notice>}
     </>
-  )
-}
-
-export function SignOutButton() {
-  const router = useRouter()
-  const [busy, setBusy] = useState(false)
-  return (
-    <Button
-      variant="secondary"
-      disabled={busy}
-      icon={<LogOut aria-hidden />}
-      className="justify-self-start"
-      onClick={async () => {
-        setBusy(true)
-        await signOut().catch(() => {})
-        router.replace('/login')
-        router.refresh()
-      }}
-    >
-      Sign out
-    </Button>
   )
 }

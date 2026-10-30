@@ -75,6 +75,15 @@ The version and the short commit are baked into the web image at build time. The
 bottom of the app and in `/api/health`. `pnpm stack` builds and starts the stack with the current
 commit filled in.
 
+## Statement import
+
+`packages/core/src/import` reads uploaded files in memory: `.xlsx` (unzipped and parsed
+directly), `.csv` (UTF-8 or Windows Hebrew), HTML tables saved as `.xls`, and text PDFs (words
+placed into columns by position, via pdf.js). It finds header rows by their labels, so
+preambles, several tables per sheet and totals rows are fine. Duplicates are matched per
+account by a hash of date, amount, description and installment (or the reference number when
+the file has one). Test fixtures are synthetic; never commit a real export.
+
 ## QA checklist for a PR
 
 1. `pnpm install`, then `pnpm lint`, `pnpm typecheck` and `pnpm test`.
