@@ -13,6 +13,8 @@ const parser = new XMLParser({
   trimValues: false,
   processEntities: true,
   htmlEntities: false,
+  // Some exporters write prefixed tags (x:worksheet, x:row); r:id becomes id.
+  removeNSPrefix: true,
   isArray: (name, _path, _leaf, isAttribute) =>
     !isAttribute && ['sheet', 'Relationship', 'si', 'r', 'row', 'c'].includes(name),
 })
@@ -28,11 +30,18 @@ function text(node: unknown): string {
   return ''
 }
 
+/** Excel escapes control characters in strings as _xHHHH_ (e.g. _x000D_ for a line break). */
+function unescapeExcel(value: string): string {
+  return value.replace(/_x([0-9a-fA-F]{4})_/g, (_, hex: string) =>
+    String.fromCharCode(parseInt(hex, 16)),
+  )
+}
+
 /** Text of a shared string or inline string: plain <t>, or rich-text runs <r><t>. */
 function richText(si: Node | undefined): string {
   if (!si) return ''
-  if (si.t !== undefined) return text(si.t)
-  if (Array.isArray(si.r)) return (si.r as Node[]).map((r) => text(r.t)).join('')
+  if (si.t !== undefined) return unescapeExcel(text(si.t))
+  if (Array.isArray(si.r)) return unescapeExcel((si.r as Node[]).map((r) => text(r.t)).join(''))
   return ''
 }
 
@@ -51,7 +60,7 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
     files = unzipSync(bytes, {
       filter: (f) => {
         if (
-          !/^xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|worksheets\/[^/]+\.xml)$/.test(
+          !/^xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedstrings\.xml|worksheets\/[^/]+\.xml)$/i.test(
             f.name,
           )
         )
@@ -65,8 +74,10 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
     if (err instanceof WorkbookError) throw err
     throw new WorkbookError('This file looks like a workbook but could not be opened')
   }
+  // Entry names differ in case between exporters (sharedStrings.xml vs SharedStrings.xml).
+  const byName = new Map(Object.entries(files).map(([name, f]) => [name.toLowerCase(), f]))
   const read = (path: string) => {
-    const f = files[path]
+    const f = byName.get(path.toLowerCase())
     return f ? (parser.parse(new TextDecoder().decode(f)) as Node) : undefined
   }
 
@@ -82,7 +93,7 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
 
   const out: Sheet[] = []
   sheets.forEach((s, i) => {
-    const target = targets.get(String(s['r:id'])) ?? `worksheets/sheet${i + 1}.xml`
+    const target = targets.get(String(s.id ?? s['r:id'])) ?? `worksheets/sheet${i + 1}.xml`
     const path = target.startsWith('/') ? target.slice(1) : `xl/${target.replace(/^\.\//, '')}`
     const ws = read(path)?.worksheet as Node | undefined
     const rowNodes = ((ws?.sheetData as Node | undefined)?.row as Node[] | undefined) ?? []

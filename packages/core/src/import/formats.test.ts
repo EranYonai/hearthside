@@ -1,3 +1,4 @@
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { makePdf, makeXlsx, type PdfText } from './fixtures'
 import { wordsToRows } from './pdf'
@@ -198,6 +199,42 @@ describe('card export with a title, merged rows and multi-line headers', () => {
         'פירוט חיובים לכרטיס מאסטרקארד 4321 - 10.26.xlsx',
       ),
     ).toEqual({ provider: 'cal', kind: 'card', network: 'mastercard', last4: '4321' })
+  })
+})
+
+describe('workbooks written with prefixed tags', () => {
+  /** Rewrite a fixture the way some exporters do: x: prefixes, _x000D_ escapes, other file-name case. */
+  function prefixed(bytes: Uint8Array): Uint8Array {
+    const out: Record<string, Uint8Array> = {}
+    for (const [name, data] of Object.entries(unzipSync(bytes))) {
+      let xml = strFromU8(data)
+      if (name.startsWith('xl/') && !name.includes('_rels'))
+        xml = xml
+          .replace(/<(\/?)(?!\?)([a-zA-Z]+)/g, '<$1x:$2')
+          .replace(/xmlns=/, 'xmlns:x=')
+          .replace(/\n/g, '_x000D_\n')
+      out[name === 'xl/sharedStrings.xml' ? 'xl/SharedStrings.xml' : name] = strToU8(xml)
+    }
+    return zipSync(out)
+  }
+
+  it('reads them like any other workbook', async () => {
+    const bytes = prefixed(
+      makeXlsx({
+        Sheet1: [
+          ['פירוט חיובים לכרטיס 9999'],
+          ['תאריך\nעסקה', 'שם בית\nעסק', 'סכום\nעסקה', 'סכום\nחיוב'],
+          [46300, 'Fresh Market', 250, 250],
+        ],
+      }),
+    )
+    expect(strFromU8(unzipSync(bytes)['xl/worksheets/sheet1.xml']!)).toContain('<x:row')
+    const sheets = await readStatementFile(bytes)
+    expect(sheets[0]!.rows[1]![0]).toBe('תאריך\r\nעסקה')
+    const result = parseStatement(sheets, { spendingIsPositive: true })
+    expect(result.transactions.map((t) => [t.occurredOn, t.description, t.amountMinor])).toEqual([
+      ['2026-10-05', 'Fresh Market', -25000],
+    ])
   })
 })
 
