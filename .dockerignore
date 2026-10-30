@@ -1,0 +1,12 @@
+**/node_modules
+**/.next
+**/coverage
+**/playwright-report
+**/test-results
+.git
+.github
+secrets
+*.md
+!apps/**/*.md
+brand
+deploy

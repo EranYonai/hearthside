@@ -1,0 +1,163 @@
+/* Generated from tokens.json by scripts/build-tokens.ts. Do not edit by hand. */
+
+:root {
+  --hs-surface-0: #fbf7ee;
+  --hs-surface-1: #fffdf6;
+  --hs-surface-2: #f3ecdf;
+  --hs-line: #e6dccb;
+  --hs-ink: #3b2a1a;
+  --hs-ink-muted: #6b5a48;
+  --hs-ink-faint: #8f7f6c;
+  --hs-brand: #ff8a3d;
+  --hs-brand-ink: #a84a0c;
+  --hs-on-brand: #2a1a0c;
+  --hs-brand-soft: #ffe7d4;
+  --hs-ember: #ffc83d;
+  --hs-positive: #276f44;
+  --hs-negative: #b23a24;
+  --hs-warning: #8f5b00;
+  --hs-info: #2f5f9e;
+  --hs-positive-soft: #e0f1e6;
+  --hs-negative-soft: #fbe3dc;
+  --hs-warning-soft: #fbefd2;
+  --hs-chart-1: #e0701f;
+  --hs-chart-2: #3e6fb0;
+  --hs-chart-3: #a87800;
+  --hs-chart-4: #3f8a6c;
+  --hs-chart-5: #7c5cb3;
+  --hs-chart-other: #958672;
+  --hs-focus: #ff8a3d;
+  --hs-shadow-card: 0 1px 2px rgba(59,42,26,0.06), 0 6px 18px rgba(59,42,26,0.06);
+  --hs-shadow-sheet: 0 -8px 32px rgba(59,42,26,0.14);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --hs-surface-0: #141821;
+    --hs-surface-1: #1d2230;
+    --hs-surface-2: #262c3c;
+    --hs-line: #323a4c;
+    --hs-ink: #f1ede6;
+    --hs-ink-muted: #a6acbd;
+    --hs-ink-faint: #7d8496;
+    --hs-brand: #ff8a3d;
+    --hs-brand-ink: #ffa766;
+    --hs-on-brand: #2a1a0c;
+    --hs-brand-soft: #3a2a1f;
+    --hs-ember: #ffc83d;
+    --hs-positive: #7fd1a0;
+    --hs-negative: #f3a08a;
+    --hs-warning: #e8b64c;
+    --hs-info: #8fb3f0;
+    --hs-positive-soft: #1f3329;
+    --hs-negative-soft: #3b2523;
+    --hs-warning-soft: #3a3020;
+    --hs-chart-1: #ff8a3d;
+    --hs-chart-2: #7aa2f7;
+    --hs-chart-3: #ffc83d;
+    --hs-chart-4: #6fcfb6;
+    --hs-chart-5: #b79bea;
+    --hs-chart-other: #727a90;
+    --hs-focus: #ff8a3d;
+    --hs-shadow-card: 0 1px 2px rgba(0,0,0,0.45);
+    --hs-shadow-sheet: 0 -8px 32px rgba(0,0,0,0.6);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --hs-surface-0: #141821;
+  --hs-surface-1: #1d2230;
+  --hs-surface-2: #262c3c;
+  --hs-line: #323a4c;
+  --hs-ink: #f1ede6;
+  --hs-ink-muted: #a6acbd;
+  --hs-ink-faint: #7d8496;
+  --hs-brand: #ff8a3d;
+  --hs-brand-ink: #ffa766;
+  --hs-on-brand: #2a1a0c;
+  --hs-brand-soft: #3a2a1f;
+  --hs-ember: #ffc83d;
+  --hs-positive: #7fd1a0;
+  --hs-negative: #f3a08a;
+  --hs-warning: #e8b64c;
+  --hs-info: #8fb3f0;
+  --hs-positive-soft: #1f3329;
+  --hs-negative-soft: #3b2523;
+  --hs-warning-soft: #3a3020;
+  --hs-chart-1: #ff8a3d;
+  --hs-chart-2: #7aa2f7;
+  --hs-chart-3: #ffc83d;
+  --hs-chart-4: #6fcfb6;
+  --hs-chart-5: #b79bea;
+  --hs-chart-other: #727a90;
+  --hs-focus: #ff8a3d;
+  --hs-shadow-card: 0 1px 2px rgba(0,0,0,0.45);
+  --hs-shadow-sheet: 0 -8px 32px rgba(0,0,0,0.6);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-surface-0: var(--hs-surface-0);
+  --color-surface-1: var(--hs-surface-1);
+  --color-surface-2: var(--hs-surface-2);
+  --color-line: var(--hs-line);
+  --color-ink: var(--hs-ink);
+  --color-ink-muted: var(--hs-ink-muted);
+  --color-ink-faint: var(--hs-ink-faint);
+  --color-brand: var(--hs-brand);
+  --color-brand-ink: var(--hs-brand-ink);
+  --color-on-brand: var(--hs-on-brand);
+  --color-brand-soft: var(--hs-brand-soft);
+  --color-ember: var(--hs-ember);
+  --color-positive: var(--hs-positive);
+  --color-negative: var(--hs-negative);
+  --color-warning: var(--hs-warning);
+  --color-info: var(--hs-info);
+  --color-positive-soft: var(--hs-positive-soft);
+  --color-negative-soft: var(--hs-negative-soft);
+  --color-warning-soft: var(--hs-warning-soft);
+  --color-chart-1: var(--hs-chart-1);
+  --color-chart-2: var(--hs-chart-2);
+  --color-chart-3: var(--hs-chart-3);
+  --color-chart-4: var(--hs-chart-4);
+  --color-chart-5: var(--hs-chart-5);
+  --color-chart-other: var(--hs-chart-other);
+  --color-focus: var(--hs-focus);
+  --font-display: "Rubik Variable", "Rubik", "Heebo Variable", "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: "Heebo Variable", "Heebo", "Rubik Variable", "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --text-amount-hero: 34px;
+  --text-amount-hero--line-height: 40px;
+  --text-amount-hero--font-weight: 600;
+  --text-amount-hero--letter-spacing: -0.01em;
+  --text-title: 24px;
+  --text-title--line-height: 30px;
+  --text-title--font-weight: 600;
+  --text-heading: 18px;
+  --text-heading--line-height: 24px;
+  --text-heading--font-weight: 600;
+  --text-amount: 15px;
+  --text-amount--line-height: 22px;
+  --text-amount--font-weight: 500;
+  --text-body: 15px;
+  --text-body--line-height: 22px;
+  --text-body--font-weight: 400;
+  --text-body-strong: 15px;
+  --text-body-strong--line-height: 22px;
+  --text-body-strong--font-weight: 500;
+  --text-caption: 13px;
+  --text-caption--line-height: 18px;
+  --text-caption--font-weight: 400;
+  --text-label: 11px;
+  --text-label--line-height: 14px;
+  --text-label--font-weight: 600;
+  --text-label--letter-spacing: 0.06em;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+  --shadow-card: var(--hs-shadow-card);
+  --shadow-sheet: var(--hs-shadow-sheet);
+}
