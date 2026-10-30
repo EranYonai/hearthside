@@ -15,7 +15,7 @@
 
 ## What it is
 
-Hearthside is a private hub for your household, whether that is just you or a big family. It gives you one clear view of how your home is doing, month by month and year by year.
+Hearthside is a private hub for your household. It gives you one clear view of how your home is doing, month by month and year by year.
 
 ## Highlights
 
