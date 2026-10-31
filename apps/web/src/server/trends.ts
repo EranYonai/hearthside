@@ -17,6 +17,10 @@ import {
   type YearSummary,
   yearSummaries,
   decimalToMinor,
+  estimateHistory,
+  historyDays,
+  historyRangeFor,
+  type PricedPosition,
 } from '@hearthside/core'
 import {
   type Db,
@@ -34,7 +38,7 @@ import {
   mayManage,
 } from './invest'
 import { AuthError, type Tx } from './repo'
-import { keepQuotesFresh } from './prices'
+import { keepQuotesFresh, priceHistory } from './prices'
 
 const { investmentAccounts, investmentTransactions, portfolioSnapshots } = schema
 
@@ -233,6 +237,8 @@ export interface Trends {
   years: YearSummary[]
   /** First day with a recorded value, or null before the first one. */
   since: string | null
+  /** Days before this one are estimated from today's holdings and past prices. */
+  estimatedUntil: string | null
   /** Account currencies with no rate to the display currency; those accounts are left out. */
   missingRates: string[]
 }
@@ -244,9 +250,20 @@ export async function trends(
   range: TrendRange,
   rates: Rates,
   now = new Date(),
+  options: {
+    url?: string | null
+    fetch?: typeof fetch
+    /** Only these accounts (still only ones the member can see). */
+    accountIds?: readonly string[]
+    /** Chart in this currency instead of the member's display currency. */
+    currency?: string
+  } = {},
 ): Promise<Trends> {
-  const currency = member.displayCurrency
-  const accounts = await listInvestmentAccounts(db, member)
+  const { accountIds, currency: inCurrency, ...prices } = options
+  const currency = inCurrency ?? member.displayCurrency
+  const accounts = (await listInvestmentAccounts(db, member)).filter(
+    (a) => !accountIds || accountIds.includes(a.id),
+  )
   const missing = new Set<string>()
   const usable = accounts.filter((a: InvestmentAccountRow) => {
     const ok = convertMinor(1_000_000, a.currency, currency, rates) !== null
@@ -265,28 +282,85 @@ export async function trends(
       ])
     : [[], []]
   const toDisplay = (minor: number, from: string) => convertMinor(minor, from, currency, rates) ?? 0
-  const perAccount = ids.map((id) =>
-    snapshots
-      .filter((s) => s.accountId === id)
-      .map((s): ValuePoint => ({ on: s.on, valueMinor: toDisplay(s.valueMinor, s.currency) })),
+  const start = rangeStart(range, dayOf(now))
+  const held = ids.length
+    ? (await householdHoldings(db, member.householdId)).filter((h) => ids.includes(h.accountId))
+    : []
+  // Past closes per instrument, fetched once each (cached for an hour in prices.ts).
+  const history = new Map<string, { on: string; price: string }[]>()
+  await Promise.all(
+    [
+      ...new Map(held.filter((h) => h.kind !== 'cash').map((h) => [h.instrumentId, h])).values(),
+    ].map(async (h) => {
+      const view = await priceHistory(
+        db as Db,
+        { id: h.instrumentId, symbol: h.symbol, currency: h.currency, quoteSymbol: h.quoteSymbol },
+        historyRangeFor(range),
+        { ...prices, now },
+      ).catch(() => null)
+      history.set(h.instrumentId, view?.points ?? [])
+    }),
   )
+  const today = dayOf(now)
+  const accountsData = ids.map((id) => {
+    const recorded = snapshots
+      .filter((s) => s.accountId === id)
+      .map((s): ValuePoint => ({ on: s.on, valueMinor: toDisplay(s.valueMinor, s.currency) }))
+    const positions = held
+      .filter((h) => h.accountId === id && h.valueMinor !== null)
+      .map((h): PricedPosition => ({
+        units: h.units,
+        points: history.get(h.instrumentId) ?? [],
+        toDisplay: (minor) => toDisplay(minor, h.currency),
+        nowMinor: toDisplay(h.valueMinor!, h.currency),
+      }))
+    return { recorded, positions, until: recorded[0]?.on ?? today }
+  })
+  // One calendar of past closes for every account, so accounts without history (cash) still
+  // count on the days the others are estimated.
+  const allPositions = accountsData.flatMap((a) => a.positions)
+  const latest = accountsData.reduce((d, a) => (a.until > d ? a.until : d), '0000-00-00')
+  const days = historyDays(allPositions, start, latest)
+  const estimatedUntil = days.length > 0 ? latest : null
+  const perAccount = accountsData.map(({ recorded, positions, until }) => {
+    if (days.length === 0 || positions.length === 0) return recorded
+    const estimate = estimateHistory(
+      positions,
+      days.filter((d) => d < until),
+    )
+    // With no recorded value yet, today's value closes the estimate.
+    const closing =
+      recorded.length === 0
+        ? [{ on: today, valueMinor: positions.reduce((n, p) => n + p.nowMinor, 0) }]
+        : []
+    return [...estimate, ...recorded, ...closing]
+  })
   const combined = combineSeries(perAccount)
   const flows = movements.map((m): Flow => ({
     on: m.on,
     kind: m.kind,
     amountMinor: toDisplay(m.amountMinor, m.currency),
   }))
-  const series = trendSeries(combined, flows, rangeStart(range, dayOf(now)))
+  // The estimate assumes today's holdings all along, so money put in before it ends already
+  // sits in the estimated values: count it from the first day, not as a jump or a loss.
+  const firstDay = combined[0]?.on
+  const fitted =
+    estimatedUntil && firstDay
+      ? flows.map((f) => (f.on <= estimatedUntil ? { ...f, on: firstDay } : f))
+      : flows
+  const series = trendSeries(combined, fitted, start)
   return {
     currency,
     range,
     series,
     rangeReturn: timeWeightedReturn(
       series.map((p) => ({ on: p.on, valueMinor: p.valueMinor })),
-      flows,
+      fitted,
     ),
-    years: yearSummaries(combined, flows),
-    since: combined[0]?.on ?? null,
+    // Years use recorded values only: an estimate can't say what a past year really did.
+    years: yearSummaries(combineSeries(accountsData.map((a) => a.recorded)), flows),
+    since: snapshots[0]?.on ?? null,
+    estimatedUntil,
     missingRates: [...missing],
   }
 }

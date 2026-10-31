@@ -23,6 +23,9 @@ moves the Unreleased notes under the new version.
 - Investment accounts also appear on the Accounts tab, with their value.
 - Investment trends: value against money put in, time-weighted returns, and deposits, fees
   and income per year. Money in and out is recorded per account (#32).
+- Market-style value charts on the Invest tab, each investment account and Trends, filled in
+  from past prices before values were recorded.
+- Fields no longer zoom phones in, so pages keep their width after moving between them.
 - The Import page also imports investment holdings into a chosen account.
 - A page per holding: position, share of the portfolio, price history from 1M to 5Y, and fund
   facts (yearly fee, index, domicile, document links) kept by the household (#33).

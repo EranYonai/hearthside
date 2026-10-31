@@ -8,7 +8,7 @@ import { requireDb } from '@/lib/db'
 import { currentRates } from '@/server/fx'
 import { trends } from '@/server/trends'
 import { requireSession } from '@/server/session'
-import { LineChart } from '@/components/LineChart'
+import { ValueChart } from '@/components/ValueChart'
 
 export const metadata: Metadata = { title: 'Trends · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -82,16 +82,7 @@ export default async function TrendsPage({
           </div>
         </div>
         {t.series.length >= 2 ? (
-          <LineChart
-            label="Value and money put in over time"
-            kind="money"
-            currency={t.currency}
-            points={t.series.map((p) => ({ on: p.on, values: [p.valueMinor, p.contributedMinor] }))}
-            series={[
-              { label: 'Value', color: 'chart-1' },
-              { label: 'Put in', color: 'chart-2', dashed: true },
-            ]}
-          />
+          <ValueChart trend={t} />
         ) : (
           <p className="text-ink-muted" data-testid="trend-empty">
             {t.since
@@ -106,6 +97,13 @@ export default async function TrendsPage({
             <Amount minor={Math.abs(gain)} currency={t.currency} whole className="text-caption" />{' '}
             {gain >= 0 ? 'more' : 'less'} than you put in. Return counts growth only, not new money,
             so it’s fair across deposits.
+          </p>
+        )}
+        {t.estimatedUntil && t.series.length >= 2 && t.series[0]!.on < t.estimatedUntil && (
+          <p className="text-caption text-ink-muted" data-testid="trend-estimated">
+            Before {dayFormat.format(new Date(`${t.estimatedUntil}T00:00:00Z`))} the line is
+            estimated from what you hold today and past prices, so trades and deposits before then
+            aren’t reflected.
           </p>
         )}
         {t.missingRates.length > 0 && (

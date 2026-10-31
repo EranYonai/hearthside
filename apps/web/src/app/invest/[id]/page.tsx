@@ -16,7 +16,8 @@ import {
   mayManage,
 } from '@/server/invest'
 import { AuthError, listMembers } from '@/server/repo'
-import { dayOf, listMovements } from '@/server/trends'
+import { dayOf, listMovements, trends } from '@/server/trends'
+import { ValueChart } from '@/components/ValueChart'
 import { requireSession } from '@/server/session'
 import {
   DeleteAccountButton,
@@ -66,6 +67,10 @@ export default async function InvestmentAccountPage({
   ])
   const { rates } = await currentRates(db)
   const summary = summarizePortfolio(list, account.currency, rates)
+  const trend = await trends(db, member, '6m', rates, undefined, {
+    accountIds: [account.id],
+    currency: account.currency,
+  })
   const unconverted = Object.entries(summary.unconverted)
   const manage = mayManage(member, account)
   const holder = people.find((p) => p.id === investmentHolder(account))
@@ -93,6 +98,7 @@ export default async function InvestmentAccountPage({
       <Card aria-labelledby="value-title">
         <Label id="value-title">Value</Label>
         <Amount minor={summary.totalMinor} currency={account.currency} whole hero />
+        <ValueChart trend={trend} compact />
         {unconverted.length > 0 && (
           <p className="text-caption text-ink-muted">
             Plus{' '}

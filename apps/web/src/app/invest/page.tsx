@@ -11,7 +11,8 @@ import { canEdit } from '@/server/ledger'
 import { investmentHolder, portfolio } from '@/server/invest'
 import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
-import { recordSnapshots } from '@/server/trends'
+import { recordSnapshots, trends } from '@/server/trends'
+import { ValueChart } from '@/components/ValueChart'
 import { runCheckup } from '@/server/checkup'
 import { CurrencySwitch, InvestmentAccountForm } from './client'
 
@@ -54,6 +55,7 @@ export default async function InvestPage() {
   const nudges = check.items.filter((i) => i.status === 'nudge').length
   const names = new Map(people.map((p) => [p.id, p.id === member.id ? 'You' : p.name]))
   const currency = summary.currency
+  const trend = await trends(db, member, '6m', fx.rates, undefined, { currency })
   const unconverted = Object.entries(summary.unconverted)
   const editable = canEdit(member)
   // One line per other currency held, e.g. "$1 = ₪3.6820".
@@ -124,6 +126,7 @@ export default async function InvestPage() {
                 not converted to {currency} yet.
               </p>
             )}
+            <ValueChart trend={trend} compact />
             <div className="flex flex-wrap gap-2">
               <Link href="/invest/trends" className={buttonClasses('secondary')}>
                 <ChartLine aria-hidden />

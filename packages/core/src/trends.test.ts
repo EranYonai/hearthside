@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   combineSeries,
   contributedBy,
+  estimateHistory,
+  historyDays,
+  historyRangeFor,
   type Flow,
   isMovementKind,
   isTrendRange,
@@ -160,5 +163,49 @@ describe('trendSeries', () => {
     expect(trendSeries(points, flows, '2027-01-01')).toEqual([
       { on: '2027-01-01', valueMinor: 130, contributedMinor: 115 },
     ])
+  })
+})
+
+describe('estimated history', () => {
+  const fund = (points: { on: string; price: string }[], units = '10') => ({
+    units,
+    points,
+    toDisplay: (minor: number) => minor * 2,
+    nowMinor: 0,
+  })
+
+  it('collects the days with a close, inside the range and before recording began', () => {
+    const a = fund([
+      { on: '2026-01-02', price: '1' },
+      { on: '2026-01-05', price: '1' },
+    ])
+    const b = fund([
+      { on: '2026-01-03', price: '1' },
+      { on: '2026-01-05', price: '1' },
+      { on: '2026-01-09', price: '1' },
+    ])
+    expect(historyDays([a, b], '2026-01-03', '2026-01-09')).toEqual(['2026-01-03', '2026-01-05'])
+    expect(historyDays([a, b], null, '2026-02-01')).toHaveLength(4)
+  })
+
+  it('values today’s holdings at past prices, cash at today’s value', () => {
+    const a = fund([
+      { on: '2026-01-02', price: '100' },
+      { on: '2026-01-04', price: '110.5' },
+    ])
+    const cash = { units: '1', points: [], toDisplay: (m: number) => m, nowMinor: 500 }
+    expect(estimateHistory([a, cash], ['2026-01-04', '2026-01-01', '2026-01-03'])).toEqual([
+      // Before its first close a holding counts at that close.
+      { on: '2026-01-01', valueMinor: 200000 + 500 },
+      { on: '2026-01-03', valueMinor: 200000 + 500 },
+      { on: '2026-01-04', valueMinor: 221000 + 500 },
+    ])
+  })
+
+  it('maps trend ranges to price history ranges', () => {
+    expect(historyRangeFor('1m')).toBe('1mo')
+    expect(historyRangeFor('3m')).toBe('6mo')
+    expect(historyRangeFor('ytd')).toBe('1y')
+    expect(historyRangeFor('all')).toBe('5y')
   })
 })

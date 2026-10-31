@@ -1,7 +1,7 @@
 'use client'
 
 import { formatMoney } from '@hearthside/core'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 export interface ChartPoint {
   on: string
@@ -11,8 +11,8 @@ export interface ChartPoint {
 
 export interface ChartSeries {
   label: string
-  /** A chart token, e.g. "chart-1". */
-  color: 'chart-1' | 'chart-2'
+  /** A chart token, e.g. "chart-1", or positive/negative for a gain or loss line. */
+  color: 'chart-1' | 'chart-2' | 'positive' | 'negative'
   dashed?: boolean
 }
 
@@ -28,8 +28,18 @@ const dayFormat = new Intl.DateTimeFormat('en-GB', {
 
 const day = (on: string) => dayFormat.format(new Date(`${on}T00:00:00Z`))
 
-const SWATCH = { 'chart-1': 'border-chart-1', 'chart-2': 'border-chart-2' }
-const DOT = { 'chart-1': 'bg-chart-1', 'chart-2': 'bg-chart-2' }
+const SWATCH = {
+  'chart-1': 'border-chart-1',
+  'chart-2': 'border-chart-2',
+  positive: 'border-positive',
+  negative: 'border-negative',
+}
+const DOT = {
+  'chart-1': 'bg-chart-1',
+  'chart-2': 'bg-chart-2',
+  positive: 'bg-positive',
+  negative: 'bg-negative',
+}
 
 /**
  * Lines over time on one axis. Hover or touch shows every series for the nearest day; pages carry
@@ -41,6 +51,9 @@ export function LineChart({
   currency,
   kind,
   label,
+  fit = kind === 'price',
+  area = false,
+  compact = false,
 }: {
   points: ChartPoint[]
   series: ChartSeries[]
@@ -48,16 +61,22 @@ export function LineChart({
   /** money: values are minor units, axis from zero. price: main units, axis fits the range. */
   kind: 'money' | 'price'
   label: string
+  /** Fit the axis to the values instead of starting at zero, like a market chart. */
+  fit?: boolean
+  /** Shade under the first line. */
+  area?: boolean
+  /** A shorter chart for a summary card. */
+  compact?: boolean
 }) {
+  const gradient = useId()
   const [active, setActive] = useState<number | null>(null)
   const times = points.map((p) => Date.parse(`${p.on}T00:00:00Z`))
   const t0 = times[0]!
   const span = Math.max(times.at(-1)! - t0, 1)
   const values = points.flatMap((p) => p.values)
-  const [bottom, top] =
-    kind === 'money'
-      ? [0, niceCeil(Math.max(...values, 1))]
-      : padRange(Math.min(...values), Math.max(...values))
+  const [bottom, top] = fit
+    ? padRange(Math.min(...values), Math.max(...values))
+    : [0, niceCeil(Math.max(...values, 1))]
   const x = (i: number) => ((times[i]! - t0) / span) * W
   const y = (v: number) => H - ((Math.max(v, bottom) - bottom) / (top - bottom)) * H
   const path = (s: number) =>
@@ -106,7 +125,7 @@ export function LineChart({
             <span>{format(bottom)}</span>
           </div>
           <div
-            className="relative h-48 touch-none"
+            className={`relative touch-none ${compact ? 'h-32' : 'h-48'}`}
             onPointerMove={(e) => pick(e.clientX, e.currentTarget.getBoundingClientRect())}
             onPointerDown={(e) => pick(e.clientX, e.currentTarget.getBoundingClientRect())}
             onPointerLeave={() => setActive(null)}
@@ -130,6 +149,29 @@ export function LineChart({
                   vectorEffect="non-scaling-stroke"
                 />
               ))}
+              {area && (
+                <>
+                  <defs>
+                    <linearGradient id={gradient} x1="0" x2="0" y1="0" y2="1">
+                      <stop
+                        offset="0%"
+                        stopColor={`var(--hs-${series[0]!.color})`}
+                        stopOpacity={0.25}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor={`var(--hs-${series[0]!.color})`}
+                        stopOpacity={0}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d={`${path(0)}L${x(points.length - 1).toFixed(1)},${H}L0,${H}Z`}
+                    fill={`url(#${gradient})`}
+                    stroke="none"
+                  />
+                </>
+              )}
               {series
                 .map((s, i) => ({ s, i }))
                 .reverse()

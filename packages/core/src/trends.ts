@@ -1,3 +1,4 @@
+import { valueMinor } from './invest'
 import type { Minor } from './money'
 
 /** Money moving in or out of an investment account, other than trades. */
@@ -200,4 +201,61 @@ export function trendSeries(
     valueMinor: p.valueMinor,
     contributedMinor: contributed[i]!,
   }))
+}
+
+/** A holding as it is today, with its past closes, for estimating values before recording began. */
+export interface PricedPosition {
+  /** Units held today, an exact decimal. */
+  units: string
+  /** Past closes, oldest first, in the holding's currency. Empty for cash or no history. */
+  points: readonly { on: string; price: string }[]
+  /** Converts minor units in the holding's currency to the display currency. */
+  toDisplay: (minor: Minor) => Minor
+  /** Today's value in the display currency, used as-is when there is no history. */
+  nowMinor: Minor
+}
+
+/** Days with a known close in any position, from `start` on and before `before`, sorted. */
+export function historyDays(
+  positions: readonly PricedPosition[],
+  start: string | null,
+  before: string,
+): string[] {
+  return [...new Set(positions.flatMap((p) => p.points.map((pt) => pt.on)))]
+    .filter((on) => on < before && (start === null || on >= start))
+    .sort()
+}
+
+/**
+ * Estimate an account's value on each of `days` from what it holds today and each holding's past
+ * prices. Trades and deposits in that time aren't known, so this is the value today's holdings
+ * would have had. A holding with no history (cash) counts at today's value; before its first
+ * known close a holding counts at that close.
+ */
+export function estimateHistory(
+  positions: readonly PricedPosition[],
+  days: readonly string[],
+): ValuePoint[] {
+  const sorted = positions.map((p) => [...p.points].sort((a, b) => a.on.localeCompare(b.on)))
+  const cursor = positions.map(() => 0)
+  return [...days].sort().map((on) => {
+    let total = 0
+    positions.forEach((p, i) => {
+      const pts = sorted[i]!
+      if (pts.length === 0) {
+        total += p.nowMinor
+        return
+      }
+      while (cursor[i]! + 1 < pts.length && pts[cursor[i]! + 1]!.on <= on) cursor[i]!++
+      total += p.toDisplay(valueMinor(p.units, pts[cursor[i]!]!.price))
+    })
+    return { on, valueMinor: total }
+  })
+}
+
+/** How far back to look up prices for a trend range. */
+export function historyRangeFor(range: TrendRange): '1mo' | '6mo' | '1y' | '5y' {
+  return ({ '1m': '1mo', '3m': '6mo', '6m': '6mo', ytd: '1y', '1y': '1y', all: '5y' } as const)[
+    range
+  ]
 }

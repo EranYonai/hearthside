@@ -172,7 +172,9 @@ describe.skipIf(!url)('trends (Postgres)', () => {
     await saveHolding(db, alex, account.id, { kind: 'cash', currency: 'USD', units: '110' })
     await recordSnapshots(db, household.id, rates, day('2026-02-01'))
 
-    const t = await trends(db, { ...alex, displayCurrency: 'ILS' }, 'all', rates, now)
+    const t = await trends(db, { ...alex, displayCurrency: 'ILS' }, 'all', rates, now, {
+      url: null,
+    })
     expect(t.series).toEqual([
       { on: '2026-01-01', valueMinor: 40000, contributedMinor: 40000 },
       { on: '2026-02-01', valueMinor: 44000, contributedMinor: 40000 },
@@ -181,8 +183,76 @@ describe.skipIf(!url)('trends (Postgres)', () => {
     expect(t.since).toBe('2026-01-01')
     expect(t.years[0]).toMatchObject({ year: 2026, deposits: 40000 })
 
-    const noRate = await trends(db, { ...alex, displayCurrency: 'EUR' }, '1m', new Map(), now)
+    const noRate = await trends(db, { ...alex, displayCurrency: 'EUR' }, '1m', new Map(), now, {
+      url: null,
+    })
     expect(noRate.missingRates).toEqual(['USD'])
     expect(noRate.series).toEqual([])
+  })
+
+  it('fills the chart in from past prices before values were recorded', async () => {
+    const { household, alex } = await home()
+    const account = await createInvestmentAccount(db, alex, {
+      name: 'Long term',
+      currency: 'USD',
+      visibility: 'household',
+    })
+    const now = day('2026-03-01')
+    await saveHolding(
+      db,
+      alex,
+      account.id,
+      {
+        kind: 'security',
+        symbol: 'TST1',
+        name: 'Test fund',
+        currency: 'USD',
+        assetClass: 'global_stocks',
+        units: '10',
+        price: '110',
+      },
+      now,
+    )
+    await saveHolding(db, alex, account.id, { kind: 'cash', currency: 'USD', units: '50' }, now)
+    const [fund] = await db
+      .select()
+      .from(schema.instruments)
+      .where(raw`kind = 'security'`)
+    for (const [on, price] of [
+      ['2026-02-10', '100'],
+      ['2026-02-20', '90'],
+    ] as const)
+      await db
+        .insert(schema.instrumentPrices)
+        .values({ instrumentId: fund!.id, price, pricedAt: day(on), source: 'manual' })
+    const ils = { ...alex, displayCurrency: 'ILS' }
+    // Money put in during the estimated stretch is already in today's holdings.
+    await addMovement(
+      db,
+      alex,
+      account.id,
+      { kind: 'deposit', on: '2026-02-15', amount: '1000' },
+      now,
+    )
+
+    // Nothing recorded yet: past prices and today's value make the line.
+    const before = await trends(db, ils, '1m', rates, now, { url: null })
+    expect(before.series.map((p) => [p.on, p.valueMinor])).toEqual([
+      ['2026-02-10', (1000 + 50) * 400],
+      ['2026-02-20', (900 + 50) * 400],
+      ['2026-03-01', (1100 + 50) * 400],
+    ])
+    expect(before.estimatedUntil).toBe('2026-03-01')
+    expect(before.series.every((p) => p.contributedMinor === 400000)).toBe(true)
+    expect(before.rangeReturn).toBeCloseTo(1150 / 1050 - 1, 10)
+    expect(before.years).toMatchObject([{ year: 2026, deposits: 400000, returnRate: null }])
+    expect(before.since).toBeNull()
+
+    // Once a value is recorded, the estimate stops there and recorded values take over.
+    await recordSnapshots(db, household.id, rates, day('2026-02-25'))
+    const after = await trends(db, ils, '1m', rates, now, { url: null })
+    expect(after.series.at(-1)).toMatchObject({ on: '2026-02-25', valueMinor: 1150 * 400 })
+    expect(after.series.map((p) => p.on)).toEqual(['2026-02-10', '2026-02-20', '2026-02-25'])
+    expect(after.estimatedUntil).toBe('2026-02-25')
   })
 })

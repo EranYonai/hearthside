@@ -12,11 +12,25 @@
   body {
     @apply bg-surface-0 font-body text-body text-ink antialiased;
     min-height: 100dvh;
+    /* Nothing should be wider than the screen; if something is, don't let the page zoom out. */
+    overflow-x: clip;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
       env(safe-area-inset-left);
   }
   :focus-visible {
     outline: 2px solid var(--color-focus);
     outline-offset: 2px;
+  }
+}
+
+/*
+ * Phones zoom in on a focused field whose text is under 16px and stay zoomed after moving to
+ * another page. Unlayered so it wins over the size utilities on the fields.
+ */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
   }
 }
