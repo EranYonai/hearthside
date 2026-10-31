@@ -28,9 +28,18 @@ moves the Unreleased notes under the new version.
   facts (yearly fee, index, domicile, document links) kept by the household (#33).
 - A passive-investing check-up: target split (80/20 by default, set by the household), fees,
   home bias, emergency fund and steady deposits. Gentle notes only; it can be turned off (#34).
+- Monthly payments that settle another account's statement are matched to that statement by
+  amount and date (or by name), so combined totals count the spending once. The match keeps
+  the statement's total, and rows show when the two disagree.
+- Account looks: each account shows a color and a short badge for where it comes from, and
+  you can pick its source and your own color when editing it. Transactions show a matching dot.
+- Delete an account, with its imports and transactions, from its edit page (asks first).
 
 ### Security
 
+- People who join with an invite link wait for the owner's approval before they can see
+  anything. The owner approves or declines them in Settings, under Members. Existing members
+  are approved automatically on upgrade.
 - Private fields are encrypted in the database, with key rotation (#44). Existing data is
   encrypted on the first start after upgrading, which needs a new key file (see
   [Self-hosting](docs/self-hosting.md)).

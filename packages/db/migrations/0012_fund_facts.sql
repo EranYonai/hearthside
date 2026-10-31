@@ -1,1 +1,0 @@
-ALTER TABLE "instruments" ADD COLUMN "facts" text;

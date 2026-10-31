@@ -11,7 +11,18 @@ export const PROVIDERS = {
   leumi: { label: 'Leumi', kind: 'bank' },
   discount: { label: 'Discount', kind: 'bank' },
   mizrahi: { label: 'Mizrahi Tefahot', kind: 'bank' },
+  fibi: { label: 'First International', kind: 'bank' },
+  mercantile: { label: 'Mercantile', kind: 'bank' },
+  jerusalem: { label: 'Bank of Jerusalem', kind: 'bank' },
+  yahav: { label: 'Yahav', kind: 'bank' },
+  massad: { label: 'Massad', kind: 'bank' },
+  onezero: { label: 'One Zero', kind: 'bank' },
+  diners: { label: 'Diners', kind: 'card' },
 } as const
+
+export function isProviderId(id: unknown): id is ProviderId {
+  return typeof id === 'string' && Object.hasOwn(PROVIDERS, id)
+}
 
 export type ProviderId = keyof typeof PROVIDERS
 export type SourceKind = 'card' | 'bank'
@@ -26,7 +37,7 @@ export interface DetectedSource {
 }
 
 export function providerLabel(id: string | null | undefined): string | null {
-  return id && id in PROVIDERS ? PROVIDERS[id as ProviderId].label : null
+  return isProviderId(id) ? PROVIDERS[id].label : null
 }
 
 /** "Max ·1234", "Hapoalim account ·5678", "Card". */
@@ -128,28 +139,32 @@ export function detectSource(
   return { provider, kind, network, last4 }
 }
 
+/** Bank description words that name a card company, and the provider each one means. */
+const CARD_PAYEES: [string[], ProviderId | null][] = [
+  [['ישראכרט', 'isracard', 'אמריקן אקספרס', 'american express'], 'isracard'],
+  [['כ\\.א\\.ל', 'כאל', 'דיינרס', 'diners'], 'cal'],
+  [['max it', 'מקס איט', 'לאומי קארד', 'leumi card'], 'max'],
+  [['כרטיסי אשראי'], null],
+]
+
 /**
  * Bank descriptions that pay a card bill (case-insensitive; valid as both a JS and a
  * Postgres regular expression). Used to avoid counting card spending twice.
  */
-export const CARD_PAYMENT_PATTERN = [
-  'ישראכרט',
-  'isracard',
-  'כרטיסי אשראי',
-  'כ\\.א\\.ל',
-  'כאל',
-  'max it',
-  'מקס איט',
-  'לאומי קארד',
-  'leumi card',
-  'אמריקן אקספרס',
-  'american express',
-  'דיינרס',
-  'diners',
-].join('|')
+export const CARD_PAYMENT_PATTERN = CARD_PAYEES.flatMap(([words]) => words).join('|')
 
 const cardPayment = new RegExp(CARD_PAYMENT_PATTERN, 'i')
+const payees = CARD_PAYEES.map(([words, id]) => [new RegExp(words.join('|'), 'i'), id] as const)
 
 export function isCardPayment(description: string): boolean {
   return cardPayment.test(description)
+}
+
+/**
+ * The card company a bank row pays: a provider id, null when the row pays a card bill
+ * without saying whose, or undefined when it isn't a card bill.
+ */
+export function cardPaymentProvider(description: string): ProviderId | null | undefined {
+  for (const [re, id] of payees) if (re.test(description)) return id
+  return undefined
 }

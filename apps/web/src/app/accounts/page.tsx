@@ -1,4 +1,3 @@
-import { providerLabel } from '@hearthside/core'
 import { Amount, buttonClasses, Card, Label } from '@hearthside/ui'
 import { ChevronLeft, ChevronRight, FileUp, Pencil } from 'lucide-react'
 import type { Metadata } from 'next'
@@ -115,7 +114,8 @@ export default async function AccountsPage({
                       <AccountCard
                         name={a.name}
                         kind={a.kind}
-                        provider={providerLabel(a.provider)}
+                        provider={a.provider}
+                        color={a.color}
                         network={a.network}
                         last4={a.last4}
                         {...(a.visibility === 'private' ? { note: 'Private' } : {})}

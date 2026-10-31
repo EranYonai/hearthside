@@ -84,6 +84,8 @@ export const members = pgTable(
     displayCurrency: text('display_currency').notNull().default('ILS'),
     /** Set when the member finishes or skips the welcome steps. */
     onboardedAt: ts('onboarded_at'),
+    /** Set when the owner lets an invited member in. Until then they see nothing. */
+    approvedAt: ts('approved_at'),
     createdAt: createdAt(),
     removedAt: ts('removed_at'),
   },
@@ -215,6 +217,8 @@ export const accounts = pgTable(
     network: encText('accounts', 'network'),
     /** Last four digits of the card or account number. Matched after reading. */
     last4: encText('accounts', 'last4'),
+    /** The person's own card color (#RRGGBB); null uses the provider's color. */
+    color: encText('accounts', 'color'),
     /** household: everyone sees it; private: only the owner. */
     visibility: text('visibility', { enum: ['household', 'private'] })
       .notNull()
@@ -286,6 +290,17 @@ export const transactions = pgTable(
     categoryConfidence: real('category_confidence'),
     /** When the categorizer (with the model) last looked at it. null means it is waiting. */
     categoryCheckedAt: timestamp('category_checked_at', { withTimezone: true }),
+    /**
+     * Bank rows only: this row pays a card bill. amount: it pays what a card bill adds up to;
+     * name: its description names a card company. Kept up to date by linkCardBills.
+     */
+    cardBill: text('card_bill', { enum: ['amount', 'name'] }),
+    /** The card account it pays, when that is a single one. */
+    cardBillAccountId: uuid('card_bill_account_id').references(() => accounts.id, {
+      onDelete: 'set null',
+    }),
+    /** What the card statements say the bill is (negative), to compare with what was paid. */
+    cardBillExpectedMinor: encInt('transactions', 'card_bill_expected_minor'),
     /** blindIndex(SHA-256 of the duplicate key from the parser). */
     dedupKey: text('dedup_key').notNull(),
     createdAt: createdAt(),
@@ -298,6 +313,7 @@ export const transactions = pgTable(
     index('transactions_uncategorized_idx')
       .on(t.householdId)
       .where(sql`${t.category} is null and ${t.categoryCheckedAt} is null`),
+    check('transactions_card_bill_check', sql`${t.cardBill} in ('amount', 'name')`),
   ],
 )
 

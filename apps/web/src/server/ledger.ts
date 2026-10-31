@@ -1,6 +1,6 @@
 import {
   countsAsSpending,
-  isCardPayment,
+  matchCardBills,
   duplicateKeys,
   suggestAccountName,
   type DetectedSource,
@@ -127,7 +127,15 @@ export async function updateAccount(
   db: Conn,
   member: MemberRow,
   id: string,
-  input: { name?: string; holderId?: string; visibility?: AccountVisibility },
+  input: {
+    name?: string
+    holderId?: string
+    visibility?: AccountVisibility
+    /** A provider id, or null for none. */
+    provider?: string | null
+    /** #RRGGBB, or null to use the provider's color. */
+    color?: string | null
+  },
 ) {
   assertEditor(member)
   const account = await getVisibleAccount(db, member, id)
@@ -139,6 +147,8 @@ export async function updateAccount(
     .set({
       ...(input.name ? { name: input.name } : {}),
       ...(input.visibility ? { visibility: input.visibility } : {}),
+      ...(input.provider !== undefined ? { provider: input.provider } : {}),
+      ...(input.color !== undefined ? { color: input.color } : {}),
       ...(input.holderId
         ? { holderId: input.holderId === account.ownerId ? null : input.holderId }
         : {}),
@@ -358,6 +368,7 @@ export async function commitImport(
       action: 'import.added',
       detail: { batchId: batch!.id, accountId: account.id, added, duplicates },
     })
+    await linkCardBills(tx, member.householdId)
     return done!
   }
   return db.transaction(run)
@@ -385,12 +396,45 @@ export async function undoBatch(db: Conn, member: MemberRow, batchId: string) {
   if (row.ownerId !== member.id && member.role !== 'owner')
     throw new AuthError('not_allowed', 'Only the account’s owner can undo this import')
   await db.delete(importBatches).where(eq(importBatches.id, batchId))
+  await linkCardBills(db, member.householdId)
   await audit(db, {
     householdId: member.householdId,
     memberId: member.id,
     action: 'import.undone',
     detail: { batchId, removed: row.batch.added },
   })
+}
+
+/** How many transactions an account holds, to warn before deleting it. */
+export async function countAccountTransactions(db: Conn, member: MemberRow, id: string) {
+  await getVisibleAccount(db, member, id)
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(transactions)
+    .where(eq(transactions.accountId, id))
+  return row?.n ?? 0
+}
+
+/**
+ * Delete an account with all its imports and transactions. Only whoever added it, or the
+ * household owner, may do this. It can't be undone.
+ */
+export async function deleteAccount(db: Conn, member: MemberRow, id: string) {
+  assertEditor(member)
+  const account = await getVisibleAccount(db, member, id)
+  if (account.ownerId !== member.id && member.role !== 'owner')
+    throw new AuthError('not_allowed', 'Only the person who added this account can delete it')
+  const removed = await countAccountTransactions(db, member, id)
+  await db.delete(accounts).where(eq(accounts.id, id))
+  // Bills that account's statements accounted for may now pay something else, or nothing.
+  await linkCardBills(db, member.householdId)
+  await audit(db, {
+    householdId: member.householdId,
+    memberId: member.id,
+    action: 'account.deleted',
+    detail: { accountId: id, kind: account.kind, removed },
+  })
+  return { removed }
 }
 
 // ---------- Transactions ----------
@@ -445,6 +489,8 @@ export async function listTransactions(db: Conn, member: MemberRow, f: Transacti
       t: transactions,
       accountName: accounts.name,
       accountKind: accounts.kind,
+      accountProvider: accounts.provider,
+      accountColor: accounts.color,
     })
     .from(transactions)
     .innerJoin(accounts, eq(accounts.id, transactions.accountId))
@@ -453,12 +499,100 @@ export async function listTransactions(db: Conn, member: MemberRow, f: Transacti
   return rows.filter((r) => matchesSearch(r.t.description, f.search)).slice(0, 1000)
 }
 
+// ---------- Card bills ----------
+
 /**
- * A bank row that pays a card bill. When cards and bank accounts are counted together,
- * these are left out: the card purchases behind them are already counted.
+ * Find the bank rows that pay a card bill and record which bill, so totals don't count
+ * card spending twice (see card-bills.ts in core). Runs over the whole household after
+ * every import and undo, since either side can arrive first. Returns how many rows changed.
  */
-function isCardBill(kind: AccountKind, amount: number, description: string): boolean {
-  return kind === 'bank' && amount < 0 && isCardPayment(description)
+export async function linkCardBills(db: Conn, householdId: string): Promise<number> {
+  const rows = await db
+    .select({
+      id: transactions.id,
+      kind: accounts.kind,
+      provider: accounts.provider,
+      accountId: transactions.accountId,
+      batchId: transactions.batchId,
+      occurredOn: transactions.occurredOn,
+      postedOn: transactions.postedOn,
+      description: transactions.description,
+      amount: transactions.amountMinor,
+      cardBill: transactions.cardBill,
+      cardBillAccountId: transactions.cardBillAccountId,
+      cardBillExpectedMinor: transactions.cardBillExpectedMinor,
+    })
+    .from(transactions)
+    .innerJoin(accounts, eq(accounts.id, transactions.accountId))
+    .where(eq(transactions.householdId, householdId))
+  const bank = rows.filter((r) => r.kind === 'bank')
+  const matches = matchCardBills(
+    bank
+      .filter((r) => r.amount < 0)
+      .map((r) => ({
+        id: r.id,
+        date: r.postedOn ?? r.occurredOn,
+        amountMinor: r.amount,
+        description: r.description,
+      })),
+    rows
+      .filter((r) => r.kind === 'card')
+      .map((r) => ({
+        accountId: r.accountId,
+        provider: r.provider,
+        occurredOn: r.occurredOn,
+        postedOn: r.postedOn,
+        batchId: r.batchId,
+        amountMinor: r.amount,
+      })),
+  )
+  let changed = 0
+  for (const r of bank) {
+    const m = matches.get(r.id)
+    const next = {
+      cardBill: m?.via ?? null,
+      cardBillAccountId: m?.accountId ?? null,
+      cardBillExpectedMinor: m?.expectedMinor ?? null,
+    }
+    if (
+      next.cardBill === r.cardBill &&
+      next.cardBillAccountId === r.cardBillAccountId &&
+      next.cardBillExpectedMinor === r.cardBillExpectedMinor
+    )
+      continue
+    await db.update(transactions).set(next).where(eq(transactions.id, r.id))
+    changed++
+  }
+  return changed
+}
+
+/** Bring card bill links up to date for every household, e.g. after an upgrade. */
+export async function linkAllCardBills(db: Conn): Promise<number> {
+  const { households } = schema
+  let changed = 0
+  for (const h of await db.select({ id: households.id }).from(households))
+    changed += await linkCardBills(db, h.id)
+  return changed
+}
+
+/**
+ * Whether a bank row that pays a card bill should be left out for this member: only when
+ * they can see the card purchases it pays for. Otherwise it's their only record of them.
+ */
+function billCovered(
+  row: { cardBill: string | null; cardBillAccountId: string | null },
+  visibleCards: ReadonlySet<string>,
+): boolean {
+  if (!row.cardBill) return false
+  return row.cardBillAccountId ? visibleCards.has(row.cardBillAccountId) : visibleCards.size > 0
+}
+
+async function visibleCardIds(db: Conn, member: MemberRow): Promise<Set<string>> {
+  const rows = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(and(visibleTo(member), eq(accounts.kind, 'card')))
+  return new Set(rows.map((r) => r.id))
 }
 
 /** True when a filter mixes cards and bank accounts, so card bills would count twice. */
@@ -469,16 +603,20 @@ function mixesKinds(f: TransactionFilter) {
 /** Money out and in for the filter, leaving out transfers and savings. */
 export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) {
   const mixed = mixesKinds(f)
-  const rows = await db
-    .select({
-      category: transactions.category,
-      kind: accounts.kind,
-      description: transactions.description,
-      amount: transactions.amountMinor,
-    })
-    .from(transactions)
-    .innerJoin(accounts, eq(accounts.id, transactions.accountId))
-    .where(filterConditions(member, f))
+  const [rows, cards] = await Promise.all([
+    db
+      .select({
+        category: transactions.category,
+        description: transactions.description,
+        amount: transactions.amountMinor,
+        cardBill: transactions.cardBill,
+        cardBillAccountId: transactions.cardBillAccountId,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(accounts.id, transactions.accountId))
+      .where(filterConditions(member, f)),
+    mixed ? visibleCardIds(db, member) : new Set<string>(),
+  ])
   let spent = 0
   let received = 0
   let count = 0
@@ -487,7 +625,7 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
   for (const r of rows) {
     if (!matchesSearch(r.description, f.search)) continue
     count++
-    if (mixed && isCardBill(r.kind, r.amount, r.description)) {
+    if (mixed && r.amount < 0 && billCovered(r, cards)) {
       cardBills += r.amount
       continue
     }

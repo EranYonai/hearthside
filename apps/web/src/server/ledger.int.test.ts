@@ -13,6 +13,7 @@ import {
   findBatchByHash,
   getOwnAccount,
   getVisibleAccount,
+  linkAllCardBills,
   listAccounts,
   listBatches,
   listMonths,
@@ -23,6 +24,8 @@ import {
   totals,
   undoBatch,
   updateAccount,
+  countAccountTransactions,
+  deleteAccount,
 } from './ledger'
 import { acceptInvite, AuthError, createHousehold, createInvite, type NewPasskey } from './repo'
 
@@ -334,6 +337,14 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
     ).rejects.toBeInstanceOf(AuthError)
     const back = await updateAccount(db, alex, card.id, { holderId: alex.id, name: 'Shared' })
     expect([back.holderId, back.name]).toEqual([null, 'Shared'])
+
+    // Provider and color can be set and cleared; leaving them out keeps them.
+    const styled = await updateAccount(db, alex, card.id, { provider: 'cal', color: '#5B2C83' })
+    expect([styled.provider, styled.color]).toEqual(['cal', '#5B2C83'])
+    const renamed = await updateAccount(db, alex, card.id, { name: 'Shared card' })
+    expect([renamed.provider, renamed.color]).toEqual(['cal', '#5B2C83'])
+    const cleared = await updateAccount(db, alex, card.id, { provider: null, color: null })
+    expect([cleared.provider, cleared.color]).toEqual([null, null])
     await expect(getVisibleAccount(db, sam, card.id)).rejects.toBeInstanceOf(AuthError)
 
     // New accounts from an import can be given to someone else.
@@ -347,6 +358,35 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
       holderId: sam.id,
     })
     expect(done!.account.holderId).toBe(sam.id)
+  })
+
+  it('deletes an account with its transactions, only for whoever added it or the owner', async () => {
+    const { alex, sam, robin } = await home()
+    const card = await createAccount(db, alex, {
+      name: 'Old card',
+      kind: 'card',
+      visibility: 'household',
+    })
+    const rows = await prepareImport(db, card, october)
+    await commitImport(db, alex, card, { fileName: 'd', fileHash: 'd', rows, skipped: 0 })
+    expect(await countAccountTransactions(db, sam, card.id)).toBe(5)
+
+    await expect(deleteAccount(db, sam, card.id)).rejects.toBeInstanceOf(AuthError)
+    await expect(deleteAccount(db, robin, card.id)).rejects.toBeInstanceOf(AuthError)
+    expect(await deleteAccount(db, alex, card.id)).toEqual({ removed: 5 })
+    await expect(getVisibleAccount(db, alex, card.id)).rejects.toBeInstanceOf(AuthError)
+    expect(await listTransactions(db, alex, { month: '2026-10', accountId: card.id })).toHaveLength(
+      0,
+    )
+    await expect(deleteAccount(db, alex, card.id)).rejects.toBeInstanceOf(AuthError)
+
+    // The household owner may delete an account someone else added.
+    const sams = await createAccount(db, sam, {
+      name: 'Sam bank',
+      kind: 'bank',
+      visibility: 'household',
+    })
+    expect(await deleteAccount(db, alex, sams.id)).toEqual({ removed: 0 })
   })
 
   it('keeps card and bank views apart and counts card bills once', async () => {
@@ -413,6 +453,145 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
     ])
     const empty = await accountSummaries(db, alex, '2026-01')
     expect(empty.map((s) => s.count)).toEqual([0, 0])
+  })
+
+  describe('card bills paid from the bank', () => {
+    // Synthetic statements: a card billed on 10/10 for two purchases, and a bank account.
+    const cardHeader = ['תאריך עסקה', 'שם בית העסק', 'סכום חיוב', 'תאריך חיוב']
+    const cardRows = (rows: string[][]) =>
+      parseStatement([{ name: 'C', rows: [cardHeader, ...rows] }], { spendingIsPositive: true })
+        .transactions
+    const bankRows = (rows: string[][]) =>
+      parseStatement([{ name: 'B', rows: [['תאריך', 'תיאור', 'חובה', 'זכות'], ...rows] }], {
+        spendingIsPositive: false,
+      }).transactions
+
+    async function setup(visibility: 'household' | 'private' = 'household') {
+      const { alex, sam } = await home()
+      const card = await createAccount(db, sam, {
+        name: 'Sam card',
+        kind: 'card',
+        provider: 'max',
+        visibility,
+      })
+      const bank = await createAccount(db, alex, {
+        name: 'Joint bank',
+        kind: 'bank',
+        visibility: 'household',
+      })
+      const importCard = () =>
+        prepareImport(
+          db,
+          card,
+          cardRows([
+            ['20/09/2026', 'Grocer', '250', '10/10/2026'],
+            ['25/09/2026', 'Pharmacy', '50', '10/10/2026'],
+          ]),
+        ).then((rows) =>
+          commitImport(db, sam, card, { fileName: 'c', fileHash: 'c', rows, skipped: 0 }),
+        )
+      const importBank = (rows: string[][]) =>
+        prepareImport(db, bank, bankRows(rows)).then((prepared) =>
+          commitImport(db, alex, bank, {
+            fileName: 'b',
+            fileHash: rows.flat().join(),
+            rows: prepared,
+            skipped: 0,
+          }),
+        )
+      const bankList = async (member = alex) =>
+        (await listTransactions(db, member, { month: '2026-10', kind: 'bank' })).map((r) => r.t)
+      return { alex, sam, card, bank, importCard, importBank, bankList }
+    }
+
+    it('finds the payment by amount, whatever it is called, in either import order', async () => {
+      const { alex, card, importCard, importBank, bankList } = await setup()
+      await importBank([
+        ['11/10/2026', 'Direct debit 4471', '300', ''],
+        ['12/10/2026', 'Rent', '1000', ''],
+      ])
+      // No card statement yet: nothing to match, so it counts.
+      expect((await bankList()).find((t) => t.cardBill)).toBeUndefined()
+      expect(await totals(db, alex, { month: '2026-10' })).toMatchObject({
+        spent: -130000,
+        cardBills: 0,
+      })
+
+      await importCard()
+      const paid = (await bankList()).find((t) => t.description === 'Direct debit 4471')!
+      expect(paid).toMatchObject({
+        cardBill: 'amount',
+        cardBillAccountId: card.id,
+        cardBillExpectedMinor: -30000,
+      })
+      // The purchases happened in September; October has only the rent and the bill.
+      expect(await totals(db, alex, { month: '2026-10' })).toMatchObject({
+        spent: -100000,
+        cardBills: -30000,
+      })
+      // The bank view still shows all the money that left the account.
+      expect(await totals(db, alex, { month: '2026-10', kind: 'bank' })).toMatchObject({
+        spent: -130000,
+        cardBills: 0,
+      })
+    })
+
+    it('finds the payment by name and keeps the difference from the statement', async () => {
+      const { alex, card, importCard, importBank, bankList } = await setup()
+      await importCard()
+      await importBank([['10/10/2026', 'MAX IT', '320', '']])
+      const [paid] = await bankList()
+      expect(paid).toMatchObject({
+        cardBill: 'name',
+        cardBillAccountId: card.id,
+        cardBillExpectedMinor: -30000,
+      })
+      expect(paid!.amountMinor - paid!.cardBillExpectedMinor!).toBe(-2000)
+      expect(await totals(db, alex, { month: '2026-10' })).toMatchObject({
+        spent: 0,
+        cardBills: -32000,
+      })
+    })
+
+    it('unlinks when the card import is undone', async () => {
+      const { alex, importCard, importBank, bankList } = await setup()
+      const batch = await importCard()
+      await importBank([['10/10/2026', 'Direct debit', '300', '']])
+      expect((await bankList())[0]!.cardBill).toBe('amount')
+      await undoBatch(db, alex, batch.id)
+      expect((await bankList())[0]).toMatchObject({
+        cardBill: null,
+        cardBillAccountId: null,
+        cardBillExpectedMinor: null,
+      })
+    })
+
+    it('counts the bill for someone who can’t see the card', async () => {
+      const { alex, sam, importCard, importBank } = await setup('private')
+      await importCard()
+      await importBank([['10/10/2026', 'Direct debit', '300', '']])
+      // Alex can't see Sam's private card, so the bank payment is Alex's only record of it.
+      expect(await totals(db, alex, { month: '2026-10' })).toMatchObject({
+        spent: -30000,
+        cardBills: 0,
+      })
+      expect(await totals(db, sam, { month: '2026-10' })).toMatchObject({
+        spent: 0,
+        cardBills: -30000,
+      })
+    })
+
+    it('links data that was imported earlier', async () => {
+      const { importCard, importBank, bankList } = await setup()
+      await importCard()
+      await importBank([['10/10/2026', 'Direct debit', '300', '']])
+      await db.execute(
+        raw`update transactions set card_bill = null, card_bill_account_id = null, card_bill_expected_minor = null`,
+      )
+      expect(await linkAllCardBills(db)).toBe(1)
+      expect((await bankList())[0]!.cardBill).toBe('amount')
+      expect(await linkAllCardBills(db)).toBe(0)
+    })
   })
 
   it('validates months', () => {
