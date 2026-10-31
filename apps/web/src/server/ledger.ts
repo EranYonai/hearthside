@@ -4,14 +4,15 @@ import {
   duplicateKeys,
   suggestAccountName,
   type DetectedSource,
+  CUSTOM_PREFIX,
   isCategory,
   normalizeDescription,
-  type CategorySlug,
   type ParsedTransaction,
 } from '@hearthside/core'
 import type { AccountRow, MemberRow } from '@hearthside/db'
 import { schema } from '@hearthside/db'
 import { and, desc, eq, gte, ilike, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm'
+import { householdCategorySet } from './categories'
 import { loadContext, quickCategory } from './categorize'
 import { audit, AuthError, type Tx } from './repo'
 import { sha256 } from './tokens'
@@ -420,7 +421,7 @@ function filterConditions(member: MemberRow, f: TransactionFilter): SQL {
   if (f.kind) conditions.push(eq(accounts.kind, f.kind))
   if (f.holderId) conditions.push(sql`${holder} = ${f.holderId}`)
   if (f.category === 'none') conditions.push(isNull(transactions.category))
-  else if (f.category && isCategory(f.category))
+  else if (f.category && (isCategory(f.category) || f.category.startsWith(CUSTOM_PREFIX)))
     conditions.push(eq(transactions.category, f.category))
   const q = f.search?.trim()
   if (q) conditions.push(ilike(transactions.description, `%${q.replace(/[\\%_]/g, '\\$&')}%`))
@@ -554,11 +555,11 @@ export async function setCategory(
   db: Conn,
   member: MemberRow,
   transactionId: string,
-  category: CategorySlug | null,
+  category: string | null,
   remember = false,
 ) {
   assertEditor(member)
-  if (category !== null && !isCategory(category))
+  if (category !== null && !(await householdCategorySet(db, member.householdId)).has(category))
     throw new AuthError('not_found', 'Unknown category')
   const [row] = await db
     .select({ t: transactions })

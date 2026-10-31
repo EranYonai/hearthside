@@ -1,4 +1,5 @@
 import {
+  categorySet,
   categorizeFast,
   categorizeMany,
   historyFrom,
@@ -9,6 +10,7 @@ import {
 } from '@hearthside/core'
 import { schema } from '@hearthside/db'
 import { and, asc, eq, gt, isNull, sql } from 'drizzle-orm'
+import { listCustomCategories } from './categories'
 import type { audit } from './repo'
 
 const { accounts, transactions, categoryRules } = schema
@@ -42,9 +44,11 @@ export async function loadContext(db: Conn, householdId: string): Promise<Catego
       )
       .groupBy(transactions.descriptionKey, transactions.category),
   ])
+  const custom = await listCustomCategories(db, householdId)
   return {
     rules: new Map(rules.map((r) => [r.match, r.category])),
-    history: historyFrom(picks),
+    history: historyFrom(picks, categorySet(custom)),
+    custom,
   }
 }
 

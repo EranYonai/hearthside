@@ -1,4 +1,10 @@
-import { CATEGORIES, isCategory, type CategorySlug } from '../categories'
+import {
+  CATEGORIES,
+  categorySet,
+  type CategorySet,
+  type CategorySlug,
+  type CustomCategory,
+} from '../categories'
 import {
   DecisionUnavailable,
   type ChoiceQuestion,
@@ -28,12 +34,12 @@ export type CategoryVia = 'rule' | 'history' | 'keyword' | 'model'
 
 export interface CategorySuggestion {
   /** null when nothing was sure enough. */
-  category: CategorySlug | null
+  category: string | null
   via: CategoryVia | null
   /** 0..1. Rules are 1. */
   confidence: number
   /** The model's runner-up options, best first, when the model was asked. */
-  alternatives?: readonly { category: CategorySlug; confidence: number }[]
+  alternatives?: readonly { category: string; confidence: number }[]
   /** Short, human-readable reason, e.g. the keyword that matched. */
   reason?: string
   /** The model was needed but unavailable: try this entry again later. */
@@ -42,7 +48,7 @@ export interface CategorySuggestion {
 
 /** One description's past manual choices. */
 export interface HistoryEntry {
-  category: CategorySlug
+  category: string
   /** How many times it was chosen. */
   count: number
   /** How many manual choices exist for the description, any category. */
@@ -54,8 +60,8 @@ export interface CategorizeContext {
   rules?: ReadonlyMap<string, string>
   /** Past manual choices: descriptionKey -> most chosen category. */
   history?: ReadonlyMap<string, HistoryEntry>
-  /** Extra keywords on top of the built-in list. */
-  keywords?: Readonly<Record<string, readonly string[]>>
+  /** The household's own categories; their keywords join the built-in list. */
+  custom?: readonly CustomCategory[]
   /** The model. Leave out to run rules, history and keywords only. */
   engine?: DecisionEngine | null
   /** Keep model answers at or above this probability. Default 0.6. */
@@ -69,45 +75,67 @@ export const DEFAULT_MIN_CONFIDENCE = 0.6
 
 /** Short descriptions the model sees for each option. */
 const DESCRIPTIONS: Record<CategorySlug, string> = {
-  groceries: 'supermarket, food shopping, bakery',
-  'eating-out': 'restaurants, cafes, takeaway and food delivery',
-  home: 'furniture, repairs, home goods, garden',
-  bills: 'electricity, water, gas, city tax, phone, internet, insurance',
-  car: 'fuel, parking, car service, tolls',
-  transport: 'public transport, taxis, ride sharing',
-  kids: 'childcare, school, toys, activities for children',
-  health: 'pharmacy, doctors, dentist, clinics',
-  shopping: 'clothes, electronics, online stores, gifts',
-  subscriptions: 'streaming, apps, software, memberships',
-  travel: 'flights, hotels, holiday rentals',
-  income: 'salary, refunds, benefits received',
-  savings: 'money moved to savings or deposits',
-  transfer: 'money moved between own accounts or sent to people',
-  pension: 'pension and long-term savings funds',
+  groceries: 'supermarket, food',
+  'eating-out': 'restaurants, cafes, delivery',
+  home: 'furniture, repairs',
+  bills: 'utilities, phone, insurance',
+  car: 'fuel, parking',
+  transport: 'buses, trains, taxis',
+  kids: 'childcare, school, toys',
+  health: 'pharmacy, doctors',
+  shopping: 'clothes, online stores',
+  subscriptions: 'streaming, apps',
+  travel: 'flights, hotels',
+  income: 'salary, refunds',
+  savings: 'to savings',
+  transfer: 'between accounts, to people',
+  pension: 'pension funds',
   other: 'anything else',
 }
 
-const MONEY_OUT_OPTIONS = CATEGORIES.map((c) => c.slug).filter((s) => s !== 'income')
-const MONEY_IN_OPTIONS: CategorySlug[] = ['income', 'transfer', 'savings', 'other']
+const MONEY_IN_BUILTIN = new Set<string>(['income', 'transfer', 'savings', 'other'])
 
-function options(slugs: readonly CategorySlug[]): Record<string, string> {
-  return Object.fromEntries(slugs.map((s) => [s, DESCRIPTIONS[s]]))
-}
+/** Rough token count; the model fits all of a question's options in 192 tokens. */
+const OPTION_BUDGET_CHARS = 480
 
-const QUESTION_OUT: ChoiceQuestion = {
-  type: 'choice',
-  instructions: 'Which household budget category does this payment belong to?',
-  options: options(MONEY_OUT_OPTIONS),
-}
-const QUESTION_IN: ChoiceQuestion = {
-  type: 'choice',
-  instructions: 'What kind of money coming in is this?',
-  options: options(MONEY_IN_OPTIONS),
+/**
+ * The model sees category names, not slugs, plus short descriptions when they fit.
+ * Returns the question and a map from the names it may answer back to slugs.
+ */
+export function categoryQuestion(
+  direction: 'in' | 'out',
+  set: CategorySet = categorySet(),
+): { question: ChoiceQuestion; slugOf: Map<string, string> } {
+  const builtIn = CATEGORIES.filter((c) =>
+    direction === 'in' ? MONEY_IN_BUILTIN.has(c.slug) : c.slug !== 'income',
+  ).map((c) => ({
+    slug: c.slug as string,
+    label: c.label as string,
+    hint: DESCRIPTIONS[c.slug] as string | null,
+  }))
+  const custom = set.custom
+    .filter((c) => c.direction === direction)
+    .map((c) => ({ slug: c.slug, label: c.label, hint: c.keywords.slice(0, 4).join(', ') || null }))
+  const all = [...builtIn, ...custom]
+  const size = all.reduce((n, o) => n + o.label.length + (o.hint?.length ?? 0) + 4, 0)
+  const withHints = size <= OPTION_BUDGET_CHARS
+  return {
+    question: {
+      type: 'choice',
+      instructions:
+        direction === 'out'
+          ? 'Which household budget category does this payment belong to?'
+          : 'What kind of money coming in is this?',
+      options: Object.fromEntries(all.map((o) => [o.label, withHints ? o.hint : null])),
+    },
+    slugOf: new Map(all.map((o) => [o.label, o.slug])),
+  }
 }
 
 /** The question the model is asked about one entry, exported so other features can reuse it. */
 export function categoryRequest(
   input: CategorizeInput,
+  set: CategorySet = categorySet(),
 ): DecisionRequest<{ category: ChoiceQuestion }> {
   const money = (Math.abs(input.amountMinor) / 100).toFixed(2)
   return {
@@ -117,7 +145,7 @@ export function categoryRequest(
       direction: input.amountMinor < 0 ? 'money out' : 'money in',
       ...(input.accountKind ? { account: input.accountKind } : {}),
     },
-    questions: { category: input.amountMinor < 0 ? QUESTION_OUT : QUESTION_IN },
+    questions: { category: categoryQuestion(input.amountMinor < 0 ? 'out' : 'in', set).question },
   }
 }
 
@@ -132,10 +160,11 @@ export function categorizeFast(
 ): CategorySuggestion {
   const key = keyOf(input)
   const skip = new Set(ctx.skip)
+  const set = categorySet(ctx.custom)
   const rule = !skip.has('rule') ? ctx.rules?.get(key) : undefined
-  if (rule && isCategory(rule)) return { category: rule, via: 'rule', confidence: 1 }
+  if (rule && set.has(rule)) return { category: rule, via: 'rule', confidence: 1 }
   const past = !skip.has('history') ? ctx.history?.get(key) : undefined
-  if (past && past.total > 0 && past.count / past.total >= 0.6)
+  if (past && set.has(past.category) && past.total > 0 && past.count / past.total >= 0.6)
     return {
       category: past.category,
       via: 'history',
@@ -145,11 +174,7 @@ export function categorizeFast(
     }
   if (!skip.has('keyword')) {
     // The key may be an opaque index, so keywords always read the description itself.
-    const hit = matchKeyword(
-      normalizeDescription(input.description),
-      input.amountMinor,
-      ctx.keywords,
-    )
+    const hit = matchKeyword(normalizeDescription(input.description), input.amountMinor, ctx.custom)
     if (hit)
       return { category: hit.category, via: 'keyword', confidence: 0.8, reason: `“${hit.word}”` }
   }
@@ -184,10 +209,15 @@ export async function categorizeMany(
   })
   if (groups.size === 0) return out
 
+  const set = categorySet(ctx.custom)
+  const slugs = {
+    in: categoryQuestion('in', set).slugOf,
+    out: categoryQuestion('out', set).slugOf,
+  }
   const firsts = [...groups.values()].map((idx) => idx[0]!)
   let answers
   try {
-    answers = await engine.decide(firsts.map((i) => categoryRequest(inputs[i]!)))
+    answers = await engine.decide(firsts.map((i) => categoryRequest(inputs[i]!, set)))
   } catch (e) {
     if (!(e instanceof DecisionUnavailable)) throw e
     for (const idx of groups.values()) for (const i of idx) out[i] = { ...NONE, retry: true }
@@ -196,14 +226,19 @@ export async function categorizeMany(
   const min = ctx.minConfidence ?? DEFAULT_MIN_CONFIDENCE
   ;[...groups.values()].forEach((idx, g) => {
     const a = answers[g]?.category
-    if (!a || !isCategory(a.choice)) return
+    const slugOf = inputs[idx[0]!]!.amountMinor < 0 ? slugs.out : slugs.in
+    const choice = a && slugOf.get(a.choice)
+    if (!a || !choice) return
     const ranked = Object.entries(a.probabilities)
-      .filter((e): e is [CategorySlug, number] => isCategory(e[0]))
+      .flatMap(([name, p]) => {
+        const slug = slugOf.get(name)
+        return slug ? [[slug, p] as const] : []
+      })
       .sort((x, y) => y[1] - x[1])
     const suggestion: CategorySuggestion =
       a.confidence >= min
         ? {
-            category: a.choice,
+            category: choice,
             via: 'model',
             confidence: a.confidence,
             alternatives: ranked
@@ -225,11 +260,12 @@ export async function categorizeMany(
 /** Build the history map from rows of past manual choices. */
 export function historyFrom(
   rows: readonly { descriptionKey: string; category: string; count: number }[],
+  set: CategorySet = categorySet(),
 ): Map<string, HistoryEntry> {
   const totals = new Map<string, number>()
-  const best = new Map<string, { category: CategorySlug; count: number }>()
+  const best = new Map<string, { category: string; count: number }>()
   for (const r of rows) {
-    if (!isCategory(r.category)) continue
+    if (!set.has(r.category)) continue
     totals.set(r.descriptionKey, (totals.get(r.descriptionKey) ?? 0) + r.count)
     const b = best.get(r.descriptionKey)
     if (!b || r.count > b.count)

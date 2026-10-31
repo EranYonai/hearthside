@@ -1,4 +1,4 @@
-import { parseStatement, type DecisionEngine } from '@hearthside/core'
+import { categorySet, parseStatement, type DecisionEngine } from '@hearthside/core'
 import { createDb, migrateDb, schema } from '@hearthside/db'
 import { eq, sql as raw } from 'drizzle-orm'
 import { join } from 'node:path'
@@ -47,6 +47,8 @@ const rows = parseStatement(
   { spendingIsPositive: true },
 ).transactions
 
+const set = categorySet()
+
 /** Answers from a table; counts the questions it was asked. */
 function fakeEngine(table: Record<string, [string, number]>) {
   const engine = {
@@ -55,10 +57,9 @@ function fakeEngine(table: Record<string, [string, number]>) {
     async decide(requests: readonly { state: unknown; questions: object }[]) {
       engine.asked += requests.length
       return requests.map((r) => {
-        const [choice, p] = table[(r.state as { description: string }).description] ?? [
-          'other',
-          0.2,
-        ]
+        const [slug, p] = table[(r.state as { description: string }).description] ?? ['other', 0.2]
+        // The model answers with category names.
+        const choice = set.has(slug) ? set.label(slug) : slug
         return {
           category: { type: 'choice', choice, confidence: p, probabilities: { [choice]: p } },
         }

@@ -8,6 +8,9 @@ import {
   historyFrom,
 } from './categorize'
 import { matchKeyword } from './keywords'
+import { categorySet, type CustomCategory } from '../categories'
+
+const set = categorySet()
 
 // Synthetic entries only: made-up merchants and amounts.
 const out = (description: string, amountMinor = -4590) => ({ description, amountMinor })
@@ -24,7 +27,9 @@ function fakeEngine(
       calls.push(requests as unknown as DecisionRequest[])
       return requests.map((r) => {
         const d = (r.state as { description: string }).description
-        const [choice, p] = table[d] ?? ['other', 0.3]
+        const [slug, p] = table[d] ?? ['other', 0.3]
+        // The model answers with category names, so tables name slugs and we translate.
+        const choice = set.has(slug) ? set.label(slug) : slug
         const opts = Object.keys(
           (r.questions as unknown as { category: { options: object } }).category.options,
         )
@@ -105,7 +110,14 @@ describe('matchKeyword', () => {
 
   it('prefers the more specific phrase and accepts extra words', () => {
     expect(matchKeyword('north gas station', -1)?.category).toBe('car')
-    expect(matchKeyword('acme tutoring', -1, { kids: ['acme tutoring'] })?.category).toBe('kids')
+    const tutoring: CustomCategory = {
+      slug: 'c-tutor',
+      label: 'Tutoring',
+      icon: 'education',
+      direction: 'out',
+      keywords: ['acme tutoring'],
+    }
+    expect(matchKeyword('acme tutoring', -1, [tutoring])?.category).toBe('c-tutor')
   })
 })
 
@@ -166,7 +178,7 @@ describe('categorizeMany', () => {
 describe('categoryRequest', () => {
   it('offers spending categories for money out and income ones for money in', () => {
     const spend = categoryRequest({ ...out('Zorblax 42'), accountKind: 'card' })
-    expect(Object.keys(spend.questions.category.options)).not.toContain('income')
+    expect(Object.keys(spend.questions.category.options)).not.toContain('Income')
     expect(spend.state).toMatchObject({
       amount: '45.90 ILS',
       direction: 'money out',
@@ -177,7 +189,7 @@ describe('categoryRequest', () => {
       amountMinor: 120000,
       currency: 'EUR',
     })
-    expect(Object.keys(income.questions.category.options)).toContain('income')
+    expect(Object.keys(income.questions.category.options)).toContain('Income')
     expect(income.state).toMatchObject({ amount: '1200.00 EUR', direction: 'money in' })
   })
 })

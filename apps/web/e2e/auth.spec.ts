@@ -267,6 +267,17 @@ test('dropping a card statement picks or creates its account and imports it', as
 
   await owner.goto('/')
   await expect(owner.getByLabel('Spent in October')).toContainText('Groceries')
+
+  // A household category of its own, with a keyword, files the store.
+  await owner.goto('/settings')
+  await owner.getByRole('button', { name: 'New category' }).click()
+  await owner.getByLabel('Category name').fill('Decor')
+  await owner.getByRole('button', { name: 'home', exact: true }).click()
+  await owner.getByLabel(/^Keywords/).fill('home store')
+  await owner.getByRole('button', { name: 'Add category' }).click()
+  await expect(owner.getByTestId('custom-categories')).toContainText('Decor')
+  await owner.goto('/transactions?month=2026-10')
+  await expect(owner.getByRole('button', { name: /^Home Store, Decor/ })).toBeVisible()
 })
 
 test('a bank statement PDF imports by column position', async () => {

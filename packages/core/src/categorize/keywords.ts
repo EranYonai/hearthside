@@ -1,4 +1,4 @@
-import type { CategorySlug } from '../categories'
+import type { CategorySlug, CustomCategory } from '../categories'
 
 /**
  * Built-in hints: words that usually mean a category. They run before the model, are cheap and
@@ -63,7 +63,12 @@ export const KEYWORDS: Readonly<Record<CategorySlug, readonly string[]>> = {
 }
 
 /** Categories a positive amount can land in from a keyword. */
-const MONEY_IN = new Set<CategorySlug>(['income', 'savings', 'transfer', 'pension'])
+const MONEY_IN: ReadonlySet<string> = new Set<CategorySlug>([
+  'income',
+  'savings',
+  'transfer',
+  'pension',
+])
 
 const HEBREW = /[֐-׿]/
 const EDGE = '(?:^|(?<=[^\\p{L}\\p{N}]))'
@@ -73,12 +78,20 @@ function escape(s: string) {
 }
 
 interface Matcher {
-  category: CategorySlug
+  category: string
+  /** May match money coming in. */
+  moneyIn: boolean
+  /** May match money going out. */
+  moneyOut: boolean
   word: string
   test: (key: string) => boolean
 }
 
-function build(table: Readonly<Record<string, readonly string[]>>): Matcher[] {
+function build(
+  table: Readonly<Record<string, readonly string[]>>,
+  moneyIn?: ReadonlySet<string>,
+): Matcher[] {
+  // Built-ins: everything but income can be money out. Household ones go one way only.
   const out: Matcher[] = []
   for (const [category, words] of Object.entries(table))
     for (const raw of words) {
@@ -90,7 +103,13 @@ function build(table: Readonly<Record<string, readonly string[]>>): Matcher[] {
             'u',
           )
         : new RegExp(`${EDGE}${w}(?=$|[^\\p{L}\\p{N}])`, 'u')
-      out.push({ category: category as CategorySlug, word: word.trim(), test: (k) => re.test(k) })
+      out.push({
+        category,
+        moneyIn: (moneyIn ?? MONEY_IN).has(category),
+        moneyOut: moneyIn ? !moneyIn.has(category) : category !== 'income',
+        word: word.trim(),
+        test: (k) => re.test(k),
+      })
     }
   // Longer words are more specific: "gas station" before "gas".
   return out.sort((a, b) => b.word.length - a.word.length)
@@ -99,20 +118,28 @@ function build(table: Readonly<Record<string, readonly string[]>>): Matcher[] {
 const DEFAULT_MATCHERS = build(KEYWORDS)
 
 export interface KeywordHit {
-  category: CategorySlug
+  category: string
   word: string
 }
 
-/** First keyword found in a normalized description, or undefined. */
+/** First keyword found in a normalized description, or undefined. Household words go first. */
 export function matchKeyword(
   key: string,
   amountMinor: number,
-  extra?: Readonly<Record<string, readonly string[]>>,
+  custom?: readonly CustomCategory[],
 ): KeywordHit | undefined {
-  const matchers = extra ? [...build(extra), ...DEFAULT_MATCHERS] : DEFAULT_MATCHERS
+  const matchers = custom?.length
+    ? [
+        ...build(
+          Object.fromEntries(custom.map((c) => [c.slug, c.keywords])),
+          new Set(custom.filter((c) => c.direction === 'in').map((c) => c.slug)),
+        ),
+        ...DEFAULT_MATCHERS,
+      ]
+    : DEFAULT_MATCHERS
   for (const m of matchers) {
-    if (amountMinor > 0 && !MONEY_IN.has(m.category)) continue
-    if (amountMinor < 0 && m.category === 'income') continue
+    if (amountMinor > 0 && !m.moneyIn) continue
+    if (amountMinor < 0 && !m.moneyOut) continue
     if (m.test(key)) return { category: m.category, word: m.word }
   }
   return undefined

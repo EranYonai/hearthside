@@ -44,7 +44,8 @@ Entries are filed in this order, and the first answer wins:
 4. A local model ([Laya](https://github.com/receptron/laya), run with ONNX Runtime on CPU),
    kept only when it is at least 60% sure
 
-Steps 1 to 3 run during import. The model fills in the rest in the background, and people's
+Households can add up to 16 categories of their own in Settings, each with keywords; the
+keyword step and the model use them too. Steps 1 to 3 run during import. The model fills in the rest in the background, and people's
 own choices are never overwritten. The Transactions screen has a "Categorize now" button.
 
 The model runs in the `decide` container, which has no database access and sits on an

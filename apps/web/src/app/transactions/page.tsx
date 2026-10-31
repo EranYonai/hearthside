@@ -1,4 +1,3 @@
-import { CATEGORIES, categoryLabel } from '@hearthside/core'
 import { Amount, buttonClasses, Card, Label, SummaryCard, TransactionList } from '@hearthside/ui'
 import { ChevronLeft, ChevronRight, FileUp } from 'lucide-react'
 import type { Metadata } from 'next'
@@ -17,6 +16,7 @@ import {
 } from '@/server/ledger'
 import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
+import { householdCategorySet } from '@/server/categories'
 import { CategorisedRow, CategorizeNow, type TxView } from './client'
 
 export const metadata: Metadata = { title: 'Transactions · Hearthside' }
@@ -59,10 +59,12 @@ export default async function TransactionsPage({
     ...(one('category') ? { category: one('category')! } : {}),
     ...(one('q') ? { search: one('q')!.slice(0, 100) } : {}),
   }
-  const [rows, sum] = await Promise.all([
+  const [rows, sum, categories] = await Promise.all([
     listTransactions(db, member, filter),
     totals(db, member, filter),
+    householdCategorySet(db, member.householdId),
   ])
+  const options = categories.all.map(({ slug, label, icon }) => ({ slug, label, icon }))
   const editable = canEdit(member)
   const query = (change: Record<string, string | undefined>) => {
     const p = new URLSearchParams()
@@ -78,7 +80,7 @@ export default async function TransactionsPage({
   ]
   const spent = Math.abs(sum.spent)
   const segments = sum.byCategory.map((c) => ({
-    name: categoryLabel(c.category),
+    name: categories.label(c.category),
     minor: Math.abs(c.minor),
     percent: spent ? (Math.abs(c.minor) / spent) * 100 : 0,
   }))
@@ -88,6 +90,8 @@ export default async function TransactionsPage({
     meta: `${accountName} · ${day.format(new Date(t.occurredOn))}`,
     minor: t.amountMinor,
     category: t.category,
+    label: categories.label(t.category),
+    icon: categories.icon(t.category),
     ...(t.categorySource === 'auto' ? { auto: true } : {}),
     ...(t.originalMinor != null && t.originalCurrency
       ? { original: { minor: t.originalMinor, currency: t.originalCurrency } }
@@ -191,7 +195,7 @@ export default async function TransactionsPage({
           <select name="category" defaultValue={filter.category ?? ''} className={selectClass}>
             <option value="">All categories</option>
             <option value="none">Uncategorized</option>
-            {CATEGORIES.map((c) => (
+            {categories.all.map((c) => (
               <option key={c.slug} value={c.slug}>
                 {c.label}
               </option>
@@ -233,7 +237,7 @@ export default async function TransactionsPage({
         ) : (
           <TransactionList className="-mx-2" data-testid="transactions">
             {views.map((tx) => (
-              <CategorisedRow key={tx.id} tx={tx} editable={editable} />
+              <CategorisedRow key={tx.id} tx={tx} editable={editable} options={options} />
             ))}
           </TransactionList>
         )}

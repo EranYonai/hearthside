@@ -70,6 +70,9 @@ services:
     image: hearthside-decide
     command: ['node', 'src/fetch-model.ts']
     restart: 'no'
+    # The image's health check is for the service, not this one-shot download.
+    healthcheck:
+      disable: true
     <<: *hardening
     environment:
       LAYA_VARIANT: ${LAYA_VARIANT:-}
