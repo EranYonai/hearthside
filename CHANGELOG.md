@@ -10,6 +10,8 @@ moves the Unreleased notes under the new version.
 
 ### Added
 
+- Spending by category as a donut chart on the transactions view, with a months view beside it,
+  and the home spending meter grouped and outlined per account.
 - Importing household records and a transactions view (#39).
 - Accounts tab grouped by type, separate views per account type, and accounts linked to the
   household member who holds them (#43, #46).
