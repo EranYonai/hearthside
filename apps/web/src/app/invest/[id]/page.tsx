@@ -35,12 +35,15 @@ function formatUnits(units: string): string {
 
 export default async function InvestmentAccountPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { member, household } = await requireSession()
   const db = requireDb()
   const { id } = await params
+  const editing = (await searchParams).edit === '1'
   const account = await getVisibleInvestmentAccount(db, member, id).catch((err: unknown) => {
     if (err instanceof AuthError) notFound()
     throw err
@@ -200,7 +203,7 @@ export default async function InvestmentAccountPage({
             </details>
           </Card>
           <Card aria-labelledby="edit-title">
-            <details>
+            <details open={editing}>
               <summary id="edit-title" className="cursor-pointer text-body-strong text-brand-ink">
                 Account details
               </summary>

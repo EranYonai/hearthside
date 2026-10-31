@@ -396,6 +396,16 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await expect(importer.getByText('Added 1, updated 0, removed 0.')).toBeVisible()
   await expect(owner.getByTestId('holdings').getByRole('listitem')).toHaveCount(3)
   await expect(owner.getByTestId('holdings')).toContainText('Test Bond Fund')
+
+  // Investment accounts also show on the Accounts tab, next to cards and banks.
+  await owner
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Accounts' })
+    .click()
+  const tiles = owner.getByTestId('accounts-investment')
+  await expect(tiles).toContainText('Long-term savings')
+  await tiles.getByRole('link', { name: 'Edit Long-term savings' }).click()
+  await expect(owner.getByLabel('Account name')).toHaveValue('Long-term savings')
 })
 
 test('settings show the app version and sign-in activity', async () => {

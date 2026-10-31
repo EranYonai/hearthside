@@ -1,5 +1,5 @@
 import { cx } from '@hearthside/ui'
-import { CreditCard, Landmark, Wallet } from 'lucide-react'
+import { CreditCard, Landmark, TrendingUp, Wallet } from 'lucide-react'
 
 const NETWORK_LABEL: Record<string, string> = {
   visa: 'VISA',
@@ -9,9 +9,14 @@ const NETWORK_LABEL: Record<string, string> = {
   isracard: 'Isracard',
 }
 
+const FALLBACK_NAME: Record<string, string> = {
+  bank: 'Current account',
+  investment: 'Investments',
+}
+
 export interface AccountCardProps {
   name: string
-  kind: 'card' | 'bank' | 'other'
+  kind: 'card' | 'bank' | 'investment' | 'other'
   provider?: string | null
   network?: string | null
   last4?: string | null
@@ -30,7 +35,14 @@ export function AccountCard({
   note,
   className,
 }: AccountCardProps) {
-  const Icon = kind === 'card' ? CreditCard : kind === 'bank' ? Landmark : Wallet
+  const Icon =
+    kind === 'card'
+      ? CreditCard
+      : kind === 'bank'
+        ? Landmark
+        : kind === 'investment'
+          ? TrendingUp
+          : Wallet
   return (
     <div
       className={cx(
@@ -55,9 +67,7 @@ export function AccountCard({
           {last4 ? `•••• ${last4}` : ' '}
         </span>
         <span className="flex items-baseline justify-between gap-2 text-caption text-ink-muted">
-          <span className="truncate">
-            {provider ? name : kind === 'bank' ? 'Current account' : 'Card'}
-          </span>
+          <span className="truncate">{provider ? name : (FALLBACK_NAME[kind] ?? 'Card')}</span>
           {network && (
             <span className="font-display font-semibold">{NETWORK_LABEL[network] ?? network}</span>
           )}

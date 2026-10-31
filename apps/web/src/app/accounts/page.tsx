@@ -7,6 +7,8 @@ import { AccountCard } from '@/components/AccountCard'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
 import { isMonth, monthName, shiftMonth } from '@/lib/month'
+import { currentRates } from '@/server/fx'
+import { investmentHolder, mayManage, portfolio } from '@/server/invest'
 import { accountSummaries, canEdit, holderOf, listMonths } from '@/server/ledger'
 import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
@@ -33,10 +35,12 @@ export default async function AccountsPage({
   const month = isMonth(params.month)
     ? params.month
     : (months[0] ?? new Date().toISOString().slice(0, 7))
-  const [summaries, people] = await Promise.all([
+  const [summaries, people, fx] = await Promise.all([
     accountSummaries(db, member, month),
     listMembers(db, household.id),
+    currentRates(db),
   ])
+  const invest = await portfolio(db, member, fx.rates)
   const names = new Map(people.map((p) => [p.id, p.id === member.id ? 'You' : p.name]))
   const label = monthName.format(new Date(`${month}-01`))
   const editable = canEdit(member)
@@ -61,7 +65,7 @@ export default async function AccountsPage({
         </Link>
       </div>
 
-      {summaries.length === 0 && (
+      {summaries.length === 0 && invest.accounts.length === 0 && (
         <Card>
           <p className="text-ink-muted">
             No accounts yet. Import a statement and its account is added for you.
@@ -139,6 +143,64 @@ export default async function AccountsPage({
           </Card>
         )
       })}
+
+      {invest.accounts.length > 0 && (
+        <Card aria-labelledby="investment-title">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <Label id="investment-title">Investments</Label>
+            <span className="text-caption text-ink-muted">
+              Value{' '}
+              <Amount
+                minor={invest.summary.totalMinor}
+                currency={invest.summary.currency}
+                whole
+                className="text-caption"
+              />
+            </span>
+          </div>
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3" data-testid="accounts-investment">
+            {invest.accounts.map((a) => {
+              const count = invest.holdings.filter((h) => h.accountId === a.id).length
+              return (
+                <li key={a.id} className="grid gap-1">
+                  <Link
+                    href={`/invest/${a.id}`}
+                    aria-label={`${a.name}, ${count} ${count === 1 ? 'holding' : 'holdings'}`}
+                    className="rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  >
+                    <AccountCard
+                      name={a.name}
+                      kind="investment"
+                      provider={a.provider}
+                      {...(a.visibility === 'private' ? { note: 'Private' } : {})}
+                    />
+                  </Link>
+                  <span className="flex min-h-11 items-center justify-between gap-2 text-caption text-ink-muted">
+                    <span className="truncate">
+                      {names.get(investmentHolder(a)) ?? 'Former member'} ·{' '}
+                      <Amount
+                        minor={invest.summary.byAccount[a.id] ?? 0}
+                        currency={invest.summary.currency}
+                        whole
+                        className="text-caption"
+                      />
+                    </span>
+                    {mayManage(member, a) && (
+                      <Link
+                        href={`/invest/${a.id}?edit=1`}
+                        aria-label={`Edit ${a.name}`}
+                        className="grid size-11 place-items-center rounded-md text-brand-ink"
+                      >
+                        <Pencil size={16} aria-hidden />
+                      </Link>
+                    )}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </Card>
+      )}
 
       {editable && (
         <Card aria-labelledby="add-title">

@@ -20,6 +20,7 @@ moves the Unreleased notes under the new version.
   allocation (#25, #28, #31).
 - Investments in each member's currency with daily exchange rates, delayed market prices, and
   holdings import from Excel or CSV (#29, #30, #28).
+- Investment accounts also appear on the Accounts tab, with their value.
 
 ### Security
 
