@@ -67,7 +67,8 @@ describe.skipIf(!url)('check-up (Postgres)', () => {
     const [row] = (await db.execute(raw`select invest_settings from households`)) as unknown as {
       invest_settings: string
     }[]
-    expect(row!.invest_settings).not.toContain('60')
+    expect(row!.invest_settings).toMatch(/^hs1:/)
+    expect(row!.invest_settings).not.toContain('stocksTarget')
     await expect(
       saveInvestSettings(db, robin, { stocksTarget: 50, emergencyMonths: 3 }),
     ).rejects.toThrow(AuthError)
