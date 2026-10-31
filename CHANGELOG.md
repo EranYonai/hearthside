@@ -18,6 +18,7 @@ moves the Unreleased notes under the new version.
 - Household categories: add, edit and remove your own in Settings, with an icon and keywords.
 - Account looks: each account shows a color and a short badge for where it comes from, and
   you can pick its source and your own color when editing it. Transactions show a matching dot.
+- Delete an account, with its imports and transactions, from its edit page (asks first).
 
 ### Security
 

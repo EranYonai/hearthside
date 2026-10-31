@@ -4,7 +4,7 @@ import { isProviderId, normalizeHexColor } from '@hearthside/core'
 import { requireDb } from '@/lib/db'
 import { runAction } from '@/server/action'
 import { cleanName } from '@/server/http'
-import { updateAccount, type AccountVisibility } from '@/server/ledger'
+import { deleteAccount, updateAccount, type AccountVisibility } from '@/server/ledger'
 import { AuthError } from '@/server/repo'
 import { requireSession } from '@/server/session'
 
@@ -39,4 +39,11 @@ export async function updateAccountAction(
     })
     return {}
   })
+}
+
+export async function deleteAccountAction(id: string) {
+  const { member } = await requireSession()
+  return runAction(['/accounts', '/transactions', '/import', '/'], () =>
+    deleteAccount(requireDb(), member, id),
+  )
 }
