@@ -3,7 +3,7 @@ import { createDb, initEncryption, migrateDb, schema } from '@hearthside/db'
 import { eq, sql as raw } from 'drizzle-orm'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { setOnboarded, updateProfile } from './profile'
+import { setDisplayCurrency, setOnboarded, updateProfile } from './profile'
 import { acceptInvite, createHousehold, createInvite, getHousehold } from './repo'
 
 const url = process.env.TEST_DATABASE_URL
@@ -92,5 +92,9 @@ describe.skipIf(!url)('profile (Postgres)', () => {
     expect((await memberRow(adult.id)).onboardedAt).toEqual(at)
     await setOnboarded(db, adult, false)
     expect((await memberRow(adult.id)).onboardedAt).toBeNull()
+
+    await setDisplayCurrency(db, adult, 'EUR')
+    expect((await memberRow(adult.id)).displayCurrency).toBe('EUR')
+    await expect(setDisplayCurrency(db, adult, 'XYZ')).rejects.toThrow('Pick a currency')
   })
 })

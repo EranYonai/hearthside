@@ -167,3 +167,16 @@ export function allocation(byClass: PortfolioSummary['byClass']): AllocationSlic
 export function normalizeSymbol(input: string): string {
   return input.trim().toUpperCase().replace(/\s+/g, '')
 }
+
+/**
+ * Every pair between the given currencies, from rates against one base (e.g. EUR → USD 1.08,
+ * EUR → ILS 4.0 gives USD/ILS 3.7037…). The base itself counts as 1.
+ */
+export function crossRates(base: string, perBase: Readonly<Record<string, number>>): Rates {
+  const all: Record<string, number> = { ...perBase, [base]: 1 }
+  const rates = new Map<string, number>()
+  for (const [from, a] of Object.entries(all))
+    for (const [to, b] of Object.entries(all))
+      if (from !== to && a > 0 && b > 0) rates.set(`${from}/${to}`, b / a)
+  return rates
+}

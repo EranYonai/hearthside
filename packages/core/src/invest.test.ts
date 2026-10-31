@@ -3,6 +3,7 @@ import {
   allocation,
   assetClassLabel,
   convertMinor,
+  crossRates,
   decimalToMinor,
   isAssetClass,
   isHoldingCurrency,
@@ -111,5 +112,20 @@ describe('helpers', () => {
   it('normalizes symbols', () => {
     expect(normalizeSymbol('  vt ')).toBe('VT')
     expect(normalizeSymbol('11 2233')).toBe('112233')
+  })
+})
+
+describe('crossRates', () => {
+  it('derives every pair from one base', () => {
+    const rates = crossRates('EUR', { USD: 1.25, ILS: 4 })
+    expect(rates.get('EUR/ILS')).toBe(4)
+    expect(rates.get('USD/ILS')).toBeCloseTo(3.2)
+    expect(rates.get('ILS/EUR')).toBe(0.25)
+    expect(convertMinor(1000, 'USD', 'ILS', rates)).toBe(3200)
+    expect(rates.has('USD/USD')).toBe(false)
+  })
+
+  it('skips nonsense rates', () => {
+    expect(crossRates('EUR', { USD: 0 }).size).toBe(0)
   })
 })

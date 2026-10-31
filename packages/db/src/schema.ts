@@ -8,6 +8,7 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -439,6 +440,24 @@ export const investmentTransactions = pgTable(
       sql`${t.kind} in ('deposit', 'withdrawal', 'buy', 'sell', 'dividend', 'interest', 'fee', 'tax')`,
     ),
   ],
+)
+
+/**
+ * Daily reference exchange rates: one unit of `base` is worth `rate` of `quote`. Public market
+ * data, so stored in the clear. The newest day per pair is the current rate.
+ */
+export const fxRates = pgTable(
+  'fx_rates',
+  {
+    base: text('base').notNull(),
+    quote: text('quote').notNull(),
+    on: date('on', { mode: 'string' }).notNull(),
+    /** Exact decimal string. */
+    rate: text('rate').notNull(),
+    source: text('source').notNull(),
+    fetchedAt: ts('fetched_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.base, t.quote, t.on] })],
 )
 
 /**

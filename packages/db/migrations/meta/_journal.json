@@ -50,6 +50,13 @@
       "when": 1793432016457,
       "tag": "0006_investments",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793432695509,
+      "tag": "0007_fx_rates",
+      "breakpoints": true
     }
   ]
 }

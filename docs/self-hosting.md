@@ -37,6 +37,14 @@ recovery codes for when they lose every device with their passkey.
 
 Upgrade with `git pull && pnpm stack`.
 
+## Exchange rates
+
+To show values in each member's chosen currency, the app fetches daily reference exchange rates
+from a free public service (no key) at most once an hour, when someone opens the Invest tab.
+Only the list of rates is requested; nothing about the household is sent. Set
+`FX_RATES_URL=off` in `.env` to turn this off, or point it at another service that answers in
+the same shape.
+
 ## Changing the database password
 
 Postgres only reads `secrets/db_password.txt` when it creates the database volume. Rewriting
