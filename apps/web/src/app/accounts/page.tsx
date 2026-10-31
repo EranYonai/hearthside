@@ -12,7 +12,6 @@ import { accountSummaries, canEdit, holderOf, listMonths } from '@/server/ledger
 import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
 import { AccountForm } from '../import/client'
-import { listBrandLogos } from '@/server/logos'
 
 export const metadata: Metadata = { title: 'Accounts · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -40,7 +39,6 @@ export default async function AccountsPage({
     listMembers(db, household.id),
     currentRates(db),
   ])
-  const logos = await listBrandLogos(db, household.id)
   const invest = await portfolio(db, member, fx.rates)
   const names = new Map(people.map((p) => [p.id, p.id === member.id ? 'You' : p.name]))
   const label = monthName.format(new Date(`${month}-01`))
@@ -117,7 +115,6 @@ export default async function AccountsPage({
                         name={a.name}
                         kind={a.kind}
                         provider={a.provider}
-                        logos={logos}
                         color={a.color}
                         network={a.network}
                         last4={a.last4}
@@ -175,7 +172,6 @@ export default async function AccountsPage({
                       name={a.name}
                       kind="investment"
                       provider={a.provider}
-                      logos={logos}
                       {...(a.visibility === 'private' ? { note: 'Private' } : {})}
                     />
                   </Link>

@@ -15,27 +15,27 @@ export interface Brand {
 }
 
 /**
- * Colors are taken from each provider's public logo and rounded to the nearest clean value.
- * `approx` marks the ones we couldn't confirm from a primary source.
+ * Colors are read from each provider's logo file (see apps/web/public/logos/SOURCES.md).
+ * `approx` marks the ones without a logo file to confirm them.
  */
 export const BRANDS: Record<ProviderId, Brand & { approx?: true }> = {
   // Banks
-  hapoalim: { color: '#E30520', accent: '#9E0015', mono: 'H' },
-  leumi: { color: '#0C4DA2', accent: '#00AEEF', mono: 'L' },
-  mizrahi: { color: '#F5821F', accent: '#4D555A', mono: 'MT' },
-  discount: { color: '#00763A', accent: '#7AC143', mono: 'D' },
-  fibi: { color: '#002F6C', accent: '#C9A227', mono: 'FI', approx: true },
-  mercantile: { color: '#00539B', accent: '#00A0DF', mono: 'M', approx: true },
-  jerusalem: { color: '#1D3F8F', accent: '#5B8DEF', mono: 'J', approx: true },
-  yahav: { color: '#00609C', accent: '#00A9CE', mono: 'Y', approx: true },
+  hapoalim: { color: '#F0000B', accent: '#525252', mono: 'H' },
+  leumi: { color: '#10069A', accent: '#0066FF', mono: 'L' },
+  mizrahi: { color: '#F87D28', accent: '#3D444B', mono: 'MT' },
+  discount: { color: '#59AD29', accent: '#2E6B12', mono: 'D' },
+  fibi: { color: '#00529B', accent: '#FDB726', mono: 'FI' },
+  mercantile: { color: '#00A661', accent: '#00663B', mono: 'M' },
+  jerusalem: { color: '#FAA819', accent: '#424245', mono: 'J' },
+  yahav: { color: '#2D5998', accent: '#4CB245', mono: 'Y' },
   massad: { color: '#5B2C83', accent: '#A779D9', mono: 'MS', approx: true },
-  onezero: { color: '#141414', accent: '#6E56CF', mono: '10', approx: true },
+  onezero: { color: '#141414', accent: '#6E6E6E', mono: '10' },
   // Cards
-  max: { color: '#D6006F', accent: '#5B1A8C', mono: 'max', approx: true },
-  cal: { color: '#00B6AD', accent: '#0A4573', mono: 'cal' },
-  isracard: { color: '#042A59', accent: '#C51115', mono: 'IC' },
-  amex: { color: '#006FCF', accent: '#00175A', mono: 'AX' },
-  diners: { color: '#004A97', accent: '#7FA7D6', mono: 'DC', approx: true },
+  max: { color: '#141414', accent: '#6E6E6E', mono: 'max' },
+  cal: { color: '#1E5CB3', accent: '#7FA7E0', mono: 'cal' },
+  isracard: { color: '#0C1419', accent: '#4A5A66', mono: 'IC' },
+  amex: { color: '#016FD0', accent: '#00175A', mono: 'AX' },
+  diners: { color: '#0079BE', accent: '#211E1F', mono: 'DC' },
 }
 
 /** Brokers, investment houses and pension funds. Free-text provider names map to these. */
@@ -43,37 +43,37 @@ export const BROKERS = {
   ibkr: {
     label: 'Interactive Brokers',
     match: /interactive\s*brokers|\bibkr\b|אינטראקטיב/i,
-    brand: { color: '#D81222', accent: '#7A0A13', mono: 'IB' },
+    brand: { color: '#D81222', accent: '#960B1A', mono: 'IB' },
   },
   etoro: {
     label: 'eToro',
     match: /e-?toro|איטורו/i,
-    brand: { color: '#0E7F2A', accent: '#0B5E20', mono: 'eT', approx: true },
+    brand: { color: '#6DFF8A', accent: '#1F7A35', mono: 'eT' },
   },
   schwab: {
     label: 'Charles Schwab',
     match: /schwab/i,
-    brand: { color: '#00A0DF', accent: '#005A87', mono: 'CS', approx: true },
+    brand: { color: '#00A0DF', accent: '#005A87', mono: 'CS' },
   },
   meitav: {
     label: 'Meitav',
     match: /meitav|מיטב/i,
-    brand: { color: '#00828C', accent: '#7FD1D6', mono: 'Mt', approx: true },
+    brand: { color: '#3F1C51', accent: '#36B778', mono: 'Mt' },
   },
   altshuler: {
     label: 'Altshuler Shaham',
     match: /altshuler|אלטשולר/i,
-    brand: { color: '#C8102E', accent: '#5E0716', mono: 'AS', approx: true },
+    brand: { color: '#007040', accent: '#1C1C1C', mono: 'AS' },
   },
   psagot: {
     label: 'Psagot',
     match: /psagot|פסגות/i,
-    brand: { color: '#0B3B8C', accent: '#4F8BE0', mono: 'Ps', approx: true },
+    brand: { color: '#393981', accent: '#1F1F71', mono: 'Ps' },
   },
   more: {
     label: 'More',
     match: /\bmore\s+(investment|invest|gemel|provident)|מור (השקעות|גמל)/i,
-    brand: { color: '#C2401B', accent: '#7A2A14', mono: 'Mo', approx: true },
+    brand: { color: '#0F3D66', accent: '#63C7C9', mono: 'Mo' },
   },
   excellence: {
     label: 'Excellence',
@@ -83,27 +83,27 @@ export const BROKERS = {
   ibi: {
     label: 'IBI',
     match: /\bibi\b|אי\.?בי\.?אי/i,
-    brand: { color: '#1F2A44', accent: '#6C7BA0', mono: 'IBI', approx: true },
+    brand: { color: '#161932', accent: '#5A5F8A', mono: 'IBI' },
   },
   migdal: {
     label: 'Migdal',
     match: /migdal|מגדל/i,
-    brand: { color: '#0033A0', accent: '#6F8FD6', mono: 'Mg', approx: true },
+    brand: { color: '#3C65E3', accent: '#020140', mono: 'Mg' },
   },
   harel: {
     label: 'Harel',
     match: /harel|הראל/i,
-    brand: { color: '#0058A3', accent: '#00A3E0', mono: 'Hr', approx: true },
+    brand: { color: '#0088C9', accent: '#2D9D3A', mono: 'Hr' },
   },
   clal: {
     label: 'Clal',
     match: /\bclal\b|כלל ביטוח|כלל פנסיה|כלל גמל/i,
-    brand: { color: '#00818A', accent: '#7FCCD1', mono: 'Cl', approx: true },
+    brand: { color: '#507CF3', accent: '#2C2A33', mono: 'Cl' },
   },
   phoenix: {
     label: 'Phoenix',
     match: /phoenix|הפניקס/i,
-    brand: { color: '#B84303', accent: '#7A2C02', mono: 'Ph', approx: true },
+    brand: { color: '#232873', accent: '#FF5A23', mono: 'Ph' },
   },
   menora: {
     label: 'Menora Mivtachim',
@@ -113,7 +113,7 @@ export const BROKERS = {
   analyst: {
     label: 'Analyst',
     match: /analyst|אנליסט/i,
-    brand: { color: '#5B2C83', accent: '#A779D9', mono: 'An', approx: true },
+    brand: { color: '#1E1C55', accent: '#5A93CE', mono: 'An' },
   },
 } as const satisfies Record<
   string,
@@ -222,6 +222,15 @@ export function shade(hex: string, amount: number): string {
   return toHex(channels(hex).map((c) => c + (target - c) * t))
 }
 
+/** The color itself, or the nearest darker shade that text can sit on (4.5:1). */
+export function readable(hex: string): string {
+  for (let t = 0; t < 1; t += 0.04) {
+    const c = shade(hex, -t)
+    if (contrastRatio(c, inkOn(c)) >= 4.5) return c
+  }
+  return '#000000'
+}
+
 export interface AccountLook {
   /** Provider label, when the provider is known. */
   label: string | null
@@ -229,11 +238,13 @@ export interface AccountLook {
   brand: BrandId | null
   mono: string
   color: string | null
+  /** `color`, darkened just enough for text: the card face and badge background. */
+  face: string | null
   /** Darker end of the card gradient; text on it still reads with `ink`. */
   deep: string | null
   /** Decorative second color. */
   accent: string | null
-  /** Text color on `color` and `deep`. */
+  /** Text color on `face` and `deep`. */
   ink: string | null
   /** True when the color came from the person, not the provider. */
   custom: boolean
@@ -264,46 +275,19 @@ export function accountLook(account: {
   const own = normalizeHexColor(account.color)
   const color = own ?? brand?.color ?? null
   const accent = own ? shade(own, 0.35) : (brand?.accent ?? null)
-  const deep = color ? shade(color, -0.3) : null
+  const face = color ? readable(color) : null
+  const ink = face ? inkOn(face) : null
+  // Light faces carry dark text, so their gradient only darkens a little.
+  const deep = face ? shade(face, ink === LIGHT_INK ? -0.3 : -0.12) : null
   return {
     label: brand?.label ?? null,
     brand: id,
     mono: brand?.mono ?? monogram(account.name),
     color,
+    face,
     deep,
     accent,
-    ink: color && deep ? inkOn(color, deep) : null,
+    ink,
     custom: own !== null,
   }
-}
-
-/** Largest logo we keep, in bytes after decoding. Uploads are resized well below this. */
-export const MAX_LOGO_BYTES = 64 * 1024
-
-const LOGO_TYPES: Record<string, (b: Uint8Array) => boolean> = {
-  'image/png': (b) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
-  'image/jpeg': (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
-  'image/webp': (b) =>
-    String.fromCharCode(...b.slice(0, 4)) === 'RIFF' &&
-    String.fromCharCode(...b.slice(8, 12)) === 'WEBP',
-}
-
-/**
- * A logo as a `data:` URL, checked to really be a small PNG, JPEG or WebP. SVG is refused,
- * since it can carry scripts. Returns null when the value isn't acceptable.
- */
-export function parseLogoDataUrl(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const m = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
-  if (!m) return null
-  const [, type, data] = m as unknown as [string, string, string]
-  if ((data.length * 3) / 4 > MAX_LOGO_BYTES + 3) return null
-  let bytes: Uint8Array
-  try {
-    bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0))
-  } catch {
-    return null
-  }
-  if (bytes.length === 0 || bytes.length > MAX_LOGO_BYTES) return null
-  return LOGO_TYPES[type]!(bytes) ? value : null
 }
