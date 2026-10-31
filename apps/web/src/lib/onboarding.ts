@@ -1,10 +1,11 @@
 /** Welcome steps each member walks through once, after their passkey and recovery codes. */
 
-export type Step = 'profile' | 'accounts' | 'invite' | 'done'
+export type Step = 'profile' | 'accounts' | 'investments' | 'invite' | 'done'
 
 export const STEP_TITLE: Record<Step, string> = {
   profile: 'About you',
   accounts: 'Your accounts',
+  investments: 'Your investments',
   invite: 'Invite your home',
   done: 'All set',
 }
@@ -22,11 +23,11 @@ export function isDisplayCurrency(value: unknown): value is DisplayCurrency {
   return DISPLAY_CURRENCIES.some((c) => c.code === value)
 }
 
-/** Viewers only look, so they skip accounts. Only the owner invites. */
+/** Viewers only look, so they skip accounts and investments. Only the owner invites. */
 export function stepsFor(role: 'owner' | 'adult' | 'viewer'): Step[] {
   if (role === 'viewer') return ['profile', 'done']
-  if (role === 'adult') return ['profile', 'accounts', 'done']
-  return ['profile', 'accounts', 'invite', 'done']
+  if (role === 'adult') return ['profile', 'accounts', 'investments', 'done']
+  return ['profile', 'accounts', 'investments', 'invite', 'done']
 }
 
 /** The requested step if this member has it, else the first one. */

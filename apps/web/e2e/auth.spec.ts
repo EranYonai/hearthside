@@ -45,10 +45,10 @@ test('the first visitor sets up the home with a passkey', async ({ browser }) =>
 
   await owner.getByRole('button', { name: 'I’ve saved them' }).click()
 
-  // Welcome steps: about you, accounts, invite, done.
+  // Welcome steps: about you, accounts, investments, invite, done.
   await expect(owner).toHaveURL(/\/welcome$/)
   await expect(owner.getByRole('heading', { name: 'Welcome, Alex' })).toBeVisible()
-  await expect(owner.getByText('Step 1 of 4')).toBeVisible()
+  await expect(owner.getByText('Step 1 of 5')).toBeVisible()
   await owner.getByLabel('Name of your home').fill('The Test Home')
   await owner.getByRole('combobox', { name: 'Show amounts in' }).selectOption('USD')
   await owner.getByRole('button', { name: 'Continue' }).click()
@@ -56,10 +56,13 @@ test('the first visitor sets up the home with a passkey', async ({ browser }) =>
   await expect(owner.getByRole('heading', { name: 'Your accounts' })).toBeVisible()
   await owner.getByRole('link', { name: 'Skip for now' }).click()
 
+  await expect(owner.getByRole('heading', { name: 'Your investments' })).toBeVisible()
+  await owner.getByRole('link', { name: 'Skip for now' }).click()
+
   await expect(owner.getByRole('heading', { name: 'Invite your home' })).toBeVisible()
   await expect(owner.getByText('Just you for now.')).toBeVisible()
   await owner.getByRole('link', { name: 'Back' }).click()
-  await expect(owner.getByRole('heading', { name: 'Your accounts' })).toBeVisible()
+  await expect(owner.getByRole('heading', { name: 'Your investments' })).toBeVisible()
   await owner.goBack()
   await owner.getByRole('link', { name: 'Just me for now' }).click()
 
@@ -143,8 +146,8 @@ async function join(
 test('the owner invites an adult and a viewer', async ({ browser }) => {
   const adultUrl = await invite('adult')
   const sam = await join(browser, adultUrl, 'Sam', async (page) => {
-    // Adults: about you, their own accounts, done. No invite step.
-    await expect(page.getByText('Step 1 of 3')).toBeVisible()
+    // Adults: about you, their own accounts and investments, done. No invite step.
+    await expect(page.getByText('Step 1 of 4')).toBeVisible()
     await expect(page.getByLabel('Name of your home')).toHaveCount(0)
     await page.getByRole('button', { name: 'Continue' }).click()
     await expect(page.getByRole('region', { name: 'Import a statement' })).toBeVisible()
@@ -153,7 +156,14 @@ test('the owner invites an adult and a viewer', async ({ browser }) => {
     await page.getByRole('button', { name: 'Add account' }).click()
     await expect(page.getByTestId('account-list')).toContainText('Sam card')
     await page.getByRole('link', { name: 'Continue' }).click()
+    // Synthetic names only.
+    await expect(page.getByRole('heading', { name: 'Your investments' })).toBeVisible()
+    await page.getByLabel('Account name').fill('Sam pension')
+    await page.getByRole('button', { name: 'Add account' }).click()
+    await expect(page.getByTestId('investment-list')).toContainText('Sam pension')
+    await page.getByRole('link', { name: 'Continue' }).click()
     await expect(page.getByTestId('welcome-summary')).toContainText('1 account added')
+    await expect(page.getByTestId('welcome-summary')).toContainText('1 investment account added')
     await page.getByRole('button', { name: 'Go to my home' }).click()
   })
   await expect(sam.getByText('Our home', { exact: true })).toBeVisible()

@@ -16,10 +16,12 @@ import {
   stepsFor,
   type Step,
 } from '@/lib/onboarding'
+import { investmentHolder, listInvestmentAccounts } from '@/server/invest'
 import { listAccounts } from '@/server/ledger'
 import { listMembers, listPasskeys } from '@/server/repo'
 import { requireSession } from '@/server/session'
 import { AccountForm, ImportForm } from '../import/client'
+import { InvestmentAccountForm } from '../invest/client'
 import { InviteCreator } from '../settings/client'
 import { FinishButton, ProfileForm } from './client'
 
@@ -30,6 +32,8 @@ const LEAD: Record<Step, string> = {
   profile: 'A few quick steps to make Hearthside yours. You can skip any of them.',
   accounts:
     'Drop in a statement from each card and account you use. Hearthside recognises the account and adds it for you.',
+  investments:
+    'Add the places you invest: a brokerage, a pension or a savings fund. Pick who can see each one. Holdings can come later.',
   invite: 'Hearthside works for one person or a whole family. Invite others now or later.',
   done: 'You can change all of this later in Settings.',
 }
@@ -115,6 +119,60 @@ export default async function WelcomePage({
         </Link>
       </>
     )
+  } else if (step === 'investments') {
+    const [all, people] = await Promise.all([
+      listInvestmentAccounts(db, member),
+      listMembers(db, household.id),
+    ])
+    const mine = all.filter((a) => investmentHolder(a) === member.id || a.ownerId === member.id)
+    body = (
+      <>
+        <Card aria-labelledby="invest-title">
+          <Label id="invest-title">Your investment accounts</Label>
+          {mine.length > 0 ? (
+            <ul className="grid grid-cols-2 gap-3" data-testid="investment-list">
+              {mine.map((a) => (
+                <li key={a.id}>
+                  <AccountCard
+                    name={a.name}
+                    kind="investment"
+                    provider={a.provider}
+                    {...(a.visibility === 'private' ? { note: 'Private' } : {})}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-ink-muted">None yet.</p>
+          )}
+          <details open={mine.length === 0}>
+            <summary className="cursor-pointer text-body-strong text-brand-ink">
+              Add an investment account
+            </summary>
+            <div className="pt-3">
+              <InvestmentAccountForm
+                stay
+                people={people
+                  .filter((p) => p.role !== 'viewer' || p.id === member.id)
+                  .map((p) => ({
+                    id: p.id,
+                    name: p.id === member.id ? `${p.name} (you)` : p.name,
+                  }))}
+                selfId={member.id}
+                defaultCurrency={member.displayCurrency}
+              />
+            </div>
+          </details>
+          <p className="text-caption text-ink-muted">
+            Add holdings by hand or from a file later, on the Invest tab.
+          </p>
+        </Card>
+        <Link href={next} className={buttonClasses('primary')}>
+          <ArrowRight aria-hidden />
+          {mine.length > 0 ? 'Continue' : 'Skip for now'}
+        </Link>
+      </>
+    )
   } else if (step === 'invite') {
     const people = await listMembers(db, household.id)
     body = (
@@ -136,11 +194,13 @@ export default async function WelcomePage({
       </>
     )
   } else {
-    const [keys, accounts] = await Promise.all([
+    const [keys, accounts, investments] = await Promise.all([
       listPasskeys(db, member.id),
       listAccounts(db, member),
+      listInvestmentAccounts(db, member),
     ])
     const ownAccounts = accounts.filter((a) => a.ownerId === member.id).length
+    const ownInvestments = investments.filter((a) => investmentHolder(a) === member.id).length
     const items: [boolean, string][] = [
       [true, 'Passkey and recovery codes'],
       [keys.length > 1, keys.length > 1 ? `${keys.length} passkeys` : 'A second passkey'],
@@ -151,6 +211,13 @@ export default async function WelcomePage({
         ownAccounts > 0
           ? `${ownAccounts} account${ownAccounts === 1 ? '' : 's'} added`
           : 'Your accounts',
+      ])
+    if (member.role !== 'viewer')
+      items.push([
+        ownInvestments > 0,
+        ownInvestments > 0
+          ? `${ownInvestments} investment account${ownInvestments === 1 ? '' : 's'} added`
+          : 'Your investments',
       ])
     body = (
       <>

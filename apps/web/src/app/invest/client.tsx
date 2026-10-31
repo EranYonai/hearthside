@@ -69,6 +69,8 @@ export function InvestmentAccountForm(props: {
   people: { id: string; name: string }[]
   selfId: string
   defaultCurrency: string
+  /** Stay on the page after adding (onboarding) instead of opening the new account. */
+  stay?: boolean
 }) {
   const router = useRouter()
   const a = props.account
@@ -101,10 +103,16 @@ export function InvestmentAccountForm(props: {
           run(
             async () => {
               const result = await createInvestmentAccountAction(input)
-              if (result.ok) router.push(`/invest/${result.id}`)
+              if (result.ok && !props.stay) router.push(`/invest/${result.id}`)
               return result
             },
-            () => {},
+            () => {
+              if (props.stay) {
+                setName('')
+                setProvider('')
+                router.refresh()
+              }
+            },
           )
       }}
     >

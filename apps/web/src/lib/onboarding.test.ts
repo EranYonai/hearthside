@@ -3,8 +3,8 @@ import { isDisplayCurrency, nextStep, previousStep, resolveStep, stepsFor } from
 
 describe('welcome steps', () => {
   it('fit each role', () => {
-    expect(stepsFor('owner')).toEqual(['profile', 'accounts', 'invite', 'done'])
-    expect(stepsFor('adult')).toEqual(['profile', 'accounts', 'done'])
+    expect(stepsFor('owner')).toEqual(['profile', 'accounts', 'investments', 'invite', 'done'])
+    expect(stepsFor('adult')).toEqual(['profile', 'accounts', 'investments', 'done'])
     expect(stepsFor('viewer')).toEqual(['profile', 'done'])
   })
 
