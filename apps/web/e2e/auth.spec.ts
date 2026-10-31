@@ -44,8 +44,34 @@ test('the first visitor sets up the home with a passkey', async ({ browser }) =>
   expect(recoveryCode).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/)
 
   await owner.getByRole('button', { name: 'I’ve saved them' }).click()
+
+  // Welcome steps: about you, accounts, invite, done.
+  await expect(owner).toHaveURL(/\/welcome$/)
+  await expect(owner.getByRole('heading', { name: 'Welcome, Alex' })).toBeVisible()
+  await expect(owner.getByText('Step 1 of 4')).toBeVisible()
+  await owner.getByLabel('Name of your home').fill('The Test Home')
+  await owner.getByRole('combobox', { name: 'Show amounts in' }).selectOption('USD')
+  await owner.getByRole('button', { name: 'Continue' }).click()
+
+  await expect(owner.getByRole('heading', { name: 'Your accounts' })).toBeVisible()
+  await owner.getByRole('link', { name: 'Skip for now' }).click()
+
+  await expect(owner.getByRole('heading', { name: 'Invite your home' })).toBeVisible()
+  await expect(owner.getByText('Just you for now.')).toBeVisible()
+  await owner.getByRole('link', { name: 'Back' }).click()
+  await expect(owner.getByRole('heading', { name: 'Your accounts' })).toBeVisible()
+  await owner.goBack()
+  await owner.getByRole('link', { name: 'Just me for now' }).click()
+
+  await expect(owner.getByRole('heading', { name: 'All set' })).toBeVisible()
+  await expect(owner.getByTestId('welcome-summary')).toContainText('A second passkey')
+  await owner.getByRole('button', { name: 'Go to my home' }).click()
   await expect(owner.getByRole('heading', { name: 'Hi Alex' })).toBeVisible()
   await expect(owner.getByText('Your home', { exact: true })).toBeVisible()
+
+  // Once done, home no longer sends you to the welcome steps.
+  await owner.reload()
+  await expect(owner.getByRole('heading', { name: 'Hi Alex' })).toBeVisible()
 })
 
 test('setup is closed once the home exists', async ({ page }) => {
@@ -92,7 +118,12 @@ async function invite(role: 'adult' | 'viewer') {
   return url
 }
 
-async function join(browser: Browser, url: string, name: string) {
+async function join(
+  browser: Browser,
+  url: string,
+  name: string,
+  welcome: (page: Page) => Promise<void>,
+) {
   const page = await newDevice(browser)
   await page.goto(url)
   await expect(page.getByRole('heading', { name: 'Join The Test Home' })).toBeVisible()
@@ -100,13 +131,31 @@ async function join(browser: Browser, url: string, name: string) {
   await page.getByRole('button', { name: 'Create passkey and join' }).click()
   await expect(page.getByTestId('recovery-codes').getByRole('listitem')).toHaveCount(10)
   await page.getByRole('button', { name: 'I’ve saved them' }).click()
+  await expect(page.getByRole('heading', { name: `Welcome, ${name}` })).toBeVisible()
+  // Until they finish or skip the welcome steps, home sends them back.
+  await page.goto('/')
+  await expect(page).toHaveURL(/\/welcome$/)
+  await welcome(page)
   await expect(page.getByRole('heading', { name: `Hi ${name}` })).toBeVisible()
   return page
 }
 
 test('the owner invites an adult and a viewer', async ({ browser }) => {
   const adultUrl = await invite('adult')
-  const sam = await join(browser, adultUrl, 'Sam')
+  const sam = await join(browser, adultUrl, 'Sam', async (page) => {
+    // Adults: about you, their own accounts, done. No invite step.
+    await expect(page.getByText('Step 1 of 3')).toBeVisible()
+    await expect(page.getByLabel('Name of your home')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await expect(page.getByRole('region', { name: 'Import a statement' })).toBeVisible()
+    await page.getByText('Add an account by hand').click()
+    await page.getByLabel('Account name').fill('Sam card')
+    await page.getByRole('button', { name: 'Add account' }).click()
+    await expect(page.getByTestId('account-list')).toContainText('Sam card')
+    await page.getByRole('link', { name: 'Continue' }).click()
+    await expect(page.getByTestId('welcome-summary')).toContainText('1 account added')
+    await page.getByRole('button', { name: 'Go to my home' }).click()
+  })
   await expect(sam.getByText('Our home', { exact: true })).toBeVisible()
 
   // Invites work once.
@@ -116,7 +165,11 @@ test('the owner invites an adult and a viewer', async ({ browser }) => {
   await again.context().close()
 
   const viewerUrl = await invite('viewer')
-  const kid = await join(browser, viewerUrl, 'Robin')
+  const kid = await join(browser, viewerUrl, 'Robin', async (page) => {
+    // Viewers only look, so they can skip straight past everything.
+    await expect(page.getByText('Step 1 of 2')).toBeVisible()
+    await page.getByRole('button', { name: 'Skip the rest' }).click()
+  })
 
   // Only the owner manages members.
   await kid.goto('/settings')
@@ -273,5 +326,17 @@ test('settings show the app version and sign-in activity', async () => {
   await owner.goto('/settings')
   await expect(owner.getByTestId('app-version')).toHaveText(/^Hearthside v\d+\.\d+\.\d+/)
   await expect(owner.getByRole('region', { name: 'Recent sign-in activity' })).toBeVisible()
+
+  // The profile lives in Settings too, and the welcome steps can be shown again.
+  await expect(owner.getByRole('combobox', { name: 'Show amounts in' })).toHaveValue('USD')
+  await owner.getByRole('combobox', { name: 'Show amounts in' }).selectOption('ILS')
+  await owner.getByRole('button', { name: 'Save' }).click()
+  await expect(owner.getByText('Saved.')).toBeVisible()
+  await owner.getByRole('button', { name: 'Show the welcome steps again' }).click()
+  await expect(owner).toHaveURL(/\/welcome$/)
+  await owner.goto('/')
+  await expect(owner).toHaveURL(/\/welcome$/)
+  await owner.getByRole('button', { name: 'Skip the rest' }).click()
+  await expect(owner.getByRole('heading', { name: 'Hi Alex' })).toBeVisible()
   await owner.context().close()
 })
