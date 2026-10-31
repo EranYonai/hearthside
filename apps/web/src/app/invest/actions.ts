@@ -1,15 +1,10 @@
 'use server'
 
-import { HoldingsFormatError, ImportFormatError, parseHoldings, readTable } from '@hearthside/core'
-
 import { requireDb } from '@/lib/db'
 import { runAction } from '@/server/action'
 import {
   createInvestmentAccount,
   deleteInvestmentAccount,
-  getVisibleInvestmentAccount,
-  importHoldings,
-  mayManage,
   removeHolding,
   saveFundFacts,
   saveHolding,
@@ -20,7 +15,6 @@ import {
 import { saveInvestSettings } from '@/server/checkup'
 import { setDisplayCurrency } from '@/server/profile'
 import { addMovement, removeMovement, type MovementInput } from '@/server/trends'
-import { AuthError } from '@/server/repo'
 import { requireSession } from '@/server/session'
 
 const PATHS = ['/invest']
@@ -71,51 +65,6 @@ export async function setDisplayCurrencyAction(currency: string) {
     await setDisplayCurrency(requireDb(), member, currency)
     return {}
   })
-}
-
-/** Read a holdings file and show what it holds; nothing is saved yet. */
-export async function previewHoldingsFileAction(accountId: string, form: FormData) {
-  const { member } = await requireSession()
-  return runAction([], async () => {
-    const account = await getVisibleInvestmentAccount(requireDb(), member, accountId)
-    if (!mayManage(member, account))
-      throw new AuthError('not_allowed', 'Only the person whose account this is can change it')
-    const file = form.get('file')
-    if (!(file instanceof File) || file.size === 0)
-      throw new AuthError('not_allowed', 'Pick a file')
-    try {
-      const sheets = readTable(new Uint8Array(await file.arrayBuffer()), file.name)
-      return parseHoldings(sheets, account.currency)
-    } catch (err) {
-      if (err instanceof HoldingsFormatError || err instanceof ImportFormatError)
-        throw new AuthError('not_allowed', err.message)
-      throw err
-    }
-  })
-}
-
-export async function importHoldingsAction(
-  accountId: string,
-  rows: {
-    symbol: string
-    name: string
-    units: string
-    price: string | null
-    currency: string | null
-    assetClass: string
-  }[],
-  removeMissing: boolean,
-) {
-  const { member } = await requireSession()
-  return runAction([...PATHS, `/invest/${accountId}`], async () =>
-    importHoldings(
-      requireDb(),
-      member,
-      accountId,
-      rows.map((r) => ({ ...r, price: r.price ?? undefined })),
-      { removeMissing: removeMissing === true },
-    ),
-  )
 }
 
 export async function addMovementAction(accountId: string, input: MovementInput) {

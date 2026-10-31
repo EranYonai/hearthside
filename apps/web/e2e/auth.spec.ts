@@ -275,7 +275,7 @@ const csv = [
 
 async function drop(page: Page, name: string, buffer: Buffer, mimeType: string) {
   await page.goto('/import')
-  await page.getByLabel('Statement file').setInputFiles({ name, mimeType, buffer })
+  await page.getByLabel('File to import').setInputFiles({ name, mimeType, buffer })
   return page.getByTestId('import-preview')
 }
 
@@ -433,19 +433,18 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await switcher.getByRole('radio', { name: 'USD' }).click()
   await expect(owner.getByTestId('unconverted')).toContainText('₪500')
 
-  // A holdings file (synthetic) adds to the account after a preview.
-  await owner.getByTestId('investment-accounts').getByRole('link').first().click()
-  const importer = owner.getByRole('region', { name: 'Import holdings from a file' })
-  await importer.getByText('Import holdings from a file').click()
-  await importer.getByLabel('Holdings file').setInputFiles({
-    name: 'holdings.csv',
-    mimeType: 'text/csv',
-    buffer: Buffer.from('Symbol,Name,Quantity,Price,Currency\nTSTZ,Test Bond Fund,4,25,USD\n'),
-  })
-  await importer.getByRole('button', { name: 'Read file' }).click()
-  await expect(importer.getByTestId('holdings-preview')).toContainText('1 holding found')
-  await importer.getByRole('button', { name: 'Import 1 holding' }).click()
-  await expect(importer.getByText('Added 1, updated 0, removed 0.')).toBeVisible()
+  // A holdings file (synthetic) dropped on the Import page finds the account on its own.
+  const first = await drop(
+    owner,
+    'holdings.csv',
+    Buffer.from('Symbol,Name,Quantity,Price,Currency\nTSTZ,Test Bond Fund,4,25,USD\n'),
+    'text/csv',
+  )
+  await expect(first.getByTestId('holdings-preview')).toContainText('Test Bond Fund')
+  await expect(first).toContainText('Into Long-term savings')
+  await owner.getByRole('button', { name: 'Import 1 holding' }).click()
+  await expect(owner.getByText('Long-term savings: added 1, updated 0, removed 0.')).toBeVisible()
+  await owner.getByRole('link', { name: 'See holdings' }).click()
   await expect(owner.getByTestId('holdings').getByRole('listitem')).toHaveCount(3)
   await expect(owner.getByTestId('holdings')).toContainText('Test Bond Fund')
 
@@ -474,20 +473,15 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await owner.getByRole('navigation', { name: 'Range' }).getByRole('link', { name: 'All' }).click()
   await expect(owner.getByTestId('years')).toContainText('$1,000')
 
-  // The Import page takes holdings files too.
-  await owner
-    .getByRole('navigation', { name: 'Main' })
-    .getByRole('link', { name: 'Import' })
-    .click()
-  const holdingsImport = owner.getByRole('region', { name: 'Import investment holdings' })
-  await holdingsImport.getByLabel('Holdings file').setInputFiles({
-    name: 'holdings.csv',
-    mimeType: 'text/csv',
-    buffer: Buffer.from('Symbol,Name,Quantity,Price,Currency\nTSTZ,Test Bond Fund,6,25,USD\n'),
-  })
-  await holdingsImport.getByRole('button', { name: 'Read file' }).click()
-  await holdingsImport.getByRole('button', { name: 'Import 1 holding' }).click()
-  await expect(holdingsImport.getByText('Added 0, updated 1, removed')).toBeVisible()
+  // The same file again updates the same account.
+  await drop(
+    owner,
+    'holdings.csv',
+    Buffer.from('Symbol,Name,Quantity,Price,Currency\nTSTZ,Test Bond Fund,6,25,USD\n'),
+    'text/csv',
+  )
+  await owner.getByRole('button', { name: 'Import 1 holding' }).click()
+  await expect(owner.getByText('Long-term savings: added 0, updated 1, removed')).toBeVisible()
 
   // Each holding has a page with its position, price history and fund facts.
   await owner
@@ -520,6 +514,21 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await expect(owner.getByTestId('checkup')).toContainText('60/40 target')
   await owner.goto('/invest')
   await expect(owner.getByRole('link', { name: /Check-up/ })).toBeVisible()
+
+  // A file from a broker we know, with an account number, adds its own account.
+  const broker = await drop(
+    owner,
+    'positions.csv',
+    Buffer.from(
+      'Interactive Brokers\nAccount U7654321\n\nSymbol,Description,Quantity,Last Price,Currency\nTSTY,Test Growth ETF,2,40,USD\n',
+    ),
+    'text/csv',
+  )
+  await expect(broker).toContainText(
+    'Creates investment account Interactive Brokers ·4321 (USD)',
+  )
+  await owner.getByRole('button', { name: 'Import 1 holding' }).click()
+  await expect(owner.getByText('Interactive Brokers ·4321: added 1')).toBeVisible()
 })
 
 test('settings show the app version and sign-in activity', async () => {

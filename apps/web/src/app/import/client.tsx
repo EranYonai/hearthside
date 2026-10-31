@@ -47,6 +47,7 @@ interface Group {
 }
 
 interface Preview {
+  type: 'statement'
   fileName: string
   groups: Group[]
   skippedCount: number
@@ -54,12 +55,34 @@ interface Preview {
   alreadyImported: string | null
 }
 
-interface Done {
-  added: number
-  duplicates: number
-  accounts: string[]
-  month: string | null
+interface HoldingsPreview {
+  type: 'holdings'
+  fileName: string
+  account: { id: string | null; name: string; isNew: boolean }
+  provider: string | null
+  currency: string
+  holdings: {
+    symbol: string
+    name: string
+    units: string
+    price: string | null
+    currency: string | null
+  }[]
+  total: number
+  skipped: { row: number; reason: string }[]
+  skippedCount: number
+  priceInHundredths: boolean
 }
+
+type Done =
+  | { type: 'statement'; added: number; duplicates: number; accounts: string[]; month: string | null }
+  | {
+      type: 'holdings'
+      added: number
+      updated: number
+      removed: number
+      account: { id: string; name: string }
+    }
 
 const day = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
@@ -76,15 +99,18 @@ async function post(form: FormData) {
 }
 
 /**
- * Drop a statement (or pick one): the file is checked right away, its account is
- * recognised or created, and one click imports it.
+ * Drop any supported file (or pick one): a statement or a holdings export. The file is
+ * checked right away, its account is recognised or created, and one click imports it.
  */
 export function ImportForm({
   accounts,
+  investAccounts = [],
   people = [],
   me,
 }: {
   accounts: AccountOption[]
+  /** Investment accounts the member may change, for holdings files. */
+  investAccounts?: { id: string; name: string }[]
   /** Members who can hold a new account; the picker shows when there's more than one. */
   people?: { id: string; name: string }[]
   me?: string
@@ -95,7 +121,8 @@ export function ImportForm({
   const [accountId, setAccountId] = useState('')
   const [holderId, setHolderId] = useState(me ?? '')
   const [dragging, setDragging] = useState(false)
-  const [preview, setPreview] = useState<Preview>()
+  const [preview, setPreview] = useState<Preview | HoldingsPreview>()
+  const [removeMissing, setRemoveMissing] = useState(true)
   const [done, setDone] = useState<Done>()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState<'check' | 'import'>()
@@ -106,6 +133,7 @@ export function ImportForm({
     if (target) form.set('accountId', target)
     if (commit) form.set('commit', '1')
     if (commit && holderId) form.set('holderId', holderId)
+    if (commit && !removeMissing) form.set('removeMissing', '0')
     setBusy(commit ? 'import' : 'check')
     setError(undefined)
     try {
@@ -134,8 +162,15 @@ export function ImportForm({
     void send(f, '', false)
   }
 
-  const fresh = preview?.groups.reduce((n, g) => n + g.fresh, 0) ?? 0
-  const created = preview?.groups.filter((g) => g.account.isNew).map((g) => g.account.name) ?? []
+  const statement = preview?.type === 'statement' ? preview : undefined
+  const held = preview?.type === 'holdings' ? preview : undefined
+  const fresh = statement?.groups.reduce((n, g) => n + g.fresh, 0) ?? 0
+  const created = statement
+    ? statement.groups.filter((g) => g.account.isNew).map((g) => g.account.name)
+    : held?.account.isNew
+      ? [held.account.name]
+      : []
+  const targets = held ? investAccounts : accounts
 
   return (
     <div className="grid gap-4">
@@ -158,16 +193,17 @@ export function ImportForm({
       >
         <FileUp size={28} aria-hidden className="text-brand-ink" />
         <span className="text-body-strong">
-          {busy === 'check' ? 'Reading…' : file ? file.name : 'Drop a statement here'}
+          {busy === 'check' ? 'Reading…' : file ? file.name : 'Drop a file here'}
         </span>
         <span className="text-caption text-ink-muted">
-          or tap to choose · Excel, CSV or PDF, up to 10 MB · read once, never stored
+          Statements or investment holdings · or tap to choose · Excel, CSV or PDF, up to 10 MB ·
+          read once, never stored
         </span>
         <input
           ref={input}
           type="file"
-          aria-label="Statement file"
-          accept=".xlsx,.csv,.xls,.pdf,.txt"
+          aria-label="File to import"
+          accept=".xlsx,.csv,.xls,.html,.htm,.pdf,.txt"
           className="sr-only"
           onChange={(e) => pick(e.target.files?.[0])}
         />
@@ -177,13 +213,14 @@ export function ImportForm({
 
       {preview && file && (
         <div className="grid gap-4" data-testid="import-preview">
-          {preview.alreadyImported && (
+          {statement?.alreadyImported && (
             <Notice tone="warning">
-              You imported this exact file on {day.format(new Date(preview.alreadyImported))}. Its
-              rows are already here.
+              You imported this exact file on {day.format(new Date(statement.alreadyImported))}.
+              Its rows are already here.
             </Notice>
           )}
-          {preview.groups.map((g, i) => (
+          {held && <HoldingsCard preview={held} />}
+          {statement?.groups.map((g, i) => (
             <Card key={i} aria-label={`Into ${g.account.name}`}>
               <div className="grid grid-cols-[minmax(0,14rem)_1fr] items-center gap-3">
                 <AccountCard
@@ -230,15 +267,26 @@ export function ImportForm({
               <summary>{preview.skippedCount} rows skipped</summary>
               <ul>
                 {preview.skipped.map((s) => (
-                  <li key={`${s.sheet}-${s.row}`}>
-                    {s.sheet}, row {s.row}: {s.reason}
+                  <li key={`${'sheet' in s ? s.sheet : ''}-${s.row}`}>
+                    {'sheet' in s ? `${s.sheet}, ` : ''}row {s.row}: {s.reason}
                   </li>
                 ))}
               </ul>
             </details>
           )}
 
-          {accounts.length > 0 && (
+          {held && !held.account.isNew && (
+            <label className="flex min-h-11 items-center gap-2">
+              <input
+                type="checkbox"
+                checked={removeMissing}
+                onChange={(e) => setRemoveMissing(e.target.checked)}
+              />
+              Remove imported holdings that aren’t in this file (sold)
+            </label>
+          )}
+
+          {targets.length > 0 && (
             <label className="grid gap-1">
               <span className="text-caption text-ink-muted">Import into</span>
               <select
@@ -250,7 +298,7 @@ export function ImportForm({
                 }}
               >
                 <option value="">Detected automatically</option>
-                {accounts.map((a) => (
+                {targets.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
@@ -278,12 +326,14 @@ export function ImportForm({
 
           <div className="flex flex-wrap items-center gap-3">
             <Button
-              disabled={!!busy || fresh === 0}
+              disabled={!!busy || (statement ? fresh === 0 : !held?.total)}
               onClick={() => void send(file, accountId, true)}
             >
               {busy === 'import'
                 ? 'Importing…'
-                : `Import ${fresh} ${fresh === 1 ? 'transaction' : 'transactions'}`}
+                : held
+                  ? `Import ${held.total} ${held.total === 1 ? 'holding' : 'holdings'}`
+                  : `Import ${fresh} ${fresh === 1 ? 'transaction' : 'transactions'}`}
             </Button>
             {created.length > 0 && (
               <span className="text-caption text-ink-muted">Adds {created.join(', ')}</span>
@@ -292,7 +342,16 @@ export function ImportForm({
         </div>
       )}
 
-      {done && (
+      {done?.type === 'holdings' && (
+        <Notice tone="positive">
+          {done.account.name}: added {done.added}, updated {done.updated}, removed {done.removed}.{' '}
+          <Link className="text-body-strong underline" href={`/invest/${done.account.id}`}>
+            See holdings
+          </Link>
+        </Notice>
+      )}
+
+      {done?.type === 'statement' && (
         <Notice tone="positive">
           Added {done.added} transactions to {done.accounts.join(', ')}
           {done.duplicates > 0 ? `, skipped ${done.duplicates} already here` : ''}.{' '}
@@ -305,6 +364,82 @@ export function ImportForm({
         </Notice>
       )}
     </div>
+  )
+}
+
+function HoldingsCard({ preview }: { preview: HoldingsPreview }) {
+  return (
+    <Card aria-label={`Into ${preview.account.name}`}>
+      <div className="grid grid-cols-[minmax(0,14rem)_1fr] items-center gap-3">
+        <AccountCard
+          name={preview.account.name}
+          kind="investment"
+          provider={preview.provider}
+          color={null}
+          network={null}
+          last4={null}
+          {...(preview.account.isNew ? { note: 'New' } : {})}
+        />
+        <p>
+          <span className="text-body-strong">
+            {preview.total} {preview.total === 1 ? 'holding' : 'holdings'}
+          </span>
+          <span className="block text-caption text-ink-muted">
+            {preview.account.isNew
+              ? `Creates investment account ${preview.account.name} (${preview.currency})`
+              : `Into ${preview.account.name}`}
+          </span>
+        </p>
+      </div>
+      {preview.priceInHundredths && (
+        <Notice tone="info">Prices in the file were in agorot and were turned into shekels.</Notice>
+      )}
+      <ul className="grid gap-1 text-caption" data-testid="holdings-preview">
+        {preview.holdings.map((h) => (
+          <li key={h.symbol} className="flex justify-between gap-2">
+            <span className="truncate">
+              <bdi>{h.name}</bdi> <span className="text-ink-muted">{h.symbol}</span>
+            </span>
+            <span className="whitespace-nowrap tabular-nums">
+              {h.units}
+              {h.price ? ` × ${h.price} ${h.currency}` : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {preview.total > preview.holdings.length && (
+        <p className="text-caption text-ink-muted">
+          Showing the first {preview.holdings.length} of {preview.total}.
+        </p>
+      )}
+    </Card>
+  )
+}
+
+/** A short list of the exports the import box recognises. */
+export function SupportedExports() {
+  return (
+    <details className="text-caption text-ink-muted">
+      <summary className="cursor-pointer">What can I import?</summary>
+      <ul className="mt-2 grid list-disc gap-1 ps-5">
+        <li>
+          Card exports from Max, Cal, Isracard, American Express and Diners (Excel or CSV).
+        </li>
+        <li>
+          Bank statements from Hapoalim (PDF or Excel), and from Leumi, Discount, Mizrahi Tefahot
+          and other banks when the export has date, description and debit/credit columns.
+        </li>
+        <li>
+          Investment holdings from brokers and investment houses, like Interactive Brokers, Meitav,
+          Altshuler Shaham, Psagot or IBI (Excel or CSV with a symbol or security number and a
+          quantity per row).
+        </li>
+      </ul>
+      <p className="mt-2">
+        We spot what the file is and add the account for you. If something isn’t recognised, any
+        export with clear column headers usually works.
+      </p>
+    </details>
   )
 }
 
