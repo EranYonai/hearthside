@@ -6,6 +6,7 @@ import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
 import { DISPLAY_CURRENCIES } from '@/lib/onboarding'
 import { currentRates } from '@/server/fx'
+import { keepQuotesFresh } from '@/server/prices'
 import { canEdit } from '@/server/ledger'
 import { investmentHolder, portfolio } from '@/server/invest'
 import { listMembers } from '@/server/repo'
@@ -40,7 +41,7 @@ const SLICE_COLORS = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'b
 export default async function InvestPage() {
   const { member, household } = await requireSession()
   const db = requireDb()
-  const fx = await currentRates(db)
+  const [fx] = await Promise.all([currentRates(db), keepQuotesFresh(db)])
   const [{ accounts, holdings, summary, allocation }, people] = await Promise.all([
     portfolio(db, member, fx.rates),
     listMembers(db, household.id),
@@ -58,7 +59,15 @@ export default async function InvestPage() {
 
   return (
     <AppShell household={household.name} current="/invest">
-      <h1 className="font-display text-title">Investments</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="font-display text-title">Investments</h1>
+        {holdings.some((h) => h.priceSource === 'market') && (
+          <span className="inline-flex items-center gap-1.5 rounded-pill bg-positive-soft px-2.5 py-0.5 text-caption font-semibold text-positive">
+            <span className="size-1.5 rounded-pill bg-positive" aria-hidden />
+            Prices up to 15 min delayed
+          </span>
+        )}
+      </div>
 
       {accounts.length === 0 ? (
         <Card>
@@ -78,6 +87,20 @@ export default async function InvestPage() {
               <CurrencySwitch value={currency} options={SWITCH} />
             </div>
             <Amount minor={summary.totalMinor} currency={currency} whole hero />
+            {summary.changeBaseMinor > 0 && (
+              <p className="text-caption text-ink-muted" data-testid="day-change">
+                <Amount
+                  minor={summary.changeMinor}
+                  currency={currency}
+                  signed
+                  whole
+                  className="text-caption"
+                />{' '}
+                ({summary.changeMinor >= 0 ? '+' : '−'}
+                {((Math.abs(summary.changeMinor) / summary.changeBaseMinor) * 100).toFixed(2)}%)
+                since the last close
+              </p>
+            )}
             {rateLines.length > 0 && fx.on && (
               <p className="text-caption text-ink-muted" data-testid="fx-rate">
                 {rateLines.join(' · ')} · rate from {dayFormat.format(new Date(fx.on))}

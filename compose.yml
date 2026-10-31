@@ -53,6 +53,8 @@ services:
       ENCRYPTION_KEY_FILE: /run/secrets/encryption_key
       # Daily reference exchange rates (docs/self-hosting.md). "off" stops fetching.
       FX_RATES_URL: ${FX_RATES_URL:-}
+      # Delayed market prices (docs/self-hosting.md). "off" stops fetching.
+      QUOTES_URL: ${QUOTES_URL:-}
     secrets: [db_password, encryption_key]
     ports:
       # Loopback only by default. WEB_BIND=0.0.0.0 in .env opens it to the LAN for testing.

@@ -11,7 +11,7 @@ import {
 } from '@hearthside/core'
 import type { Db, InstrumentRow, InvestmentAccountRow, MemberRow } from '@hearthside/db'
 import { blindIndex, schema } from '@hearthside/db'
-import { and, asc, desc, eq, inArray, isNull, or, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm'
 import { cleanName } from './http'
 import { canEdit } from './ledger'
 import { audit, AuthError, type Tx } from './repo'
@@ -361,6 +361,11 @@ export interface HoldingView {
   priceSource: 'manual' | 'market' | 'import' | null
   /** Value in `currency`, minor units; null without a price. */
   valueMinor: number | null
+  /** Change since the last close, in `currency` minor units, for market prices. */
+  changeMinor: number | null
+  /** What the quote source last said about it (securities only). */
+  quoteStatus: InstrumentRow['quoteStatus']
+  checkedAt: Date | null
   updatedAt: Date
 }
 
@@ -386,6 +391,11 @@ export async function listHoldings(
     .map(({ holding: h, instrument: i }): HoldingView => {
       const p = i.kind === 'cash' ? { price: '1', pricedAt: null, source: null } : prices.get(i.id)
       const price = p?.price ?? null
+      const value = price === null ? null : valueMinor(h.units, price)
+      const change =
+        value !== null && p?.source === 'market' && i.prevClose
+          ? value - valueMinor(h.units, i.prevClose)
+          : null
       return {
         id: h.id,
         accountId: h.accountId,
@@ -400,14 +410,20 @@ export async function listHoldings(
         price,
         pricedAt: p?.pricedAt ?? null,
         priceSource: p?.source ?? null,
-        valueMinor: price === null ? null : valueMinor(h.units, price),
+        valueMinor: value,
+        changeMinor: change,
+        quoteStatus: i.quoteStatus,
+        checkedAt: i.checkedAt,
         updatedAt: h.updatedAt,
       }
     })
     .sort((a, b) => (b.valueMinor ?? -1) - (a.valueMinor ?? -1) || a.name.localeCompare(b.name))
 }
 
-/** Newest price per instrument. */
+/**
+ * Current price per instrument: the newest market price while the quote source knows the
+ * instrument (a market close can be older than a price typed in since), else the newest of any.
+ */
 export async function latestPrices(db: Conn, instrumentIds: readonly string[]) {
   const map = new Map<
     string,
@@ -415,10 +431,20 @@ export async function latestPrices(db: Conn, instrumentIds: readonly string[]) {
   >()
   if (instrumentIds.length === 0) return map
   const rows = await db
-    .selectDistinctOn([instrumentPrices.instrumentId])
+    .selectDistinctOn([instrumentPrices.instrumentId], {
+      instrumentId: instrumentPrices.instrumentId,
+      price: instrumentPrices.price,
+      pricedAt: instrumentPrices.pricedAt,
+      source: instrumentPrices.source,
+    })
     .from(instrumentPrices)
+    .innerJoin(instruments, eq(instruments.id, instrumentPrices.instrumentId))
     .where(inArray(instrumentPrices.instrumentId, [...new Set(instrumentIds)]))
-    .orderBy(instrumentPrices.instrumentId, desc(instrumentPrices.pricedAt))
+    .orderBy(
+      instrumentPrices.instrumentId,
+      desc(sql`${instrumentPrices.source} = 'market' and ${instruments.quoteStatus} = 'ok'`),
+      desc(instrumentPrices.pricedAt),
+    )
   for (const r of rows)
     map.set(r.instrumentId, { price: r.price, pricedAt: r.pricedAt, source: r.source })
   return map

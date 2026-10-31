@@ -62,7 +62,13 @@ describe('convertMinor', () => {
 
 describe('summarizePortfolio', () => {
   const holdings: PricedHolding[] = [
-    { accountId: 'a', assetClass: 'global_stocks', currency: 'USD', valueMinor: 10000 },
+    {
+      accountId: 'a',
+      assetClass: 'global_stocks',
+      currency: 'USD',
+      valueMinor: 10000,
+      changeMinor: 200,
+    },
     { accountId: 'a', assetClass: 'bonds', currency: 'ILS', valueMinor: 5000 },
     { accountId: 'b', assetClass: 'cash', currency: 'ILS', valueMinor: 1000 },
     { accountId: 'b', assetClass: 'global_stocks', currency: 'EUR', valueMinor: 700 },
@@ -76,6 +82,8 @@ describe('summarizePortfolio', () => {
     expect(s.byAccount).toEqual({ a: 40000, b: 1000 })
     expect(s.unconverted).toEqual({ EUR: 700 })
     expect(s.unpriced).toBe(1)
+    expect(s.changeMinor).toBe(700)
+    expect(s.changeBaseMinor).toBe(34300)
   })
 })
 

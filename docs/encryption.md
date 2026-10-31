@@ -18,7 +18,7 @@ still apply on top of this.
 | `transactions`            | `description`, `amount_minor`, `original_minor`, `reference`, `notes` | `description_key`, `dedup_key` |
 | `category_rules`          |                                                                       | `match`                        |
 | `investment_accounts`     | `name`, `provider`                                                    |                                |
-| `instruments`             | `symbol`, `name`                                                      | `symbol_key`                   |
+| `instruments`             | `symbol`, `name`, `quote_symbol`, `prev_close`                        | `symbol_key`                   |
 | `holdings`                | `units`, `cost_minor`                                                 |                                |
 | `instrument_prices`       | `price`                                                               |                                |
 | `investment_transactions` | `units`, `amount_minor`                                               | `dedup_key`                    |

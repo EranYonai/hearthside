@@ -27,6 +27,7 @@ export default defineConfig({
             process.env.ENCRYPTION_KEY ?? 'dGVzdC1vbmx5LWtleS1mb3ItZTJlLXRlc3RzLTAwMDA=',
           // No network calls from tests.
           FX_RATES_URL: 'off',
+          QUOTES_URL: 'off',
         },
         timeout: 180_000,
       },

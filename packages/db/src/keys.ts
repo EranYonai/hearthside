@@ -110,7 +110,7 @@ export const ENCRYPTED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   import_batches: ['file_name'],
   transactions: ['description', 'amount_minor', 'original_minor', 'reference', 'notes'],
   investment_accounts: ['name', 'provider'],
-  instruments: ['symbol', 'name'],
+  instruments: ['symbol', 'name', 'quote_symbol', 'prev_close'],
   holdings: ['units', 'cost_minor'],
   instrument_prices: ['price'],
   investment_transactions: ['units', 'amount_minor'],
