@@ -17,6 +17,7 @@ import {
   type InvestmentAccountInput,
 } from '@/server/invest'
 import { setDisplayCurrency } from '@/server/profile'
+import { addMovement, removeMovement, type MovementInput } from '@/server/trends'
 import { AuthError } from '@/server/repo'
 import { requireSession } from '@/server/session'
 
@@ -113,4 +114,20 @@ export async function importHoldingsAction(
       { removeMissing: removeMissing === true },
     ),
   )
+}
+
+export async function addMovementAction(accountId: string, input: MovementInput) {
+  const { member } = await requireSession()
+  return runAction([...PATHS, `/invest/${accountId}`, '/invest/trends'], async () => {
+    await addMovement(requireDb(), member, accountId, input)
+    return {}
+  })
+}
+
+export async function removeMovementAction(accountId: string, id: string) {
+  const { member } = await requireSession()
+  return runAction([...PATHS, `/invest/${accountId}`, '/invest/trends'], async () => {
+    await removeMovement(requireDb(), member, id)
+    return {}
+  })
 }

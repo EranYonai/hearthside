@@ -8,4 +8,7 @@ export async function register() {
     import('./lib/db'),
   ])
   void sweepPending(requireDb()).catch(() => undefined)
+  // A value per investment account per day, for trends.
+  const { startSnapshots } = await import('./server/trends')
+  startSnapshots(requireDb())
 }

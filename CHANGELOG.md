@@ -21,6 +21,8 @@ moves the Unreleased notes under the new version.
 - Investments in each member's currency with daily exchange rates, delayed market prices, and
   holdings import from Excel or CSV (#29, #30, #28).
 - Investment accounts also appear on the Accounts tab, with their value.
+- Investment trends: value against money put in, time-weighted returns, and deposits, fees
+  and income per year. Money in and out is recorded per account (#32).
 
 ### Security
 

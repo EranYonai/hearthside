@@ -1,17 +1,19 @@
 'use client'
 
-import { ASSET_CLASSES, HOLDING_CURRENCIES } from '@hearthside/core'
+import { ASSET_CLASSES, HOLDING_CURRENCIES, MOVEMENT_KINDS } from '@hearthside/core'
 import { Button, Notice, TextField } from '@hearthside/ui'
 import { Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useId, useState } from 'react'
 import { useAction } from '@/lib/use-action'
 import {
+  addMovementAction,
   createInvestmentAccountAction,
   deleteInvestmentAccountAction,
   importHoldingsAction,
   previewHoldingsFileAction,
   removeHoldingAction,
+  removeMovementAction,
   saveHoldingAction,
   setDisplayCurrencyAction,
   updateInvestmentAccountAction,
@@ -581,5 +583,91 @@ export function HoldingsImport({ accountId }: { accountId: string }) {
       {error && <Notice tone="negative">{error}</Notice>}
       {done && <Notice tone="positive">{done}</Notice>}
     </div>
+  )
+}
+
+/** Record money moving in or out of an account: deposits, withdrawals, fees, income. */
+export function MovementForm(props: { accountId: string; currency: string; today: string }) {
+  const router = useRouter()
+  const kindId = useId()
+  const [kind, setKind] = useState<string>('deposit')
+  const [on, setOn] = useState(props.today)
+  const [amount, setAmount] = useState('')
+  const { pending, error, run } = useAction()
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        run(
+          () => addMovementAction(props.accountId, { kind, on, amount }),
+          () => {
+            setAmount('')
+            router.refresh()
+          },
+        )
+      }}
+    >
+      <div className="grid gap-1">
+        <label htmlFor={kindId} className="text-body-strong">
+          What was it
+        </label>
+        <select
+          id={kindId}
+          className={selectClass}
+          value={kind}
+          onChange={(e) => setKind(e.target.value)}
+        >
+          {MOVEMENT_KINDS.map((k) => (
+            <option key={k.slug} value={k.slug}>
+              {k.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <TextField
+        label="Date"
+        name="on"
+        type="date"
+        required
+        max={props.today}
+        value={on}
+        onChange={(e) => setOn(e.target.value)}
+      />
+      <TextField
+        label={`Amount in ${props.currency}`}
+        name="amount"
+        inputMode="decimal"
+        required
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        autoComplete="off"
+      />
+      {error && <Notice tone="negative">{error}</Notice>}
+      <Button type="submit" disabled={pending} className="justify-self-start">
+        Add
+      </Button>
+    </form>
+  )
+}
+
+export function RemoveMovementButton(props: { accountId: string; id: string; label: string }) {
+  const router = useRouter()
+  const { pending, error, run } = useAction()
+  return (
+    <>
+      <ConfirmButton
+        label={`Remove ${props.label}`}
+        confirmLabel="Tap again to remove"
+        pending={pending}
+        onConfirm={() =>
+          run(
+            () => removeMovementAction(props.accountId, props.id),
+            () => router.refresh(),
+          )
+        }
+      />
+      {error && <Notice tone="negative">{error}</Notice>}
+    </>
   )
 }

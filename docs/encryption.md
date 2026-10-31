@@ -23,6 +23,7 @@ still apply on top of this.
 | `holdings`                | `units`, `cost_minor`                                                 |                                |
 | `instrument_prices`       | `price`                                                               |                                |
 | `investment_transactions` | `units`, `amount_minor`                                               | `dedup_key`                    |
+| `portfolio_snapshots`     | `value_minor`                                                         |                                |
 
 Left in the clear because queries need them and they say little alone: ids, roles, dates,
 currencies, account kind and visibility, categories, installment numbers, asset classes,

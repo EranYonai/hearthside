@@ -406,6 +406,21 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await expect(tiles).toContainText('Long-term savings')
   await tiles.getByRole('link', { name: 'Edit Long-term savings' }).click()
   await expect(owner.getByLabel('Account name')).toHaveValue('Long-term savings')
+
+  // Money put in is recorded per account and feeds the trends page.
+  const moves = owner.getByRole('region', { name: 'Money in and out' })
+  await moves.getByLabel('What was it').selectOption('deposit')
+  await moves.getByLabel('Amount in USD').fill('1,000')
+  await moves.getByRole('button', { name: 'Add' }).click()
+  await expect(owner.getByTestId('movements')).toContainText('Deposit')
+  await expect(owner.getByTestId('movements')).toContainText('+$1,000')
+
+  await owner.getByRole('link', { name: 'Investments' }).click()
+  await owner.getByRole('link', { name: 'Trends' }).click()
+  await expect(owner.getByRole('heading', { name: 'Trends' })).toBeVisible()
+  await expect(owner.getByTestId('trend-empty')).toContainText('recorded once a day')
+  await owner.getByRole('navigation', { name: 'Range' }).getByRole('link', { name: 'All' }).click()
+  await expect(owner.getByTestId('years')).toContainText('$1,000')
 })
 
 test('settings show the app version and sign-in activity', async () => {

@@ -1,5 +1,5 @@
-import { Amount, Card, Label } from '@hearthside/ui'
-import { ChevronRight, Lock } from 'lucide-react'
+import { Amount, buttonClasses, Card, Label } from '@hearthside/ui'
+import { ChartLine, ChevronRight, Lock } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AppShell } from '@/components/AppShell'
@@ -11,6 +11,7 @@ import { canEdit } from '@/server/ledger'
 import { investmentHolder, portfolio } from '@/server/invest'
 import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
+import { recordSnapshots } from '@/server/trends'
 import { CurrencySwitch, InvestmentAccountForm } from './client'
 
 export const metadata: Metadata = { title: 'Invest · Hearthside' }
@@ -46,6 +47,8 @@ export default async function InvestPage() {
     portfolio(db, member, fx.rates),
     listMembers(db, household.id),
   ])
+  // Today's value for trends; an hourly job does the same when nobody opens this page.
+  await recordSnapshots(db, household.id, fx.rates)
   const names = new Map(people.map((p) => [p.id, p.id === member.id ? 'You' : p.name]))
   const currency = summary.currency
   const unconverted = Object.entries(summary.unconverted)
@@ -118,6 +121,13 @@ export default async function InvestPage() {
                 not converted to {currency} yet.
               </p>
             )}
+            <Link
+              href="/invest/trends"
+              className={`${buttonClasses('secondary')} justify-self-start`}
+            >
+              <ChartLine aria-hidden />
+              Trends
+            </Link>
             {summary.unpriced > 0 && (
               <p className="text-caption text-ink-muted">
                 {summary.unpriced === 1

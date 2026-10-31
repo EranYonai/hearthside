@@ -78,6 +78,13 @@
       "when": 1793434196600,
       "tag": "0010_quotes",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793449124140,
+      "tag": "0011_portfolio_snapshots",
+      "breakpoints": true
     }
   ]
 }

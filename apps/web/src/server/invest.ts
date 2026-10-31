@@ -454,12 +454,21 @@ export async function listHoldings(
 ): Promise<HoldingView[]> {
   const ids = accountIds ?? (await listInvestmentAccounts(db, member)).map((a) => a.id)
   if (ids.length === 0) return []
+  return loadHoldings(db, and(visibleTo(member), inArray(holdings.accountId, [...ids]))!)
+}
+
+/** Every holding in a household, whoever can see it. Only for household-wide bookkeeping. */
+export async function householdHoldings(db: Conn, householdId: string): Promise<HoldingView[]> {
+  return loadHoldings(db, eq(holdings.householdId, householdId))
+}
+
+async function loadHoldings(db: Conn, where: SQL): Promise<HoldingView[]> {
   const rows = await db
     .select({ holding: holdings, instrument: instruments })
     .from(holdings)
     .innerJoin(instruments, eq(instruments.id, holdings.instrumentId))
     .innerJoin(investmentAccounts, eq(investmentAccounts.id, holdings.accountId))
-    .where(and(visibleTo(member), inArray(holdings.accountId, [...ids])))
+    .where(where)
   const prices = await latestPrices(
     db,
     rows.filter((r) => r.instrument.kind === 'security').map((r) => r.instrument.id),

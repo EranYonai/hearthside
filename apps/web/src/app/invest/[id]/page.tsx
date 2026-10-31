@@ -1,4 +1,4 @@
-import { assetClassLabel, summarizePortfolio } from '@hearthside/core'
+import { assetClassLabel, movementLabel, summarizePortfolio } from '@hearthside/core'
 import { Amount, buttonClasses, Card, Label, Notice } from '@hearthside/ui'
 import { ChevronLeft } from 'lucide-react'
 import type { Metadata } from 'next'
@@ -16,17 +16,27 @@ import {
   mayManage,
 } from '@/server/invest'
 import { AuthError, listMembers } from '@/server/repo'
+import { dayOf, listMovements } from '@/server/trends'
 import { requireSession } from '@/server/session'
 import {
   DeleteAccountButton,
   HoldingForm,
   HoldingsImport,
   InvestmentAccountForm,
+  MovementForm,
   RemoveHoldingButton,
+  RemoveMovementButton,
 } from '../client'
 
 export const metadata: Metadata = { title: 'Investment account · Hearthside' }
 export const dynamic = 'force-dynamic'
+
+const dateFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
 
 function formatUnits(units: string): string {
   const [whole, frac] = units.split('.')
@@ -49,9 +59,10 @@ export default async function InvestmentAccountPage({
     throw err
   })
   await keepQuotesFresh(db)
-  const [list, people] = await Promise.all([
+  const [list, people, movements] = await Promise.all([
     listHoldings(db, member, [account.id]),
     listMembers(db, household.id),
+    listMovements(db, member, [account.id]),
   ])
   const { rates } = await currentRates(db)
   const summary = summarizePortfolio(list, account.currency, rates)
@@ -175,6 +186,55 @@ export default async function InvestmentAccountPage({
             </li>
           ))}
         </ul>
+      </Card>
+
+      <Card aria-labelledby="movements-title">
+        <h2 id="movements-title" className="font-display text-heading">
+          Money in and out
+        </h2>
+        <p className="text-caption text-ink-muted">
+          Deposits and withdrawals show how much you put in, so trends can tell growth from new
+          money. Fees and dividends are listed per year.
+        </p>
+        {movements.length > 0 && (
+          <ul data-testid="movements">
+            {movements.map((m) => (
+              <li
+                key={m.id}
+                className="flex min-h-11 items-center gap-3 border-t border-line py-1 first:border-t-0"
+              >
+                <span className="grid flex-1">
+                  <span className="text-body-strong">{movementLabel(m.kind)}</span>
+                  <span className="text-caption text-ink-muted">
+                    {dateFormat.format(new Date(`${m.on}T00:00:00Z`))}
+                  </span>
+                </span>
+                <Amount minor={m.amountMinor} currency={m.currency} signed />
+                {manage && m.source === 'manual' && (
+                  <RemoveMovementButton
+                    accountId={account.id}
+                    id={m.id}
+                    label={`${movementLabel(m.kind).toLowerCase()} on ${m.on}`}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {manage && (
+          <details open={movements.length === 0}>
+            <summary className="cursor-pointer text-body-strong text-brand-ink">
+              Add money in or out
+            </summary>
+            <div className="pt-3">
+              <MovementForm
+                accountId={account.id}
+                currency={account.currency}
+                today={dayOf(new Date())}
+              />
+            </div>
+          </details>
+        )}
       </Card>
 
       {manage ? (

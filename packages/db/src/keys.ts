@@ -115,6 +115,7 @@ export const ENCRYPTED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   holdings: ['units', 'cost_minor'],
   instrument_prices: ['price'],
   investment_transactions: ['units', 'amount_minor'],
+  portfolio_snapshots: ['value_minor'],
 }
 
 /** Keyed-hash columns; their plaintext form was the value itself (or its SHA-256). */

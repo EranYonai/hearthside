@@ -489,6 +489,31 @@ export const investmentTransactions = pgTable(
 )
 
 /**
+ * One value per investment account per day, in the account's currency, so trends can show how
+ * the value moved. Today's row is rewritten as prices change; earlier days stay as they were.
+ */
+export const portfolioSnapshots = pgTable(
+  'portfolio_snapshots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => investmentAccounts.id, { onDelete: 'cascade' }),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    on: date('on', { mode: 'string' }).notNull(),
+    valueMinor: encInt('portfolio_snapshots', 'value_minor').notNull(),
+    currency: text('currency').notNull(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('portfolio_snapshots_account_day_idx').on(t.accountId, t.on),
+    index('portfolio_snapshots_household_idx').on(t.householdId, t.on),
+  ],
+)
+
+/**
  * Daily reference exchange rates: one unit of `base` is worth `rate` of `quote`. Public market
  * data, so stored in the clear. The newest day per pair is the current rate.
  */
@@ -537,3 +562,4 @@ export type InvestmentAccountRow = typeof investmentAccounts.$inferSelect
 export type InstrumentRow = typeof instruments.$inferSelect
 export type HoldingRow = typeof holdings.$inferSelect
 export type InvestmentTransactionRow = typeof investmentTransactions.$inferSelect
+export type PortfolioSnapshotRow = typeof portfolioSnapshots.$inferSelect
