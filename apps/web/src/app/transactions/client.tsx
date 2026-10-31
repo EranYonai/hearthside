@@ -10,6 +10,8 @@ export interface TxView {
   id: string
   description: string
   meta: string
+  /** The account's card color, shown as a dot before the meta line. */
+  accountColor: string | null
   minor: Minor
   category: string | null
   label: string
@@ -25,6 +27,7 @@ function rowProps(tx: TxView) {
     category: tx.icon as Category,
     merchant: tx.description,
     meta: `${tx.label}${tx.auto ? ' (auto)' : ''} · ${tx.meta}`,
+    ...(tx.accountColor ? { metaColor: tx.accountColor } : {}),
     minor: tx.minor,
     ...(tx.original ? { original: tx.original } : {}),
     ...(tx.installment ? { installment: tx.installment } : {}),

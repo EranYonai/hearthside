@@ -16,6 +16,8 @@ moves the Unreleased notes under the new version.
 - Welcome steps for each new member, and profile settings with a display currency (#40).
 - Automatic categories: rules, past choices and keywords at import, then a local model for the rest (#42).
 - Household categories: add, edit and remove your own in Settings, with an icon and keywords.
+- Account looks: each account shows a color and a short badge for where it comes from, and
+  you can pick its source and your own color when editing it. Transactions show a matching dot.
 
 ### Security
 

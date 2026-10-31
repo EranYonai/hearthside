@@ -11,7 +11,18 @@ export const PROVIDERS = {
   leumi: { label: 'Leumi', kind: 'bank' },
   discount: { label: 'Discount', kind: 'bank' },
   mizrahi: { label: 'Mizrahi Tefahot', kind: 'bank' },
+  fibi: { label: 'First International', kind: 'bank' },
+  mercantile: { label: 'Mercantile', kind: 'bank' },
+  jerusalem: { label: 'Bank of Jerusalem', kind: 'bank' },
+  yahav: { label: 'Yahav', kind: 'bank' },
+  massad: { label: 'Massad', kind: 'bank' },
+  onezero: { label: 'One Zero', kind: 'bank' },
+  diners: { label: 'Diners', kind: 'card' },
 } as const
+
+export function isProviderId(id: unknown): id is ProviderId {
+  return typeof id === 'string' && Object.hasOwn(PROVIDERS, id)
+}
 
 export type ProviderId = keyof typeof PROVIDERS
 export type SourceKind = 'card' | 'bank'
@@ -26,7 +37,7 @@ export interface DetectedSource {
 }
 
 export function providerLabel(id: string | null | undefined): string | null {
-  return id && id in PROVIDERS ? PROVIDERS[id as ProviderId].label : null
+  return isProviderId(id) ? PROVIDERS[id].label : null
 }
 
 /** "Max ·1234", "Hapoalim account ·5678", "Card". */

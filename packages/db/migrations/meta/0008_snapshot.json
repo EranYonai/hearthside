@@ -1,5 +1,5 @@
 {
-  "id": "89577831-026c-470c-a9a2-a2ff4fb228c2",
+  "id": "690a85ab-7d82-4a48-9c7f-3bed76768581",
   "prevId": "e9486667-b09d-4db1-841c-fddcb19ea586",
   "version": "7",
   "dialect": "postgresql",
@@ -59,6 +59,12 @@
         },
         "last4": {
           "name": "last4",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "color": {
+          "name": "color",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -971,12 +977,6 @@
         },
         "onboarded_at": {
           "name": "onboarded_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "approved_at": {
-          "name": "approved_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false

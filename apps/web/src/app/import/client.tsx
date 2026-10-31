@@ -30,6 +30,7 @@ interface Group {
   account: { id: string | null; name: string; isNew: boolean }
   kind: 'card' | 'bank' | 'other'
   provider: string | null
+  color: string | null
   network: string | null
   last4: string | null
   total: number
@@ -189,6 +190,7 @@ export function ImportForm({
                   name={g.account.name}
                   kind={g.kind}
                   provider={g.provider}
+                  color={g.color}
                   network={g.network}
                   last4={g.last4}
                   {...(g.account.isNew ? { note: 'New' } : {})}
