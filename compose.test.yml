@@ -29,6 +29,9 @@ services:
       APP_ORIGIN: http://localhost:${WEB_PORT:-3300}
       # Throwaway key for the throwaway database. Never use it for real data.
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dGVzdC1vbmx5LWtleS1mb3ItZTJlLXRlc3RzLTAwMDA=}
+      # Tests never reach market data services.
+      FX_RATES_URL: 'off'
+      QUOTES_URL: 'off'
     ports:
       - 127.0.0.1:${WEB_PORT:-3300}:3000
     depends_on:

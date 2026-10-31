@@ -78,6 +78,13 @@
       "when": 1793451633540,
       "tag": "0010_card_bills",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793451831472,
+      "tag": "0011_investments",
+      "breakpoints": true
     }
   ]
 }
