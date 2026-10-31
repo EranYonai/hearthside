@@ -32,6 +32,8 @@ import {
   unusedRecoveryCodeCount,
   audit,
   clearRecoveryFlag,
+  approveMember,
+  isApproved,
   type NewPasskey,
 } from './repo'
 import { SESSION_REFRESH_MS } from './config'
@@ -144,12 +146,50 @@ describe.skipIf(!url)('repo (Postgres)', () => {
     const kid = await acceptInvite(db, { token: viewer.token, name: 'Kim', passkey: passkey() })
     expect(kid.member.role).toBe('viewer')
 
+    // Joiners wait for the owner before they count as members.
+    expect((await listMembers(db, household.id)).map((m) => m.name)).toEqual(['Alex'])
+    expect(
+      (await listMembers(db, household.id, { includePending: true })).map((m) => m.name),
+    ).toEqual(['Alex', 'Sam', 'Kim'])
+    await approveMember(db, owner, sam.member.id)
+    await approveMember(db, owner, kid.member.id)
+
     expect((await listMembers(db, household.id)).map((m) => [m.name, m.role])).toEqual([
       ['Alex', 'owner'],
       ['Sam', 'adult'],
       ['Kim', 'viewer'],
     ])
     expect(await listOpenInvites(db, household.id)).toHaveLength(0)
+  })
+
+  it('keeps invite joiners pending until the owner approves or declines them', async () => {
+    const { member: owner } = await setupHome()
+    expect(isApproved(owner)).toBe(true)
+
+    const first = await createInvite(db, owner, 'adult')
+    const sam = (await acceptInvite(db, { token: first.token, name: 'Sam', passkey: passkey() }))
+      .member
+    expect(isApproved(sam)).toBe(false)
+    const token = await createSession(db, sam.id)
+    expect(isApproved((await getSession(db, token))!.member)).toBe(false)
+
+    // Only the owner approves, and only once.
+    await expect(approveMember(db, sam, sam.id)).rejects.toMatchObject({ code: 'not_allowed' })
+    await approveMember(db, owner, sam.id)
+    expect(isApproved((await getSession(db, token))!.member)).toBe(true)
+    await expect(approveMember(db, owner, sam.id)).rejects.toMatchObject({ code: 'not_found' })
+
+    // Declining removes them and ends their session.
+    const second = await createInvite(db, owner, 'viewer')
+    const kim = (await acceptInvite(db, { token: second.token, name: 'Kim', passkey: passkey() }))
+      .member
+    const kimSession = await createSession(db, kim.id)
+    await removeMember(db, owner, kim.id)
+    expect(await getSession(db, kimSession)).toBeUndefined()
+    await expect(approveMember(db, owner, kim.id)).rejects.toMatchObject({ code: 'not_found' })
+
+    const actions = (await recentAudit(db, owner.householdId, 20)).map((a) => a.entry.action)
+    expect(actions).toContain('member.approved')
   })
 
   it('lets only the owner invite, and honours revoke and expiry', async () => {

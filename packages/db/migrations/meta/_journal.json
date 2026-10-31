@@ -64,6 +64,13 @@
       "when": 1793449092413,
       "tag": "0008_account_color",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793450477869,
+      "tag": "0009_member_approval",
+      "breakpoints": true
     }
   ]
 }

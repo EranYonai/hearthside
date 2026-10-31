@@ -7,6 +7,7 @@ import { SignOutButton } from '@/components/SignOutButton'
 import { ThemeToggle } from '@/lib/ThemeToggle'
 import { requireDb } from '@/lib/db'
 import {
+  isApproved,
   listMembers,
   listOpenInvites,
   listPasskeys,
@@ -20,6 +21,7 @@ import { CategoryManager } from './categories'
 import {
   InviteCreator,
   MemberControls,
+  PendingControls,
   RegenerateCodes,
   RemovePasskey,
   RevokeInvite,
@@ -36,7 +38,7 @@ export default async function SettingsPage() {
   const db = requireDb()
   const isOwner = member.role === 'owner'
   const [people, keys, codesLeft, invites, activity, custom] = await Promise.all([
-    listMembers(db, household.id),
+    listMembers(db, household.id, { includePending: isOwner }),
     listPasskeys(db, member.id),
     unusedRecoveryCodeCount(db, member.id),
     isOwner ? listOpenInvites(db, household.id) : Promise.resolve([]),
@@ -44,6 +46,8 @@ export default async function SettingsPage() {
     listCustomCategories(db, household.id),
   ])
   const editor = member.role !== 'viewer'
+  const waiting = people.filter((p) => !isApproved(p))
+  const current = people.filter(isApproved)
 
   return (
     <AppShell household={household.name} current="/settings">
@@ -119,8 +123,31 @@ export default async function SettingsPage() {
 
       <Card aria-labelledby="members-title" id="members">
         <Label id="members-title">Members</Label>
+        {waiting.length > 0 && (
+          <div className="grid gap-1" data-testid="pending-members">
+            <Notice tone="warning">
+              {waiting.length === 1
+                ? 'Someone joined with an invite link and is waiting for you.'
+                : `${waiting.length} people joined with invite links and are waiting for you.`}{' '}
+              They can’t see anything until you approve them.
+            </Notice>
+            <ul className="grid divide-y divide-line">
+              {waiting.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span>
+                    <span className="text-body-strong">{p.name}</span>
+                    <span className="block text-caption text-ink-muted">
+                      {ROLE_LABEL[p.role]} · joined {date.format(p.createdAt)} · waiting
+                    </span>
+                  </span>
+                  <PendingControls id={p.id} name={p.name} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <ul className="grid divide-y divide-line" data-testid="member-list">
-          {people.map((p) => (
+          {current.map((p) => (
             <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <span>
                 <span className="text-body-strong">{p.name}</span>
