@@ -1,4 +1,5 @@
 import {
+  closingBalance,
   countsAsSpending,
   matchCardBills,
   duplicateKeys,
@@ -11,7 +12,20 @@ import {
 } from '@hearthside/core'
 import type { AccountRow, MemberRow } from '@hearthside/db'
 import { blindIndex, schema } from '@hearthside/db'
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm'
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm'
 import { householdCategorySet } from './categories'
 import { loadContext, quickCategory } from './categorize'
 import { audit, AuthError, type Tx } from './repo'
@@ -137,7 +151,10 @@ export async function updateAccount(
     color?: string | null
     /** Card network, or null for none. */
     network?: string | null
+    /** Bank accounts: today's balance in minor units, or null to forget it. */
+    balanceMinor?: number | null
   },
+  now = new Date(),
 ) {
   assertEditor(member)
   const account = await getVisibleAccount(db, member, id)
@@ -152,6 +169,15 @@ export async function updateAccount(
       ...(input.provider !== undefined ? { provider: input.provider } : {}),
       ...(input.color !== undefined ? { color: input.color } : {}),
       ...(input.network !== undefined ? { network: input.network } : {}),
+      ...(input.balanceMinor !== undefined
+        ? input.balanceMinor === null
+          ? { balanceMinor: null, balanceOn: null, balanceSource: null }
+          : {
+              balanceMinor: input.balanceMinor,
+              balanceOn: now.toISOString().slice(0, 10),
+              balanceSource: 'manual' as const,
+            }
+        : {}),
       ...(input.holderId
         ? { holderId: input.holderId === account.ownerId ? null : input.holderId }
         : {}),
@@ -360,6 +386,19 @@ export async function commitImport(
       added += inserted.length
     }
     const duplicates = input.rows.length - added
+    // A bank file's running balance keeps the account's balance current, unless a newer one
+    // is already known.
+    const closing = account.kind === 'bank' ? closingBalance(input.rows) : null
+    if (closing)
+      await tx
+        .update(accounts)
+        .set({ balanceMinor: closing.minor, balanceOn: closing.on, balanceSource: 'statement' })
+        .where(
+          and(
+            eq(accounts.id, account.id),
+            or(isNull(accounts.balanceOn), lte(accounts.balanceOn, closing.on)),
+          ),
+        )
     const [done] = await tx
       .update(importBatches)
       .set({ added, duplicates })

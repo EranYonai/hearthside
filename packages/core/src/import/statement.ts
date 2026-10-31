@@ -25,6 +25,8 @@ export interface ParsedTransaction {
   notes?: string
   /** Last four digits of the card, when the file lists several cards. */
   last4?: string
+  /** Running balance after this row, when a bank file lists one. */
+  balanceMinor?: Minor
   sheet: string
   /** 1-based row number in the sheet, for error messages. */
   row: number
@@ -97,6 +99,7 @@ function readRow(
   const postedOn = parseDate(cell(row, map.postedDate))
   const reference = cell(row, map.reference) || undefined
   const last4 = /(\d{4})\D*$/.exec(cell(row, map.last4))?.[1]
+  const balanceMinor = parseAmount(cell(row, map.balance))
   return {
     occurredOn,
     ...(postedOn && postedOn !== occurredOn ? { postedOn } : {}),
@@ -109,6 +112,7 @@ function readRow(
     ...(reference ? { reference } : {}),
     ...(notes ? { notes } : {}),
     ...(last4 ? { last4 } : {}),
+    ...(balanceMinor !== undefined ? { balanceMinor } : {}),
   }
 }
 

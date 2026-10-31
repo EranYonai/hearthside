@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { AccountCard, NETWORKS } from '@/components/AccountCard'
 import { useAction } from '@/lib/use-action'
-import { deleteAccountAction, updateAccountAction } from '../actions'
+import { deleteAccountAction, setBalanceAction, updateAccountAction } from '../actions'
 
 const PROVIDER_IDS = Object.keys(PROVIDERS) as ProviderId[]
 const BANKS = PROVIDER_IDS.filter((id) => PROVIDERS[id].kind === 'bank')
@@ -247,6 +247,47 @@ export function EditAccountForm(props: {
       <Button type="submit" disabled={pending} className="justify-self-start">
         Save
       </Button>
+    </form>
+  )
+}
+
+/** Type in today's balance, for files without a balance column. */
+export function BalanceForm(props: { id: string; minor: number | null }) {
+  const router = useRouter()
+  const [amount, setAmount] = useState(props.minor === null ? '' : (props.minor / 100).toFixed(2))
+  const [saved, setSaved] = useState(false)
+  const { pending, error, run } = useAction()
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        setSaved(false)
+        run(
+          () => setBalanceAction(props.id, amount),
+          () => {
+            setSaved(true)
+            router.refresh()
+          },
+        )
+      }}
+    >
+      <TextField
+        label="Balance today"
+        name="balance"
+        inputMode="decimal"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        autoComplete="off"
+        hint="Leave empty to take it out of what you own."
+      />
+      <span className="flex flex-wrap items-center gap-3">
+        <Button type="submit" variant="secondary" disabled={pending}>
+          Update balance
+        </Button>
+        {saved && !pending && <span className="text-caption text-positive">Saved</span>}
+      </span>
+      {error && <Notice tone="negative">{error}</Notice>}
     </form>
   )
 }

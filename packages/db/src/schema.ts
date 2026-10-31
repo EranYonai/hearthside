@@ -219,6 +219,11 @@ export const accounts = pgTable(
     last4: encText('accounts', 'last4'),
     /** The person's own card color (#RRGGBB); null uses the provider's color. */
     color: encText('accounts', 'color'),
+    /** Bank accounts: the latest known balance, from a statement or typed in. */
+    balanceMinor: encInt('accounts', 'balance_minor'),
+    /** The day that balance is from. */
+    balanceOn: date('balance_on', { mode: 'string' }),
+    balanceSource: text('balance_source', { enum: ['statement', 'manual'] }),
     /** household: everyone sees it; private: only the owner. */
     visibility: text('visibility', { enum: ['household', 'private'] })
       .notNull()

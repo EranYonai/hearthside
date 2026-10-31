@@ -5,6 +5,7 @@ import { wordsToRows } from './pdf'
 import { detectSource, suggestAccountName, providerLabel } from './detect'
 import { parseStatement } from './statement'
 import { ImportFormatError, readStatementFile } from './table'
+import { closingBalance } from '../wealth'
 
 // Synthetic files shaped like common exports. Names, merchants and amounts are made up.
 
@@ -286,6 +287,10 @@ describe('bank statement PDF', () => {
       ['2026-10-04', -12345],
       ['2026-10-05', 120],
     ])
+    expect(result.transactions.map((t) => t.balanceMinor)).toEqual([
+      2000000, 1450000, 1437655, 1437775,
+    ])
+    expect(closingBalance(result.transactions)).toEqual({ minor: 1437775, on: '2026-10-05' })
   })
 
   it('keeps lines before the first header as plain text rows', () => {
