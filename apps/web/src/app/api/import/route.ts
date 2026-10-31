@@ -118,6 +118,7 @@ export const POST = authRoute(async ({ request, db }) => {
     after(() => scheduleCategorize(db, member.householdId))
     const latest = parsed.transactions.reduce((m, r) => (r.occurredOn > m ? r.occurredOn : m), '')
     return json({
+      type: 'statement',
       added: results.reduce((n, r) => n + r.batch.added, 0),
       duplicates: results.reduce((n, r) => n + r.batch.duplicates, 0),
       accounts: results.map((r) => r.account.name),
