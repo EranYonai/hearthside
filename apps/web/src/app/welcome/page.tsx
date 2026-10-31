@@ -3,7 +3,6 @@ import { ArrowLeft, ArrowRight, CircleCheck, CircleDashed } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { providerLabel } from '@hearthside/core'
 import { AccountCard } from '@/components/AccountCard'
 import { AddPasskeyButton } from '@/components/AddPasskeyButton'
 import { AuthShell } from '@/components/AuthShell'
@@ -87,7 +86,8 @@ export default async function WelcomePage({
                   <AccountCard
                     name={a.name}
                     kind={a.kind}
-                    provider={providerLabel(a.provider)}
+                    provider={a.provider}
+                    color={a.color}
                     network={a.network}
                     last4={a.last4}
                     {...(a.visibility === 'private' ? { note: 'Only you' } : {})}

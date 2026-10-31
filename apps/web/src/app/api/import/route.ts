@@ -3,7 +3,6 @@ import {
   StatementError,
   detectSource,
   parseStatement,
-  providerLabel,
   readStatementFile,
 } from '@hearthside/core'
 import { after } from 'next/server'
@@ -30,7 +29,8 @@ function describe(g: ImportGroup) {
       ? { id: g.account.id, name: g.account.name, isNew: false }
       : { id: null, name: g.proposed.name, isNew: true },
     kind: g.account?.kind ?? g.proposed.kind,
-    provider: providerLabel(g.account?.provider ?? g.proposed.provider),
+    provider: g.account?.provider ?? g.proposed.provider,
+    color: g.account?.color ?? null,
     network: g.account?.network ?? g.proposed.network,
     last4: g.account?.last4 ?? g.proposed.last4,
     total: g.rows.length,

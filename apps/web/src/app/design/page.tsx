@@ -14,6 +14,8 @@ import {
 } from '@hearthside/ui'
 import { Download, RefreshCw } from 'lucide-react'
 import type { Metadata } from 'next'
+import { PROVIDERS, type ProviderId } from '@hearthside/core'
+import { AccountCard } from '@/components/AccountCard'
 import { ThemeToggle } from '@/lib/ThemeToggle'
 import { VersionTag } from '@/lib/VersionTag'
 
@@ -161,6 +163,30 @@ export default function DesignPage() {
       <footer className="pt-4 text-center">
         <VersionTag />
       </footer>
+      <section className="grid gap-3" aria-labelledby="accounts">
+        <h2 id="accounts" className="font-display text-heading">
+          Account colors
+        </h2>
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {(Object.keys(PROVIDERS) as ProviderId[]).map((id) => (
+            <li key={id}>
+              <AccountCard
+                name={PROVIDERS[id].label}
+                kind={PROVIDERS[id].kind}
+                provider={id}
+                last4="1234"
+                {...(PROVIDERS[id].kind === 'card' ? { network: 'visa' } : {})}
+              />
+            </li>
+          ))}
+          <li>
+            <AccountCard name="Custom color" kind="card" color="#E8B100" last4="1234" />
+          </li>
+          <li>
+            <AccountCard name="Joint savings" kind="bank" />
+          </li>
+        </ul>
+      </section>
     </main>
   )
 }

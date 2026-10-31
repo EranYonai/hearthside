@@ -1,3 +1,4 @@
+import { accountLook } from '@hearthside/core'
 import { Amount, buttonClasses, Card, Label, SummaryCard, TransactionList } from '@hearthside/ui'
 import { ChevronLeft, ChevronRight, FileUp } from 'lucide-react'
 import type { Metadata } from 'next'
@@ -84,8 +85,13 @@ export default async function TransactionsPage({
     minor: Math.abs(c.minor),
     percent: spent ? (Math.abs(c.minor) / spent) * 100 : 0,
   }))
-  const views: TxView[] = rows.map(({ t, accountName }) => ({
+  const views: TxView[] = rows.map(({ t, accountName, accountProvider, accountColor }) => ({
     id: t.id,
+    accountColor: accountLook({
+      name: accountName,
+      provider: accountProvider,
+      color: accountColor,
+    }).color,
     description: t.description,
     meta: `${accountName} · ${day.format(new Date(t.occurredOn))}`,
     minor: t.amountMinor,

@@ -106,7 +106,7 @@ export const ENCRYPTED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   passkeys: ['name'],
   auth_challenges: ['payload'],
   audit_log: ['detail', 'ip'],
-  accounts: ['name', 'provider', 'network', 'last4'],
+  accounts: ['name', 'provider', 'network', 'last4', 'color'],
   import_batches: ['file_name'],
   transactions: ['description', 'amount_minor', 'original_minor', 'reference', 'notes'],
   household_categories: ['label', 'keywords'],
