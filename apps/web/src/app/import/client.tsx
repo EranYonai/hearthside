@@ -107,10 +107,12 @@ export function ImportForm({
   investAccounts = [],
   people = [],
   me,
+  logos,
 }: {
   accounts: AccountOption[]
   /** Investment accounts the member may change, for holdings files. */
   investAccounts?: { id: string; name: string }[]
+  logos?: Partial<Record<string, string>>
   /** Members who can hold a new account; the picker shows when there's more than one. */
   people?: { id: string; name: string }[]
   me?: string
@@ -219,7 +221,7 @@ export function ImportForm({
               Its rows are already here.
             </Notice>
           )}
-          {held && <HoldingsCard preview={held} />}
+          {held && <HoldingsCard preview={held} logos={logos} />}
           {statement?.groups.map((g, i) => (
             <Card key={i} aria-label={`Into ${g.account.name}`}>
               <div className="grid grid-cols-[minmax(0,14rem)_1fr] items-center gap-3">
@@ -228,6 +230,7 @@ export function ImportForm({
                   kind={g.kind}
                   provider={g.provider}
                   color={g.color}
+                  logos={logos}
                   network={g.network}
                   last4={g.last4}
                   {...(g.account.isNew ? { note: 'New' } : {})}
@@ -367,7 +370,13 @@ export function ImportForm({
   )
 }
 
-function HoldingsCard({ preview }: { preview: HoldingsPreview }) {
+function HoldingsCard({
+  preview,
+  logos,
+}: {
+  preview: HoldingsPreview
+  logos?: Partial<Record<string, string>> | undefined
+}) {
   return (
     <Card aria-label={`Into ${preview.account.name}`}>
       <div className="grid grid-cols-[minmax(0,14rem)_1fr] items-center gap-3">
@@ -375,6 +384,7 @@ function HoldingsCard({ preview }: { preview: HoldingsPreview }) {
           name={preview.account.name}
           kind="investment"
           provider={preview.provider}
+          logos={logos}
           color={null}
           network={null}
           last4={null}

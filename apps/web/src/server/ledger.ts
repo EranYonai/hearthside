@@ -11,7 +11,7 @@ import {
 } from '@hearthside/core'
 import type { AccountRow, MemberRow } from '@hearthside/db'
 import { blindIndex, schema } from '@hearthside/db'
-import { and, desc, eq, gte, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm'
 import { householdCategorySet } from './categories'
 import { loadContext, quickCategory } from './categorize'
 import { audit, AuthError, type Tx } from './repo'
@@ -135,6 +135,8 @@ export async function updateAccount(
     provider?: string | null
     /** #RRGGBB, or null to use the provider's color. */
     color?: string | null
+    /** Card network, or null for none. */
+    network?: string | null
   },
 ) {
   assertEditor(member)
@@ -149,6 +151,7 @@ export async function updateAccount(
       ...(input.visibility ? { visibility: input.visibility } : {}),
       ...(input.provider !== undefined ? { provider: input.provider } : {}),
       ...(input.color !== undefined ? { color: input.color } : {}),
+      ...(input.network !== undefined ? { network: input.network } : {}),
       ...(input.holderId
         ? { holderId: input.holderId === account.ownerId ? null : input.holderId }
         : {}),
@@ -472,7 +475,9 @@ function filterConditions(member: MemberRow, f: TransactionFilter): SQL {
   if (f.accountId) conditions.push(eq(transactions.accountId, f.accountId))
   if (f.kind) conditions.push(eq(accounts.kind, f.kind))
   if (f.holderId) conditions.push(sql`${holder} = ${f.holderId}`)
-  if (f.category === 'none') conditions.push(isNull(transactions.category))
+  if (f.category === 'alerts')
+    conditions.push(isNotNull(transactions.alert), isNull(transactions.alertDismissedAt))
+  else if (f.category === 'none') conditions.push(isNull(transactions.category))
   else if (f.category && (isCategory(f.category) || f.category.startsWith(CUSTOM_PREFIX)))
     conditions.push(eq(transactions.category, f.category))
   return and(...conditions)!
@@ -606,6 +611,7 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
   const [rows, cards] = await Promise.all([
     db
       .select({
+        accountId: transactions.accountId,
         category: transactions.category,
         description: transactions.description,
         amount: transactions.amountMinor,
@@ -622,6 +628,7 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
   let count = 0
   let cardBills = 0
   const byCategory = new Map<string | null, number>()
+  const byAccount = new Map<string, { minor: number; byCategory: Map<string | null, number> }>()
   for (const r of rows) {
     if (!matchesSearch(r.description, f.search)) continue
     count++
@@ -633,6 +640,10 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
     if (r.amount < 0) {
       spent += r.amount
       byCategory.set(r.category, (byCategory.get(r.category) ?? 0) + r.amount)
+      const acct = byAccount.get(r.accountId) ?? { minor: 0, byCategory: new Map() }
+      byAccount.set(r.accountId, acct)
+      acct.minor += r.amount
+      acct.byCategory.set(r.category, (acct.byCategory.get(r.category) ?? 0) + r.amount)
     } else received += r.amount
   }
   return {
@@ -644,7 +655,28 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
     byCategory: [...byCategory]
       .map(([category, minor]) => ({ category, minor }))
       .sort((a, b) => a.minor - b.minor),
+    /** Spending per account, largest first, each split by category. */
+    byAccount: [...byAccount]
+      .map(([accountId, a]) => ({
+        accountId,
+        minor: a.minor,
+        byCategory: [...a.byCategory]
+          .map(([category, minor]) => ({ category, minor }))
+          .sort((x, y) => x.minor - y.minor),
+      }))
+      .sort((a, b) => a.minor - b.minor),
   }
+}
+
+/** Spending for each of the given months, under the same filter. */
+export async function monthlySpending(
+  db: Conn,
+  member: MemberRow,
+  f: Omit<TransactionFilter, 'month'>,
+  months: string[],
+) {
+  const sums = await Promise.all(months.map((month) => totals(db, member, { ...f, month })))
+  return months.map((month, i) => ({ month, spent: sums[i]!.spent }))
 }
 
 /** This month's money out and in for each visible account. */
@@ -692,6 +724,21 @@ export async function listMonths(db: Conn, member: MemberRow) {
     .where(visibleTo(member))
     .orderBy(desc(sql`to_char(${transactions.occurredOn}, 'YYYY-MM')`))
   return rows.map((r) => r.month)
+}
+
+/** Someone checked an alert and it's fine: hide it, and don't raise it again. */
+export async function dismissAlert(db: Conn, member: MemberRow, transactionId: string) {
+  assertEditor(member)
+  const [row] = await db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .innerJoin(accounts, eq(accounts.id, transactions.accountId))
+    .where(and(visibleTo(member), eq(transactions.id, transactionId)))
+  if (!row) throw new AuthError('not_found', 'That transaction isn’t here')
+  await db
+    .update(transactions)
+    .set({ alertDismissedAt: new Date() })
+    .where(eq(transactions.id, transactionId))
 }
 
 /**

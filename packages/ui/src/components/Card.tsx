@@ -5,7 +5,7 @@ export function Card({ className, ...rest }: HTMLAttributes<HTMLElement>) {
   return (
     <section
       className={cx(
-        'grid gap-3 rounded-lg border border-line bg-surface-1 p-4 shadow-card',
+        'grid grid-cols-[minmax(0,1fr)] gap-3 rounded-lg border border-line bg-surface-1 p-4 shadow-card',
         className,
       )}
       {...rest}

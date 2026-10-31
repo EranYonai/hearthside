@@ -290,6 +290,13 @@ export const transactions = pgTable(
     categoryConfidence: real('category_confidence'),
     /** When the categorizer (with the model) last looked at it. null means it is waiting. */
     categoryCheckedAt: timestamp('category_checked_at', { withTimezone: true }),
+    /** Worth a second look: fee, spike or model. See core's AlertReason. */
+    alert: text('alert', { enum: ['fee', 'spike', 'model'] }),
+    alertConfidence: real('alert_confidence'),
+    /** When alerts were last checked with the model. null means waiting. */
+    alertCheckedAt: timestamp('alert_checked_at', { withTimezone: true }),
+    /** Someone looked and said it's fine. */
+    alertDismissedAt: timestamp('alert_dismissed_at', { withTimezone: true }),
     /**
      * Bank rows only: this row pays a card bill. amount: it pays what a card bill adds up to;
      * name: its description names a card company. Kept up to date by linkCardBills.
@@ -310,6 +317,9 @@ export const transactions = pgTable(
     index('transactions_household_date_idx').on(t.householdId, t.occurredOn),
     index('transactions_batch_idx').on(t.batchId),
     index('transactions_description_idx').on(t.householdId, t.descriptionKey),
+    index('transactions_alert_pending_idx')
+      .on(t.householdId)
+      .where(sql`${t.alertCheckedAt} is null`),
     index('transactions_uncategorized_idx')
       .on(t.householdId)
       .where(sql`${t.category} is null and ${t.categoryCheckedAt} is null`),
@@ -360,6 +370,27 @@ export const householdCategories = pgTable(
     uniqueIndex('household_categories_label_idx').on(t.householdId, t.labelKey),
     check('household_categories_direction_check', sql`${t.direction} in ('out', 'in')`),
   ],
+)
+
+/**
+ * A logo someone in the household uploaded for a bank, card company or broker. We don't ship
+ * logos (they're trademarks), so each home brings its own, kept private like everything else.
+ */
+export const brandLogos = pgTable(
+  'brand_logos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    /** blindIndex(brand id), e.g. of "leumi" or "ibkr". */
+    brandKey: text('brand_key').notNull(),
+    /** A small image as a data: URL (PNG, JPEG or WebP). */
+    image: encText('brand_logos', 'image').notNull(),
+    createdBy: uuid('created_by').references(() => members.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('brand_logos_brand_idx').on(t.householdId, t.brandKey)],
 )
 
 // ---------- Investments ----------

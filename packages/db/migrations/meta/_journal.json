@@ -85,6 +85,20 @@
       "when": 1793451831472,
       "tag": "0011_investments",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793467872274,
+      "tag": "0012_alerts",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793468536911,
+      "tag": "0013_brand_logos",
+      "breakpoints": true
     }
   ]
 }
