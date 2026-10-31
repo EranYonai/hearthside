@@ -177,7 +177,6 @@ async function drop(page: Page, name: string, buffer: Buffer, mimeType: string) 
 test('dropping a card statement picks or creates its account and imports it', async () => {
   await owner.goto('/')
   await owner.getByRole('link', { name: 'Import a statement' }).click()
-  await expect(owner.getByText('None yet.')).toBeVisible()
 
   const preview = await drop(owner, 'visa-october.csv', Buffer.from(csv), 'text/csv')
   await expect(preview.getByRole('region', { name: 'Into Card ·4821' })).toContainText('3 new')
@@ -185,8 +184,9 @@ test('dropping a card statement picks or creates its account and imports it', as
   await expect(preview.getByLabel('spent 42 shekels 50')).toBeVisible()
   await owner.getByRole('button', { name: 'Import 3 transactions' }).click()
   await expect(owner.getByText('Added 3 transactions to Card ·4821')).toBeVisible()
-  await expect(owner.getByTestId('account-list')).toContainText('•••• 4821')
-  await expect(owner.getByTestId('account-list')).toContainText('VISA')
+  await owner.getByRole('link', { name: 'See your accounts' }).click()
+  await expect(owner.getByTestId('accounts-card')).toContainText('•••• 4821')
+  await expect(owner.getByTestId('accounts-card')).toContainText('VISA')
 
   // The same file again finds the account and adds nothing.
   const again = await drop(owner, 'visa-october.csv', Buffer.from(csv), 'text/csv')
@@ -232,6 +232,33 @@ test('a bank statement PDF imports by column position', async () => {
   await expect(preview.getByLabel('spent 5500 shekels')).toBeVisible()
   await owner.getByRole('button', { name: 'Import 2 transactions' }).click()
   await expect(owner.getByText('Added 2 transactions to Bank account ·8901')).toBeVisible()
+
+  // Cards and bank accounts have their own views.
+  await owner.goto('/transactions?month=2026-10')
+  await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(5)
+  await owner
+    .getByRole('navigation', { name: 'Account type' })
+    .getByRole('link', { name: 'Bank accounts' })
+    .click()
+  await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(2)
+  await expect(owner.getByLabel('Money out in October 2026')).toContainText('₪5,500')
+  await owner
+    .getByRole('navigation', { name: 'Account type' })
+    .getByRole('link', { name: 'Cards' })
+    .click()
+  await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(3)
+
+  // Accounts are grouped by type and can be renamed.
+  await owner
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Accounts' })
+    .click()
+  await expect(owner.getByTestId('accounts-bank')).toContainText('•••• 8901')
+  await owner.getByRole('link', { name: 'Edit Bank account ·8901' }).click()
+  await owner.getByLabel('Account name').fill('Household bank')
+  await owner.getByRole('button', { name: 'Save' }).click()
+  await expect(owner.getByText('Saved.')).toBeVisible()
+  await expect(owner.getByRole('heading', { name: 'Household bank' })).toBeVisible()
 
   // Undo removes what that import added.
   await owner.goto('/import')

@@ -1,12 +1,12 @@
 import { Card, Label, Notice } from '@hearthside/ui'
 import type { Metadata } from 'next'
-import { providerLabel } from '@hearthside/core'
-import { AccountCard } from '@/components/AccountCard'
+import Link from 'next/link'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
 import { canEdit, listAccounts, listBatches } from '@/server/ledger'
+import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
-import { AccountForm, ImportForm, UndoImport } from './client'
+import { ImportForm, UndoImport } from './client'
 
 export const metadata: Metadata = { title: 'Import · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -29,7 +29,11 @@ export default async function ImportPage() {
       </AppShell>
     )
   }
-  const [accounts, batches] = await Promise.all([listAccounts(db, member), listBatches(db, member)])
+  const [accounts, batches, people] = await Promise.all([
+    listAccounts(db, member),
+    listBatches(db, member),
+    listMembers(db, household.id),
+  ])
   const mine = accounts.filter((a) => a.ownerId === member.id)
   return (
     <AppShell household={household.name} current="/import">
@@ -37,40 +41,21 @@ export default async function ImportPage() {
 
       <Card aria-labelledby="import-title">
         <Label id="import-title">Import a statement</Label>
-        <ImportForm accounts={mine.map(({ id, name, kind }) => ({ id, name, kind }))} />
+        <ImportForm
+          accounts={mine.map(({ id, name, kind }) => ({ id, name, kind }))}
+          people={people
+            .filter((p) => p.role !== 'viewer')
+            .map((p) => ({ id: p.id, name: p.id === member.id ? `${p.name} (you)` : p.name }))}
+          me={member.id}
+        />
       </Card>
 
-      <Card aria-labelledby="accounts-title">
-        <Label id="accounts-title">Your accounts</Label>
-        {mine.length > 0 ? (
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3" data-testid="account-list">
-            {mine.map((a) => (
-              <li key={a.id}>
-                <AccountCard
-                  name={a.name}
-                  kind={a.kind}
-                  provider={providerLabel(a.provider)}
-                  network={a.network}
-                  last4={a.last4}
-                  {...(a.visibility === 'private' ? { note: 'Only you' } : {})}
-                />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-ink-muted">
-            None yet. Import a statement and its account is added for you.
-          </p>
-        )}
-        <details>
-          <summary className="cursor-pointer text-body-strong text-brand-ink">
-            Add an account by hand
-          </summary>
-          <div className="pt-3">
-            <AccountForm />
-          </div>
-        </details>
-      </Card>
+      <p className="-mt-3 text-caption text-ink-muted">
+        Accounts are added for you as you import.{' '}
+        <Link href="/accounts" className="text-body-strong text-brand-ink underline">
+          See your accounts
+        </Link>
+      </p>
 
       {batches.length > 0 && (
         <Card aria-labelledby="history-title">
