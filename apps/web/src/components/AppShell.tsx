@@ -28,7 +28,9 @@ export function AppShell({
         <Logo size={32} />
         <span className="font-display text-heading">{household}</span>
       </header>
-      <main className="mx-auto grid max-w-3xl gap-6 px-4 py-6">{children}</main>
+      <main className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] gap-6 px-4 py-6">
+        {children}
+      </main>
       <footer className="pb-4 text-center">
         <VersionTag />
       </footer>
