@@ -6,21 +6,28 @@ still apply on top of this.
 
 ## What is encrypted
 
-| Table                  | Encrypted                                                                                         | Keyed hash (lookups)           |
-| ---------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `households`           | `name`                                                                                            |                                |
-| `members`              | `name`                                                                                            |                                |
-| `passkeys`             | `name`                                                                                            |                                |
-| `auth_challenges`      | `payload`                                                                                         |                                |
-| `audit_log`            | `detail`, `ip`                                                                                    | `ip_hash` (rate limits)        |
-| `accounts`             | `name`, `provider`, `network`, `last4`                                                            |                                |
-| `import_batches`       | `file_name`                                                                                       | `file_hash` (same file twice)  |
-| `transactions`         | `description`, `amount_minor`, `original_minor`, `reference`, `notes`, `card_bill_expected_minor` | `description_key`, `dedup_key` |
-| `category_rules`       |                                                                                                   | `match`                        |
-| `household_categories` | `label`, `keywords`                                                                               | `label_key` (unique names)     |
+| Table                     | Encrypted                                                                                         | Keyed hash (lookups)           |
+| ------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `households`              | `name`, `invest_settings`                                                                         |                                |
+| `members`                 | `name`                                                                                            |                                |
+| `passkeys`                | `name`                                                                                            |                                |
+| `auth_challenges`         | `payload`                                                                                         |                                |
+| `audit_log`               | `detail`, `ip`                                                                                    | `ip_hash` (rate limits)        |
+| `accounts`                | `name`, `provider`, `network`, `last4`                                                            |                                |
+| `import_batches`          | `file_name`                                                                                       | `file_hash` (same file twice)  |
+| `transactions`            | `description`, `amount_minor`, `original_minor`, `reference`, `notes`, `card_bill_expected_minor` | `description_key`, `dedup_key` |
+| `category_rules`          |                                                                                                   | `match`                        |
+| `household_categories`    | `label`, `keywords`                                                                               | `label_key` (unique names)     |
+| `investment_accounts`     | `name`, `provider`                                                                                |                                |
+| `instruments`             | `symbol`, `name`, `quote_symbol`, `prev_close`, `facts`                                           | `symbol_key`                   |
+| `holdings`                | `units`, `cost_minor`                                                                             |                                |
+| `instrument_prices`       | `price`                                                                                           |                                |
+| `investment_transactions` | `units`, `amount_minor`                                                                           | `dedup_key`                    |
+| `portfolio_snapshots`     | `value_minor`                                                                                     |                                |
 
 Left in the clear because queries need them and they say little alone: ids, roles, dates,
-currencies, account kind and visibility, categories, installment numbers and timestamps.
+currencies, account kind and visibility, categories, installment numbers, asset classes,
+instrument and transaction kinds, and timestamps.
 
 ## How it works
 

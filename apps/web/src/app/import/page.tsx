@@ -3,9 +3,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
+import { listInvestmentAccounts, mayManage } from '@/server/invest'
 import { canEdit, listAccounts, listBatches } from '@/server/ledger'
 import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
+import { InvestImport } from '../invest/client'
 import { ImportForm, UndoImport } from './client'
 
 export const metadata: Metadata = { title: 'Import · Hearthside' }
@@ -29,11 +31,13 @@ export default async function ImportPage() {
       </AppShell>
     )
   }
-  const [accounts, batches, people] = await Promise.all([
+  const [accounts, batches, people, investAccounts] = await Promise.all([
     listAccounts(db, member),
     listBatches(db, member),
     listMembers(db, household.id),
+    listInvestmentAccounts(db, member),
   ])
+  const investable = investAccounts.filter((a) => mayManage(member, a))
   const mine = accounts.filter((a) => a.ownerId === member.id)
   return (
     <AppShell household={household.name} current="/import">
@@ -56,6 +60,21 @@ export default async function ImportPage() {
           See your accounts
         </Link>
       </p>
+
+      <Card aria-labelledby="holdings-import-title">
+        <Label id="holdings-import-title">Import investment holdings</Label>
+        {investable.length > 0 ? (
+          <InvestImport accounts={investable.map(({ id, name }) => ({ id, name }))} />
+        ) : (
+          <p className="text-ink-muted">
+            Holdings go into an investment account.{' '}
+            <Link href="/invest" className="text-body-strong text-brand-ink underline">
+              Add one on the Invest tab
+            </Link>{' '}
+            first, then import its holdings here.
+          </p>
+        )}
+      </Card>
 
       {batches.length > 0 && (
         <Card aria-labelledby="history-title">

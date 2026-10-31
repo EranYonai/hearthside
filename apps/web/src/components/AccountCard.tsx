@@ -1,6 +1,6 @@
 import { accountLook } from '@hearthside/core'
 import { cx } from '@hearthside/ui'
-import { CreditCard, Landmark, Wallet } from 'lucide-react'
+import { CreditCard, Landmark, TrendingUp, Wallet } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
 const NETWORK_LABEL: Record<string, string> = {
@@ -11,9 +11,14 @@ const NETWORK_LABEL: Record<string, string> = {
   isracard: 'Isracard',
 }
 
+const FALLBACK_NAME: Record<string, string> = {
+  bank: 'Current account',
+  investment: 'Investments',
+}
+
 export interface AccountCardProps {
   name: string
-  kind: 'card' | 'bank' | 'other'
+  kind: 'card' | 'bank' | 'investment' | 'other'
   /** Provider id (see PROVIDERS in core). */
   provider?: string | null
   /** The person's own color; overrides the provider's. */
@@ -74,7 +79,14 @@ export function AccountCard({
   className,
 }: AccountCardProps) {
   const look = accountLook({ name, provider, color })
-  const Icon = kind === 'card' ? CreditCard : kind === 'bank' ? Landmark : Wallet
+  const Icon =
+    kind === 'card'
+      ? CreditCard
+      : kind === 'bank'
+        ? Landmark
+        : kind === 'investment'
+          ? TrendingUp
+          : Wallet
   const painted = kind === 'card' && look.color !== null
   const striped = kind !== 'card' && look.color !== null
 
@@ -125,7 +137,7 @@ export function AccountCard({
         </span>
         <span className={cx('flex items-baseline justify-between gap-2 text-caption', muted)}>
           <span className="min-w-0 truncate">
-            {look.label ? name : kind === 'bank' ? 'Current account' : 'Card'}
+            {look.label ? name : (FALLBACK_NAME[kind] ?? 'Card')}
           </span>
           {network && (
             <span className="flex-none font-display font-semibold">

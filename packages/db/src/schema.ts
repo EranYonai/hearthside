@@ -9,6 +9,7 @@ import {
   integer,
   pgTable,
   real,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -59,6 +60,12 @@ export const households = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     name: encText('households', 'name').notNull(),
+    /** Investing preferences: target split, emergency months, check-up on or off. */
+    investSettings: encJson<{
+      stocksTarget?: number
+      emergencyMonths?: number
+      checkupOn?: boolean
+    }>('households', 'invest_settings'),
     createdAt: createdAt(),
   },
   () => [uniqueIndex('households_singleton').on(sql`(true)`)],
@@ -365,6 +372,204 @@ export const householdCategories = pgTable(
   ],
 )
 
+// ---------- Investments ----------
+
+/** A brokerage, fund or savings account holding investments. Separate from everyday accounts. */
+export const investmentAccounts = pgTable(
+  'investment_accounts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => members.id, { onDelete: 'cascade' }),
+    /** The member whose account it is; null means the owner. */
+    holderId: uuid('holder_id').references(() => members.id, { onDelete: 'set null' }),
+    name: encText('investment_accounts', 'name').notNull(),
+    /** Who runs the account, as the member typed it. */
+    provider: encText('investment_accounts', 'provider'),
+    /** The account's base currency. */
+    currency: text('currency').notNull().default('ILS'),
+    visibility: text('visibility', { enum: ['household', 'private'] })
+      .notNull()
+      .default('household'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('investment_accounts_household_idx').on(t.householdId),
+    check('investment_accounts_visibility_check', sql`${t.visibility} in ('household', 'private')`),
+  ],
+)
+
+/**
+ * Something that can be held: a fund, share, bond or a cash balance. Per household, since
+ * which instruments a home holds is private; symbols are sealed and matched by blind index.
+ */
+export const instruments = pgTable(
+  'instruments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['security', 'cash'] }).notNull(),
+    /** Ticker or fund number; the currency code for cash. */
+    symbol: encText('instruments', 'symbol').notNull(),
+    /** blindIndex(instrumentKey(kind, symbol, currency)). */
+    symbolKey: text('symbol_key').notNull(),
+    name: encText('instruments', 'name').notNull(),
+    /** Currency it is priced in. */
+    currency: text('currency').notNull(),
+    assetClass: text('asset_class').notNull(),
+    /** Symbol at the quote source, when it differs from `symbol`. */
+    quoteSymbol: encText('instruments', 'quote_symbol'),
+    /** Last close before the current price, for today's change. Exact decimal string. */
+    prevClose: encText('instruments', 'prev_close'),
+    /** Last time the quote source was asked, and what it said. */
+    checkedAt: ts('checked_at'),
+    quoteStatus: text('quote_status', { enum: ['ok', 'not_found', 'error'] }),
+    /** Fund facts a member typed: yearly fee, index tracked, domicile, document links. */
+    facts: encJson<{
+      fee: string | null
+      index: string | null
+      domicile: string | null
+      documents: { label: string; url: string }[]
+    }>('instruments', 'facts'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('instruments_symbol_idx').on(t.householdId, t.symbolKey),
+    check('instruments_kind_check', sql`${t.kind} in ('security', 'cash')`),
+  ],
+)
+
+/** How many units of an instrument an account holds right now. */
+export const holdings = pgTable(
+  'holdings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => investmentAccounts.id, { onDelete: 'cascade' }),
+    instrumentId: uuid('instrument_id')
+      .notNull()
+      .references(() => instruments.id, { onDelete: 'restrict' }),
+    /** Exact decimal string. */
+    units: encText('holdings', 'units').notNull(),
+    /** Total paid, in minor units of the instrument's currency, when known. */
+    costMinor: encInt('holdings', 'cost_minor'),
+    source: text('source', { enum: ['manual', 'import', 'sync'] }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('holdings_account_instrument_idx').on(t.accountId, t.instrumentId),
+    index('holdings_household_idx').on(t.householdId),
+  ],
+)
+
+/** Price history per instrument, in its currency. Newest row is the current price. */
+export const instrumentPrices = pgTable(
+  'instrument_prices',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instrumentId: uuid('instrument_id')
+      .notNull()
+      .references(() => instruments.id, { onDelete: 'cascade' }),
+    /** Exact decimal string. */
+    price: encText('instrument_prices', 'price').notNull(),
+    pricedAt: ts('priced_at').notNull(),
+    source: text('source', { enum: ['manual', 'market', 'import'] }).notNull(),
+  },
+  (t) => [index('instrument_prices_latest_idx').on(t.instrumentId, t.pricedAt)],
+)
+
+/** Money and units moving in an investment account: deposits, trades, income, fees. */
+export const investmentTransactions = pgTable(
+  'investment_transactions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => investmentAccounts.id, { onDelete: 'cascade' }),
+    instrumentId: uuid('instrument_id').references(() => instruments.id, {
+      onDelete: 'restrict',
+    }),
+    kind: text('kind', {
+      enum: ['deposit', 'withdrawal', 'buy', 'sell', 'dividend', 'interest', 'fee', 'tax'],
+    }).notNull(),
+    occurredOn: date('occurred_on', { mode: 'string' }).notNull(),
+    /** Exact decimal string, for trades. */
+    units: encText('investment_transactions', 'units'),
+    /** Minor units; negative is money leaving the account's cash. */
+    amountMinor: encInt('investment_transactions', 'amount_minor').notNull(),
+    currency: text('currency').notNull(),
+    source: text('source', { enum: ['manual', 'import', 'sync'] }).notNull(),
+    /** blindIndex of the provider's id for the row, to skip repeats. */
+    dedupKey: text('dedup_key'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('investment_transactions_account_date_idx').on(t.accountId, t.occurredOn),
+    uniqueIndex('investment_transactions_dedup_idx').on(t.accountId, t.dedupKey),
+    check(
+      'investment_transactions_kind_check',
+      sql`${t.kind} in ('deposit', 'withdrawal', 'buy', 'sell', 'dividend', 'interest', 'fee', 'tax')`,
+    ),
+  ],
+)
+
+/**
+ * One value per investment account per day, in the account's currency, so trends can show how
+ * the value moved. Today's row is rewritten as prices change; earlier days stay as they were.
+ */
+export const portfolioSnapshots = pgTable(
+  'portfolio_snapshots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => investmentAccounts.id, { onDelete: 'cascade' }),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    on: date('on', { mode: 'string' }).notNull(),
+    valueMinor: encInt('portfolio_snapshots', 'value_minor').notNull(),
+    currency: text('currency').notNull(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('portfolio_snapshots_account_day_idx').on(t.accountId, t.on),
+    index('portfolio_snapshots_household_idx').on(t.householdId, t.on),
+  ],
+)
+
+/**
+ * Daily reference exchange rates: one unit of `base` is worth `rate` of `quote`. Public market
+ * data, so stored in the clear. The newest day per pair is the current rate.
+ */
+export const fxRates = pgTable(
+  'fx_rates',
+  {
+    base: text('base').notNull(),
+    quote: text('quote').notNull(),
+    on: date('on', { mode: 'string' }).notNull(),
+    /** Exact decimal string. */
+    rate: text('rate').notNull(),
+    source: text('source').notNull(),
+    fetchedAt: ts('fetched_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.base, t.quote, t.on] })],
+)
+
 /**
  * Data keys, wrapped by the master key. Purpose 'data' seals values (newest active one is used;
  * retired ones only decrypt until rows are re-encrypted); 'index' keys the blind indexes.
@@ -392,3 +597,8 @@ export type AccountRow = typeof accounts.$inferSelect
 export type TransactionRow = typeof transactions.$inferSelect
 export type ImportBatchRow = typeof importBatches.$inferSelect
 export type HouseholdCategoryRow = typeof householdCategories.$inferSelect
+export type InvestmentAccountRow = typeof investmentAccounts.$inferSelect
+export type InstrumentRow = typeof instruments.$inferSelect
+export type HoldingRow = typeof holdings.$inferSelect
+export type InvestmentTransactionRow = typeof investmentTransactions.$inferSelect
+export type PortfolioSnapshotRow = typeof portfolioSnapshots.$inferSelect
