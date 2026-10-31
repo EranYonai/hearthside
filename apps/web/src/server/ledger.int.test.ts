@@ -335,6 +335,14 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
     ).rejects.toBeInstanceOf(AuthError)
     const back = await updateAccount(db, alex, card.id, { holderId: alex.id, name: 'Shared' })
     expect([back.holderId, back.name]).toEqual([null, 'Shared'])
+
+    // Provider and color can be set and cleared; leaving them out keeps them.
+    const styled = await updateAccount(db, alex, card.id, { provider: 'cal', color: '#5B2C83' })
+    expect([styled.provider, styled.color]).toEqual(['cal', '#5B2C83'])
+    const renamed = await updateAccount(db, alex, card.id, { name: 'Shared card' })
+    expect([renamed.provider, renamed.color]).toEqual(['cal', '#5B2C83'])
+    const cleared = await updateAccount(db, alex, card.id, { provider: null, color: null })
+    expect([cleared.provider, cleared.color]).toEqual([null, null])
     await expect(getVisibleAccount(db, sam, card.id)).rejects.toBeInstanceOf(AuthError)
 
     // New accounts from an import can be given to someone else.

@@ -127,7 +127,15 @@ export async function updateAccount(
   db: Conn,
   member: MemberRow,
   id: string,
-  input: { name?: string; holderId?: string; visibility?: AccountVisibility },
+  input: {
+    name?: string
+    holderId?: string
+    visibility?: AccountVisibility
+    /** A provider id, or null for none. */
+    provider?: string | null
+    /** #RRGGBB, or null to use the provider's color. */
+    color?: string | null
+  },
 ) {
   assertEditor(member)
   const account = await getVisibleAccount(db, member, id)
@@ -139,6 +147,8 @@ export async function updateAccount(
     .set({
       ...(input.name ? { name: input.name } : {}),
       ...(input.visibility ? { visibility: input.visibility } : {}),
+      ...(input.provider !== undefined ? { provider: input.provider } : {}),
+      ...(input.color !== undefined ? { color: input.color } : {}),
       ...(input.holderId
         ? { holderId: input.holderId === account.ownerId ? null : input.holderId }
         : {}),
@@ -447,6 +457,8 @@ export async function listTransactions(db: Conn, member: MemberRow, f: Transacti
       t: transactions,
       accountName: accounts.name,
       accountKind: accounts.kind,
+      accountProvider: accounts.provider,
+      accountColor: accounts.color,
     })
     .from(transactions)
     .innerJoin(accounts, eq(accounts.id, transactions.accountId))

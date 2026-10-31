@@ -10,6 +10,8 @@ export interface TransactionRowProps {
   merchant: string
   /** category · source ·last4 · who · date */
   meta: string
+  /** A small dot before the meta line, e.g. the account's color. */
+  metaColor?: string
   minor: Minor
   original?: { minor: Minor; currency: string }
   installment?: { n: number; total: number }
@@ -27,6 +29,7 @@ export function TransactionRow({
   category,
   merchant,
   meta,
+  metaColor,
   minor,
   original,
   installment,
@@ -48,8 +51,16 @@ export function TransactionRow({
             </span>
           )}
         </span>
-        <span className="truncate text-caption text-ink-muted">
-          {pending ? `Pending · ${meta}` : meta}
+        <span className="flex items-center gap-1.5 text-caption text-ink-muted">
+          {metaColor && (
+            <span
+              aria-hidden
+              className="size-2 flex-none rounded-pill"
+              style={{ background: metaColor }}
+              data-testid="meta-color"
+            />
+          )}
+          <span className="truncate">{pending ? `Pending · ${meta}` : meta}</span>
         </span>
       </div>
       <div className="text-end">

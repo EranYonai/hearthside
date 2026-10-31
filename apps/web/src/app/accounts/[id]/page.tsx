@@ -1,4 +1,3 @@
-import { providerLabel } from '@hearthside/core'
 import { buttonClasses, Card, Notice } from '@hearthside/ui'
 import { ChevronLeft } from 'lucide-react'
 import type { Metadata } from 'next'
@@ -33,20 +32,16 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
         Accounts
       </Link>
       <h1 className="font-display text-title">{account.name}</h1>
-      <div className="max-w-64">
-        <AccountCard
-          name={account.name}
-          kind={account.kind}
-          provider={providerLabel(account.provider)}
-          network={account.network}
-          last4={account.last4}
-        />
-      </div>
       <Card>
         {mayEdit ? (
           <EditAccountForm
             id={account.id}
             name={account.name}
+            kind={account.kind}
+            provider={account.provider}
+            color={account.color}
+            network={account.network}
+            last4={account.last4}
             holderId={holderOf(account)}
             visibility={account.visibility}
             people={people
@@ -54,7 +49,19 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
               .map((p) => ({ id: p.id, name: p.id === member.id ? `${p.name} (you)` : p.name }))}
           />
         ) : (
-          <Notice tone="info">Only the person who added this account can change it.</Notice>
+          <>
+            <div className="max-w-64">
+              <AccountCard
+                name={account.name}
+                kind={account.kind}
+                provider={account.provider}
+                color={account.color}
+                network={account.network}
+                last4={account.last4}
+              />
+            </div>
+            <Notice tone="info">Only the person who added this account can change it.</Notice>
+          </>
         )}
       </Card>
     </AppShell>

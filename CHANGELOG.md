@@ -19,6 +19,8 @@ moves the Unreleased notes under the new version.
 - Monthly payments that settle another account's statement are matched to that statement by
   amount and date (or by name), so combined totals count the spending once. The match keeps
   the statement's total, and rows show when the two disagree.
+- Account looks: each account shows a color and a short badge for where it comes from, and
+  you can pick its source and your own color when editing it. Transactions show a matching dot.
 
 ### Security
 

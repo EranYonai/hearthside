@@ -1,5 +1,5 @@
 {
-  "id": "be0dfc1b-86aa-4743-9989-da608a78d10f",
+  "id": "690a85ab-7d82-4a48-9c7f-3bed76768581",
   "prevId": "e9486667-b09d-4db1-841c-fddcb19ea586",
   "version": "7",
   "dialect": "postgresql",
@@ -59,6 +59,12 @@
         },
         "last4": {
           "name": "last4",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "color": {
+          "name": "color",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1427,24 +1433,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "card_bill": {
-          "name": "card_bill",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "card_bill_account_id": {
-          "name": "card_bill_account_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "card_bill_expected_minor": {
-          "name": "card_bill_expected_minor",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "dedup_key": {
           "name": "dedup_key",
           "type": "text",
@@ -1594,30 +1582,12 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "transactions_card_bill_account_id_accounts_id_fk": {
-          "name": "transactions_card_bill_account_id_accounts_id_fk",
-          "tableFrom": "transactions",
-          "tableTo": "accounts",
-          "columnsFrom": [
-            "card_bill_account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "transactions_card_bill_check": {
-          "name": "transactions_card_bill_check",
-          "value": "\"transactions\".\"card_bill\" in ('amount', 'name')"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     }
   },

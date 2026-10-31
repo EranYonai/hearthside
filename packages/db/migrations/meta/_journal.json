@@ -61,8 +61,15 @@
     {
       "idx": 8,
       "version": "7",
-      "when": 1793449104290,
-      "tag": "0008_card_bills",
+      "when": 1793449092413,
+      "tag": "0008_account_color",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793450509299,
+      "tag": "0009_card_bills",
       "breakpoints": true
     }
   ]
