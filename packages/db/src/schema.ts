@@ -283,6 +283,17 @@ export const transactions = pgTable(
     categoryConfidence: real('category_confidence'),
     /** When the categorizer (with the model) last looked at it. null means it is waiting. */
     categoryCheckedAt: timestamp('category_checked_at', { withTimezone: true }),
+    /**
+     * Bank rows only: this row pays a card bill. amount: it pays what a card bill adds up to;
+     * name: its description names a card company. Kept up to date by linkCardBills.
+     */
+    cardBill: text('card_bill', { enum: ['amount', 'name'] }),
+    /** The card account it pays, when that is a single one. */
+    cardBillAccountId: uuid('card_bill_account_id').references(() => accounts.id, {
+      onDelete: 'set null',
+    }),
+    /** What the card statements say the bill is (negative), to compare with what was paid. */
+    cardBillExpectedMinor: encInt('transactions', 'card_bill_expected_minor'),
     /** blindIndex(SHA-256 of the duplicate key from the parser). */
     dedupKey: text('dedup_key').notNull(),
     createdAt: createdAt(),
@@ -295,6 +306,7 @@ export const transactions = pgTable(
     index('transactions_uncategorized_idx')
       .on(t.householdId)
       .where(sql`${t.category} is null and ${t.categoryCheckedAt} is null`),
+    check('transactions_card_bill_check', sql`${t.cardBill} in ('amount', 'name')`),
   ],
 )
 
