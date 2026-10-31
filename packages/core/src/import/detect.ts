@@ -26,7 +26,8 @@ export function isProviderId(id: unknown): id is ProviderId {
 
 export type ProviderId = keyof typeof PROVIDERS
 export type SourceKind = 'card' | 'bank'
-export type CardNetwork = 'visa' | 'mastercard' | 'amex' | 'diners' | 'isracard'
+export const CARD_NETWORKS = ['visa', 'mastercard', 'amex', 'diners', 'isracard'] as const
+export type CardNetwork = (typeof CARD_NETWORKS)[number]
 
 export interface DetectedSource {
   provider: ProviderId | null

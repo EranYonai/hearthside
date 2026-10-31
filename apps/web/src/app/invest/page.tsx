@@ -15,6 +15,8 @@ import { recordSnapshots, trends } from '@/server/trends'
 import { ValueChart } from '@/components/ValueChart'
 import { runCheckup } from '@/server/checkup'
 import { CurrencySwitch, InvestmentAccountForm } from './client'
+import { AccountMark } from '@/components/AccountCard'
+import { listBrandLogos } from '@/server/logos'
 
 export const metadata: Metadata = { title: 'Invest · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -45,9 +47,10 @@ export default async function InvestPage() {
   const { member, household } = await requireSession()
   const db = requireDb()
   const [fx] = await Promise.all([currentRates(db), keepQuotesFresh(db)])
-  const [{ accounts, holdings, summary, allocation }, people] = await Promise.all([
+  const [{ accounts, holdings, summary, allocation }, people, logos] = await Promise.all([
     portfolio(db, member, fx.rates),
     listMembers(db, household.id),
+    listBrandLogos(db, household.id),
   ])
   // Today's value for trends; an hourly job does the same when nobody opens this page.
   await recordSnapshots(db, household.id, fx.rates)
@@ -196,6 +199,7 @@ export default async function InvestPage() {
                       href={`/invest/${a.id}`}
                       className="flex min-h-14 items-center gap-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                     >
+                      <AccountMark name={a.name} provider={a.provider} logos={logos} />
                       <span className="grid flex-1">
                         <span className="flex items-center gap-1.5 text-body-strong">
                           {a.name}

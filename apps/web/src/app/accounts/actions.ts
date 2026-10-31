@@ -1,11 +1,12 @@
 'use server'
 
-import { isProviderId, normalizeHexColor } from '@hearthside/core'
+import { CARD_NETWORKS, isProviderId, normalizeHexColor } from '@hearthside/core'
 import { requireDb } from '@/lib/db'
 import { runAction } from '@/server/action'
 import { cleanName } from '@/server/http'
 import { deleteAccount, updateAccount, type AccountVisibility } from '@/server/ledger'
 import { AuthError } from '@/server/repo'
+import { removeBrandLogo, setBrandLogo } from '@/server/logos'
 import { requireSession } from '@/server/session'
 
 const VISIBILITIES: AccountVisibility[] = ['household', 'private']
@@ -18,6 +19,7 @@ export async function updateAccountAction(
     visibility: AccountVisibility
     provider: string | null
     color: string | null
+    network?: string | null
   },
 ) {
   const { member } = await requireSession()
@@ -30,12 +32,15 @@ export async function updateAccountAction(
       throw new AuthError('not_allowed', 'Pick a provider from the list')
     const color = input.color === null ? null : normalizeHexColor(input.color)
     if (input.color !== null && !color) throw new AuthError('not_allowed', 'Pick a valid color')
+    if (input.network && !(CARD_NETWORKS as readonly string[]).includes(input.network))
+      throw new AuthError('not_allowed', 'Pick a card network from the list')
     await updateAccount(requireDb(), member, id, {
       name,
       holderId: input.holderId,
       visibility: input.visibility,
       provider: input.provider,
       color,
+      ...(input.network !== undefined ? { network: input.network || null } : {}),
     })
     return {}
   })
@@ -46,4 +51,22 @@ export async function deleteAccountAction(id: string) {
   return runAction(['/accounts', '/transactions', '/import', '/'], () =>
     deleteAccount(requireDb(), member, id),
   )
+}
+
+const LOGO_PATHS = ['/accounts', '/invest', '/import', '/settings', '/welcome', '/']
+
+export async function setBrandLogoAction(brand: string, image: string) {
+  const { member } = await requireSession()
+  return runAction(LOGO_PATHS, async () => {
+    await setBrandLogo(requireDb(), member, brand, image)
+    return {}
+  })
+}
+
+export async function removeBrandLogoAction(brand: string) {
+  const { member } = await requireSession()
+  return runAction(LOGO_PATHS, async () => {
+    await removeBrandLogo(requireDb(), member, brand)
+    return {}
+  })
 }

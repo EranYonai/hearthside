@@ -83,8 +83,10 @@ export function ImportForm({
   accounts,
   people = [],
   me,
+  logos,
 }: {
   accounts: AccountOption[]
+  logos?: Partial<Record<string, string>>
   /** Members who can hold a new account; the picker shows when there's more than one. */
   people?: { id: string; name: string }[]
   me?: string
@@ -191,6 +193,7 @@ export function ImportForm({
                   kind={g.kind}
                   provider={g.provider}
                   color={g.color}
+                  logos={logos}
                   network={g.network}
                   last4={g.last4}
                   {...(g.account.isNew ? { note: 'New' } : {})}

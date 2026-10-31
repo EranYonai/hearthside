@@ -14,8 +14,8 @@ import {
 } from '@hearthside/ui'
 import { Download, RefreshCw } from 'lucide-react'
 import type { Metadata } from 'next'
-import { PROVIDERS, type ProviderId } from '@hearthside/core'
-import { AccountCard } from '@/components/AccountCard'
+import { BRAND_IDS, CARD_NETWORKS, brandOf } from '@hearthside/core'
+import { AccountCard, NetworkMark } from '@/components/AccountCard'
 import { ThemeToggle } from '@/lib/ThemeToggle'
 import { VersionTag } from '@/lib/VersionTag'
 
@@ -168,17 +168,21 @@ export default function DesignPage() {
           Account colors
         </h2>
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {(Object.keys(PROVIDERS) as ProviderId[]).map((id) => (
-            <li key={id}>
-              <AccountCard
-                name={PROVIDERS[id].label}
-                kind={PROVIDERS[id].kind}
-                provider={id}
-                last4="1234"
-                {...(PROVIDERS[id].kind === 'card' ? { network: 'visa' } : {})}
-              />
-            </li>
-          ))}
+          {BRAND_IDS.map((id, i) => {
+            const b = brandOf(id)
+            const kind = b.kind === 'broker' ? 'investment' : b.kind
+            return (
+              <li key={id}>
+                <AccountCard
+                  name={b.label}
+                  kind={kind}
+                  provider={id}
+                  {...(kind === 'investment' ? {} : { last4: '1234' })}
+                  {...(kind === 'card' ? { network: CARD_NETWORKS[i % CARD_NETWORKS.length] } : {})}
+                />
+              </li>
+            )
+          })}
           <li>
             <AccountCard name="Custom color" kind="card" color="#E8B100" last4="1234" />
           </li>
@@ -186,6 +190,11 @@ export default function DesignPage() {
             <AccountCard name="Joint savings" kind="bank" />
           </li>
         </ul>
+        <div className="flex flex-wrap gap-2">
+          {CARD_NETWORKS.map((n) => (
+            <NetworkMark key={n} network={n} />
+          ))}
+        </div>
       </section>
     </main>
   )

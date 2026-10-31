@@ -135,6 +135,8 @@ export async function updateAccount(
     provider?: string | null
     /** #RRGGBB, or null to use the provider's color. */
     color?: string | null
+    /** Card network, or null for none. */
+    network?: string | null
   },
 ) {
   assertEditor(member)
@@ -149,6 +151,7 @@ export async function updateAccount(
       ...(input.visibility ? { visibility: input.visibility } : {}),
       ...(input.provider !== undefined ? { provider: input.provider } : {}),
       ...(input.color !== undefined ? { color: input.color } : {}),
+      ...(input.network !== undefined ? { network: input.network } : {}),
       ...(input.holderId
         ? { holderId: input.holderId === account.ownerId ? null : input.holderId }
         : {}),
