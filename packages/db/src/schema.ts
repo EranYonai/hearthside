@@ -208,6 +208,8 @@ export const accounts = pgTable(
     network: encText('accounts', 'network'),
     /** Last four digits of the card or account number. Matched after reading. */
     last4: encText('accounts', 'last4'),
+    /** The person's own card color (#RRGGBB); null uses the provider's color. */
+    color: encText('accounts', 'color'),
     /** household: everyone sees it; private: only the owner. */
     visibility: text('visibility', { enum: ['household', 'private'] })
       .notNull()
