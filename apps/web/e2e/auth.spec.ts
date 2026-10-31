@@ -542,9 +542,7 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
     ),
     'text/csv',
   )
-  await expect(broker).toContainText(
-    'Creates investment account Interactive Brokers ·4321 (USD)',
-  )
+  await expect(broker).toContainText('Creates investment account Interactive Brokers ·4321 (USD)')
   await owner.getByRole('button', { name: 'Import 1 holding' }).click()
   await expect(owner.getByText('Interactive Brokers ·4321: added 1')).toBeVisible()
 })

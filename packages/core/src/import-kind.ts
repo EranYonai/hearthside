@@ -8,8 +8,7 @@ import { StatementError, parseStatement, type ParsedStatement, type Sheet } from
  */
 
 export type ClassifiedFile =
-  | { type: 'statement'; probe: ParsedStatement }
-  | { type: 'holdings'; holdings: HoldingsFile }
+  { type: 'statement'; probe: ParsedStatement } | { type: 'holdings'; holdings: HoldingsFile }
 
 export class UnknownFileError extends Error {}
 

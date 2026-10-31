@@ -49,7 +49,11 @@ const brokerFile = [
   'TSTB,Test Bond Fund,4,50,USD',
 ].join('\n')
 
-async function plan(member: Parameters<typeof planHoldingsImport>[1], text: string, accountId?: string) {
+async function plan(
+  member: Parameters<typeof planHoldingsImport>[1],
+  text: string,
+  accountId?: string,
+) {
   const sheets = readTable(new TextEncoder().encode(text), 'positions.csv')
   const kind = classifyImport(sheets)
   if (kind.type !== 'holdings') throw new Error('expected holdings')

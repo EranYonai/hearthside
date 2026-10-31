@@ -91,9 +91,7 @@ export const POST = authRoute(async ({ request, db }) => {
     if (kind.type === 'holdings')
       return await holdings(db, member, form!, sheets, kind.holdings, file.name, accountId)
     source = detectSource(sheets, kind.probe, file.name)
-    const accountKind = accountId
-      ? (await getOwnAccount(db, member, accountId)).kind
-      : source.kind
+    const accountKind = accountId ? (await getOwnAccount(db, member, accountId)).kind : source.kind
     parsed = parseStatement(sheets, { spendingIsPositive: accountKind === 'card' })
   } catch (err) {
     if (

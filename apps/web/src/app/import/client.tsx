@@ -75,7 +75,13 @@ interface HoldingsPreview {
 }
 
 type Done =
-  | { type: 'statement'; added: number; duplicates: number; accounts: string[]; month: string | null }
+  | {
+      type: 'statement'
+      added: number
+      duplicates: number
+      accounts: string[]
+      month: string | null
+    }
   | {
       type: 'holdings'
       added: number
@@ -217,8 +223,8 @@ export function ImportForm({
         <div className="grid gap-4" data-testid="import-preview">
           {statement?.alreadyImported && (
             <Notice tone="warning">
-              You imported this exact file on {day.format(new Date(statement.alreadyImported))}.
-              Its rows are already here.
+              You imported this exact file on {day.format(new Date(statement.alreadyImported))}. Its
+              rows are already here.
             </Notice>
           )}
           {held && <HoldingsCard preview={held} logos={logos} />}
@@ -432,9 +438,7 @@ export function SupportedExports() {
     <details className="text-caption text-ink-muted">
       <summary className="cursor-pointer">What can I import?</summary>
       <ul className="mt-2 grid list-disc gap-1 ps-5">
-        <li>
-          Card exports from Max, Cal, Isracard, American Express and Diners (Excel or CSV).
-        </li>
+        <li>Card exports from Max, Cal, Isracard, American Express and Diners (Excel or CSV).</li>
         <li>
           Bank statements from Hapoalim (PDF or Excel), and from Leumi, Discount, Mizrahi Tefahot
           and other banks when the export has date, description and debit/credit columns.
