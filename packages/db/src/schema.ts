@@ -391,6 +391,13 @@ export const instruments = pgTable(
     /** Currency it is priced in. */
     currency: text('currency').notNull(),
     assetClass: text('asset_class').notNull(),
+    /** Symbol at the quote source, when it differs from `symbol`. */
+    quoteSymbol: encText('instruments', 'quote_symbol'),
+    /** Last close before the current price, for today's change. Exact decimal string. */
+    prevClose: encText('instruments', 'prev_close'),
+    /** Last time the quote source was asked, and what it said. */
+    checkedAt: ts('checked_at'),
+    quoteStatus: text('quote_status', { enum: ['ok', 'not_found', 'error'] }),
     createdAt: createdAt(),
   },
   (t) => [

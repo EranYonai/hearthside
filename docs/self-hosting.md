@@ -70,6 +70,13 @@ Only the list of rates is requested; nothing about the household is sent. Set
 `FX_RATES_URL=off` in `.env` to turn this off, or point it at another service that answers in
 the same shape.
 
+## Market prices
+
+Prices for held funds and shares come from a public quote feed (no key), up to 15 minutes
+delayed while markets are open. The app asks at most every 15 minutes per holding, only while
+someone has the Invest tab open, and only sends the ticker. Unknown tickers are retried daily;
+their price can be entered by hand. Set `QUOTES_URL=off` in `.env` to turn this off.
+
 ## Changing the database password
 
 Postgres only reads `secrets/db_password.txt` when it creates the database volume. Rewriting

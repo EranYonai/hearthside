@@ -91,6 +91,8 @@ export interface PricedHolding {
   currency: string
   /** Null when the holding has no price yet. */
   valueMinor: Minor | null
+  /** Change since the last close, when known. */
+  changeMinor?: Minor | null
 }
 
 export interface PortfolioSummary {
@@ -103,6 +105,10 @@ export interface PortfolioSummary {
   unpriced: number
   byClass: Partial<Record<AssetClass, Minor>>
   byAccount: Record<string, Minor>
+  /** Change since the last close, over the holdings that have one. */
+  changeMinor: Minor
+  /** Value of the holdings behind `changeMinor` at the last close. */
+  changeBaseMinor: Minor
 }
 
 export function summarizePortfolio(
@@ -117,6 +123,8 @@ export function summarizePortfolio(
     unpriced: 0,
     byClass: {},
     byAccount: {},
+    changeMinor: 0,
+    changeBaseMinor: 0,
   }
   for (const h of holdings) {
     if (h.valueMinor === null) {
@@ -131,6 +139,11 @@ export function summarizePortfolio(
     summary.totalMinor += v
     summary.byClass[h.assetClass] = (summary.byClass[h.assetClass] ?? 0) + v
     summary.byAccount[h.accountId] = (summary.byAccount[h.accountId] ?? 0) + v
+    if (h.changeMinor != null) {
+      const c = convertMinor(h.changeMinor, h.currency, currency, rates)!
+      summary.changeMinor += c
+      summary.changeBaseMinor += v - c
+    }
   }
   return summary
 }

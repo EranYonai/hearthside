@@ -6,7 +6,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
+import { LocalTime } from '@/lib/LocalTime'
 import { currentRates } from '@/server/fx'
+import { keepQuotesFresh } from '@/server/prices'
 import {
   getVisibleInvestmentAccount,
   investmentHolder,
@@ -25,8 +27,6 @@ import {
 export const metadata: Metadata = { title: 'Investment account · Hearthside' }
 export const dynamic = 'force-dynamic'
 
-const dateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' })
-
 function formatUnits(units: string): string {
   const [whole, frac] = units.split('.')
   return `${BigInt(whole!).toLocaleString('en-US')}${frac ? `.${frac}` : ''}`
@@ -44,6 +44,7 @@ export default async function InvestmentAccountPage({
     if (err instanceof AuthError) notFound()
     throw err
   })
+  await keepQuotesFresh(db)
   const [list, people] = await Promise.all([
     listHoldings(db, member, [account.id]),
     listMembers(db, household.id),
@@ -111,7 +112,9 @@ export default async function InvestmentAccountPage({
                   </span>
                   <span className="grid text-end">
                     {h.valueMinor === null ? (
-                      <span className="text-caption text-ink-muted">No price yet</span>
+                      <span className="text-caption text-ink-muted">
+                        {h.quoteStatus === 'not_found' ? 'No market price found' : 'No price yet'}
+                      </span>
                     ) : (
                       <Amount
                         minor={h.valueMinor}
@@ -123,9 +126,24 @@ export default async function InvestmentAccountPage({
                     {h.kind === 'security' && h.price && (
                       <span className="text-caption text-ink-muted">
                         {h.price} {h.currency}
-                        {h.priceSource === 'manual' && h.pricedAt
-                          ? ` · you, ${dateFormat.format(h.pricedAt)}`
-                          : ''}
+                        {h.changeMinor !== null && h.changeMinor !== 0 && (
+                          <>
+                            {' · '}
+                            <Amount
+                              minor={h.changeMinor}
+                              currency={h.currency}
+                              signed
+                              whole
+                              className="text-caption"
+                            />
+                          </>
+                        )}
+                        {h.pricedAt && (
+                          <>
+                            {h.priceSource === 'manual' ? ' · you, ' : ' · '}
+                            <LocalTime iso={h.pricedAt.toISOString()} />
+                          </>
+                        )}
                       </span>
                     )}
                   </span>
