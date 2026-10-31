@@ -104,6 +104,9 @@ export interface HoldingsFile {
   skipped: { row: number; reason: string }[]
   /** Prices in the file were in hundredths (agorot) and were divided by 100. */
   priceInHundredths: boolean
+  /** Where the table starts: the sheet name and the 1-based header row. */
+  sheet: string
+  headerRow: number
 }
 
 export class HoldingsFormatError extends Error {}
@@ -176,7 +179,7 @@ export function parseHoldings(sheets: readonly Sheet[], defaultCurrency: string)
     if (priceInHundredths)
       for (const h of out) if (h.price) h.price = parseDecimal((Number(h.price) / 100).toFixed(8))
     if (out.length === 0) throw new HoldingsFormatError('No holdings found under the header row')
-    return { holdings: out, skipped, priceInHundredths }
+    return { holdings: out, skipped, priceInHundredths, sheet: sheet.name, headerRow: headerAt + 1 }
   }
   throw new HoldingsFormatError(
     'Couldn’t find a holdings table. It needs columns for the symbol (or security number) and the quantity.',

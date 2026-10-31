@@ -10,6 +10,8 @@ moves the Unreleased notes under the new version.
 
 ### Added
 
+- One import box for every supported file: it tells records from holdings exports, finds the
+  matching account or adds it on its own (investment accounts too), and lists what it supports.
 - Spending by category as a donut chart on the transactions view, with a months view beside it,
   and the home spending meter grouped and outlined per account.
 - Importing household records and a transactions view (#39).

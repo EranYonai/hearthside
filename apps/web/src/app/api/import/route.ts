@@ -1,12 +1,18 @@
 import {
   ImportFormatError,
   StatementError,
+  UnknownFileError,
+  classifyImport,
   detectSource,
+  parseHoldings,
   parseStatement,
   readStatementFile,
+  type Sheet,
 } from '@hearthside/core'
+import type { Db, MemberRow } from '@hearthside/db'
 import { after } from 'next/server'
 import { scheduleCategorize } from '@/server/categorize'
+import { commitHoldingsPlan, planHoldingsImport, type HoldingsPlan } from '@/server/holdings-plan'
 import { fail, json } from '@/server/http'
 import {
   commitPlan,
@@ -79,13 +85,20 @@ export const POST = authRoute(async ({ request, db }) => {
   let source
   try {
     sheets = await readStatementFile(bytes, file.name)
-    // Read once to find the tables, detect the source, then read with the right signs.
-    const probe = parseStatement(sheets, { spendingIsPositive: true })
-    source = detectSource(sheets, probe, file.name)
-    const kind = accountId ? (await getOwnAccount(db, member, accountId)).kind : source.kind
-    parsed = parseStatement(sheets, { spendingIsPositive: kind === 'card' })
+    // Read once to tell statements from holdings and find the tables, then read with the
+    // right signs.
+    const kind = classifyImport(sheets)
+    if (kind.type === 'holdings')
+      return await holdings(db, member, form!, sheets, kind.holdings, file.name, accountId)
+    source = detectSource(sheets, kind.probe, file.name)
+    const accountKind = accountId ? (await getOwnAccount(db, member, accountId)).kind : source.kind
+    parsed = parseStatement(sheets, { spendingIsPositive: accountKind === 'card' })
   } catch (err) {
-    if (err instanceof ImportFormatError || err instanceof StatementError)
+    if (
+      err instanceof ImportFormatError ||
+      err instanceof StatementError ||
+      err instanceof UnknownFileError
+    )
       return fail(err.message, 422)
     throw err
   }
@@ -103,6 +116,7 @@ export const POST = authRoute(async ({ request, db }) => {
     after(() => scheduleCategorize(db, member.householdId))
     const latest = parsed.transactions.reduce((m, r) => (r.occurredOn > m ? r.occurredOn : m), '')
     return json({
+      type: 'statement',
       added: results.reduce((n, r) => n + r.batch.added, 0),
       duplicates: results.reduce((n, r) => n + r.batch.duplicates, 0),
       accounts: results.map((r) => r.account.name),
@@ -115,6 +129,7 @@ export const POST = authRoute(async ({ request, db }) => {
   )
   const already = previous.find(Boolean)
   return json({
+    type: 'statement',
     fileName: file.name,
     groups: groups.map(describe),
     skipped: parsed.skipped.slice(0, 20),
@@ -122,3 +137,48 @@ export const POST = authRoute(async ({ request, db }) => {
     alreadyImported: already ? already.createdAt : null,
   })
 })
+
+/** The holdings half of the import: preview, or with commit, bring the account in line. */
+async function holdings(
+  db: Db,
+  member: MemberRow,
+  form: FormData,
+  sheets: Sheet[],
+  file: HoldingsPlan['file'],
+  fileName: string,
+  accountId: string | undefined,
+) {
+  let plan = await planHoldingsImport(db, member, sheets, file, fileName, accountId)
+  // Rows without a currency are in the account's own currency.
+  const currency = plan.account?.currency ?? plan.proposed.currency
+  if (currency !== 'ILS') plan = { ...plan, file: parseHoldings(sheets, currency) }
+
+  if (form.get('commit') === '1') {
+    const holder = form.get('holderId')
+    const result = await commitHoldingsPlan(db, member, plan, {
+      removeMissing: form.get('removeMissing') !== '0',
+      holderId: typeof holder === 'string' && holder ? holder : null,
+    })
+    return json({
+      type: 'holdings',
+      added: result.added,
+      updated: result.updated,
+      removed: result.removed,
+      account: { id: result.account.id, name: result.account.name },
+    })
+  }
+  return json({
+    type: 'holdings',
+    fileName,
+    account: plan.account
+      ? { id: plan.account.id, name: plan.account.name, isNew: false }
+      : { id: null, name: plan.proposed.name, isNew: true },
+    provider: plan.account?.provider ?? plan.proposed.provider,
+    currency,
+    holdings: plan.file.holdings.slice(0, PREVIEW_ROWS),
+    total: plan.file.holdings.length,
+    skipped: plan.file.skipped.slice(0, 20),
+    skippedCount: plan.file.skipped.length,
+    priceInHundredths: plan.file.priceInHundredths,
+  })
+}

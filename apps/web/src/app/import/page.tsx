@@ -7,8 +7,7 @@ import { listInvestmentAccounts, mayManage } from '@/server/invest'
 import { canEdit, listAccounts, listBatches } from '@/server/ledger'
 import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
-import { InvestImport } from '../invest/client'
-import { ImportForm, UndoImport } from './client'
+import { ImportForm, SupportedExports, UndoImport } from './client'
 import { listBrandLogos } from '@/server/logos'
 
 export const metadata: Metadata = { title: 'Import · Hearthside' }
@@ -46,15 +45,17 @@ export default async function ImportPage() {
       <h1 className="font-display text-title">Import</h1>
 
       <Card aria-labelledby="import-title">
-        <Label id="import-title">Import a statement</Label>
+        <Label id="import-title">Import a file</Label>
         <ImportForm
           accounts={mine.map(({ id, name, kind }) => ({ id, name, kind }))}
+          investAccounts={investable.map(({ id, name }) => ({ id, name }))}
           people={people
             .filter((p) => p.role !== 'viewer')
             .map((p) => ({ id: p.id, name: p.id === member.id ? `${p.name} (you)` : p.name }))}
           me={member.id}
           logos={logos}
         />
+        <SupportedExports />
       </Card>
 
       <p className="-mt-3 text-caption text-ink-muted">
@@ -63,21 +64,6 @@ export default async function ImportPage() {
           See your accounts
         </Link>
       </p>
-
-      <Card aria-labelledby="holdings-import-title">
-        <Label id="holdings-import-title">Import investment holdings</Label>
-        {investable.length > 0 ? (
-          <InvestImport accounts={investable.map(({ id, name }) => ({ id, name }))} />
-        ) : (
-          <p className="text-ink-muted">
-            Holdings go into an investment account.{' '}
-            <Link href="/invest" className="text-body-strong text-brand-ink underline">
-              Add one on the Invest tab
-            </Link>{' '}
-            first, then import its holdings here.
-          </p>
-        )}
-      </Card>
 
       {batches.length > 0 && (
         <Card aria-labelledby="history-title">
