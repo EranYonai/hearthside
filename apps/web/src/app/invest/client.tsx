@@ -671,3 +671,33 @@ export function RemoveMovementButton(props: { accountId: string; id: string; lab
     </>
   )
 }
+
+/** Holdings import with an account picker, for the Import page. */
+export function InvestImport(props: { accounts: { id: string; name: string }[] }) {
+  const id = useId()
+  const [accountId, setAccountId] = useState(props.accounts[0]!.id)
+  return (
+    <div className="grid gap-4">
+      {props.accounts.length > 1 && (
+        <div className="grid gap-1">
+          <label htmlFor={id} className="text-body-strong">
+            Investment account
+          </label>
+          <select
+            id={id}
+            className={selectClass}
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+          >
+            {props.accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <HoldingsImport key={accountId} accountId={accountId} />
+    </div>
+  )
+}

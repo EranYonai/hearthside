@@ -23,6 +23,7 @@ moves the Unreleased notes under the new version.
 - Investment accounts also appear on the Accounts tab, with their value.
 - Investment trends: value against money put in, time-weighted returns, and deposits, fees
   and income per year. Money in and out is recorded per account (#32).
+- The Import page also imports investment holdings into a chosen account.
 
 ### Security
 

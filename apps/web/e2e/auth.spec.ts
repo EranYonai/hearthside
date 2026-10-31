@@ -421,6 +421,21 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await expect(owner.getByTestId('trend-empty')).toContainText('recorded once a day')
   await owner.getByRole('navigation', { name: 'Range' }).getByRole('link', { name: 'All' }).click()
   await expect(owner.getByTestId('years')).toContainText('$1,000')
+
+  // The Import page takes holdings files too.
+  await owner
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Import' })
+    .click()
+  const holdingsImport = owner.getByRole('region', { name: 'Import investment holdings' })
+  await holdingsImport.getByLabel('Holdings file').setInputFiles({
+    name: 'holdings.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('Symbol,Name,Quantity,Price,Currency\nTSTZ,Test Bond Fund,6,25,USD\n'),
+  })
+  await holdingsImport.getByRole('button', { name: 'Read file' }).click()
+  await holdingsImport.getByRole('button', { name: 'Import 1 holding' }).click()
+  await expect(holdingsImport.getByText('Added 0, updated 1, removed')).toBeVisible()
 })
 
 test('settings show the app version and sign-in activity', async () => {
