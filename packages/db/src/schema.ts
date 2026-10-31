@@ -60,6 +60,12 @@ export const households = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     name: encText('households', 'name').notNull(),
+    /** Investing preferences: target split, emergency months, check-up on or off. */
+    investSettings: encJson<{
+      stocksTarget?: number
+      emergencyMonths?: number
+      checkupOn?: boolean
+    }>('households', 'invest_settings'),
     createdAt: createdAt(),
   },
   () => [uniqueIndex('households_singleton').on(sql`(true)`)],

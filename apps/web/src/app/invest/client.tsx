@@ -15,6 +15,7 @@ import {
   removeHoldingAction,
   removeMovementAction,
   saveFundFactsAction,
+  saveInvestSettingsAction,
   saveHoldingAction,
   setDisplayCurrencyAction,
   updateInvestmentAccountAction,
@@ -799,6 +800,78 @@ export function FundFactsForm(props: {
       {saved && !error && <Notice tone="positive">Saved.</Notice>}
       <Button type="submit" disabled={pending} className="justify-self-start">
         Save fund facts
+      </Button>
+    </form>
+  )
+}
+
+/** The household's investing preferences, for the check-up. */
+export function InvestSettingsForm(props: {
+  settings: { stocksTarget: number; emergencyMonths: number; checkupOn: boolean }
+}) {
+  const router = useRouter()
+  const sliderId = useId()
+  const [stocks, setStocks] = useState(String(props.settings.stocksTarget))
+  const [months, setMonths] = useState(String(props.settings.emergencyMonths))
+  const [on, setOn] = useState(props.settings.checkupOn)
+  const [saved, setSaved] = useState(false)
+  const { pending, error, run } = useAction()
+  const n = Number(stocks)
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        setSaved(false)
+        run(
+          () =>
+            saveInvestSettingsAction({
+              stocksTarget: stocks,
+              emergencyMonths: months,
+              checkupOn: on,
+            }),
+          () => {
+            setSaved(true)
+            router.refresh()
+          },
+        )
+      }}
+    >
+      <div className="grid gap-1">
+        <label htmlFor={sliderId} className="text-body-strong">
+          Target split
+        </label>
+        <input
+          id={sliderId}
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={stocks}
+          onChange={(e) => setStocks(e.target.value)}
+          aria-valuetext={`${n}% stocks, ${100 - n}% bonds and cash`}
+          className="min-h-11 accent-[var(--hs-brand)]"
+        />
+        <span className="text-caption text-ink-muted" data-testid="split-label">
+          {n}% stocks / {100 - n}% bonds and cash
+        </span>
+      </div>
+      <TextField
+        label="Emergency fund, in months of spending"
+        name="months"
+        inputMode="numeric"
+        value={months}
+        onChange={(e) => setMonths(e.target.value)}
+        autoComplete="off"
+      />
+      <label className="flex min-h-11 items-center gap-2">
+        <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} />
+        Show the check-up
+      </label>
+      {error && <Notice tone="negative">{error}</Notice>}
+      {saved && !error && <Notice tone="positive">Saved.</Notice>}
+      <Button type="submit" disabled={pending} className="justify-self-start">
+        Save
       </Button>
     </form>
   )

@@ -26,6 +26,8 @@ moves the Unreleased notes under the new version.
 - The Import page also imports investment holdings into a chosen account.
 - A page per holding: position, share of the portfolio, price history from 1M to 5Y, and fund
   facts (yearly fee, index, domicile, document links) kept by the household (#33).
+- A passive-investing check-up: target split (80/20 by default, set by the household), fees,
+  home bias, emergency fund and steady deposits. Gentle notes only; it can be turned off (#34).
 
 ### Security
 

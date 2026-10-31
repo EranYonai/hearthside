@@ -1,5 +1,5 @@
 import { Amount, buttonClasses, Card, Label } from '@hearthside/ui'
-import { ChartLine, ChevronRight, Lock } from 'lucide-react'
+import { ChartLine, ChevronRight, Lightbulb, Lock } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AppShell } from '@/components/AppShell'
@@ -12,6 +12,7 @@ import { investmentHolder, portfolio } from '@/server/invest'
 import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
 import { recordSnapshots } from '@/server/trends'
+import { runCheckup } from '@/server/checkup'
 import { CurrencySwitch, InvestmentAccountForm } from './client'
 
 export const metadata: Metadata = { title: 'Invest · Hearthside' }
@@ -49,6 +50,8 @@ export default async function InvestPage() {
   ])
   // Today's value for trends; an hourly job does the same when nobody opens this page.
   await recordSnapshots(db, household.id, fx.rates)
+  const check = await runCheckup(db, member, fx.rates)
+  const nudges = check.items.filter((i) => i.status === 'nudge').length
   const names = new Map(people.map((p) => [p.id, p.id === member.id ? 'You' : p.name]))
   const currency = summary.currency
   const unconverted = Object.entries(summary.unconverted)
@@ -121,13 +124,24 @@ export default async function InvestPage() {
                 not converted to {currency} yet.
               </p>
             )}
-            <Link
-              href="/invest/trends"
-              className={`${buttonClasses('secondary')} justify-self-start`}
-            >
-              <ChartLine aria-hidden />
-              Trends
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/invest/trends" className={buttonClasses('secondary')}>
+                <ChartLine aria-hidden />
+                Trends
+              </Link>
+              <Link href="/invest/checkup" className={buttonClasses('secondary')}>
+                <Lightbulb aria-hidden />
+                Check-up
+                {check.settings.checkupOn && nudges > 0 && (
+                  <span
+                    className="rounded-pill bg-warning-soft px-2 text-caption font-semibold text-warning"
+                    data-testid="nudge-count"
+                  >
+                    {nudges}
+                  </span>
+                )}
+              </Link>
+            </div>
             {summary.unpriced > 0 && (
               <p className="text-caption text-ink-muted">
                 {summary.unpriced === 1

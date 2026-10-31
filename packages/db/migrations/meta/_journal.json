@@ -92,6 +92,13 @@
       "when": 1793449664795,
       "tag": "0012_fund_facts",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793450140847,
+      "tag": "0013_invest_settings",
+      "breakpoints": true
     }
   ]
 }

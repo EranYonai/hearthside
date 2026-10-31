@@ -456,6 +456,18 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await expect(
     owner.getByTestId('fund-documents').getByRole('link', { name: 'Prospectus' }),
   ).toHaveAttribute('href', 'https://example.com/prospectus.pdf')
+
+  // The check-up gives gentle observations and keeps the household's plan.
+  await owner.goto('/invest/checkup')
+  await expect(owner.getByRole('heading', { name: 'Check-up' })).toBeVisible()
+  await expect(owner.getByTestId('checkup')).toContainText('Fees look low')
+  await expect(owner.getByText('General education, not financial advice')).toBeVisible()
+  await owner.getByLabel('Target split').fill('60')
+  await expect(owner.getByTestId('split-label')).toHaveText('60% stocks / 40% bonds and cash')
+  await owner.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(owner.getByTestId('checkup')).toContainText('60/40 target')
+  await owner.goto('/invest')
+  await expect(owner.getByRole('link', { name: /Check-up/ })).toBeVisible()
 })
 
 test('settings show the app version and sign-in activity', async () => {

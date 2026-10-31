@@ -8,7 +8,7 @@ still apply on top of this.
 
 | Table                     | Encrypted                                                             | Keyed hash (lookups)           |
 | ------------------------- | --------------------------------------------------------------------- | ------------------------------ |
-| `households`              | `name`                                                                |                                |
+| `households`              | `name`, `invest_settings`                                             |                                |
 | `members`                 | `name`                                                                |                                |
 | `passkeys`                | `name`                                                                |                                |
 | `auth_challenges`         | `payload`                                                             |                                |

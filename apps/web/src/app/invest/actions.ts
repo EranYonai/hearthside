@@ -17,6 +17,7 @@ import {
   type HoldingInput,
   type InvestmentAccountInput,
 } from '@/server/invest'
+import { saveInvestSettings } from '@/server/checkup'
 import { setDisplayCurrency } from '@/server/profile'
 import { addMovement, removeMovement, type MovementInput } from '@/server/trends'
 import { AuthError } from '@/server/repo'
@@ -145,6 +146,18 @@ export async function saveFundFactsAction(
   const { member } = await requireSession()
   return runAction([`/invest/holding/${holdingId}`], async () => {
     await saveFundFacts(requireDb(), member, holdingId, input)
+    return {}
+  })
+}
+
+export async function saveInvestSettingsAction(input: {
+  stocksTarget: string
+  emergencyMonths: string
+  checkupOn: boolean
+}) {
+  const { member } = await requireSession()
+  return runAction([...PATHS, '/invest/checkup'], async () => {
+    await saveInvestSettings(requireDb(), member, input)
     return {}
   })
 }

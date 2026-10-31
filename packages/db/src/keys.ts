@@ -101,7 +101,7 @@ export async function loadKeys(db: Db, masterKeys: readonly Buffer[]): Promise<K
 
 /** Every private column; must match the encText/encInt/encJson columns in schema.ts. */
 export const ENCRYPTED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
-  households: ['name'],
+  households: ['name', 'invest_settings'],
   members: ['name'],
   passkeys: ['name'],
   auth_challenges: ['payload'],
