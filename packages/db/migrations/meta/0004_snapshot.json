@@ -1,5 +1,5 @@
 {
-  "id": "8ea4b582-64ff-4e8f-9ef6-ae12444271d9",
+  "id": "910d36b2-6580-496e-98c9-3a86e1b878e4",
   "prevId": "052a669c-6111-4637-a381-d814b23164b4",
   "version": "7",
   "dialect": "postgresql",
@@ -84,6 +84,33 @@
           "columns": [
             {
               "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "accounts_source_idx": {
+          "name": "accounts_source_idx",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last4",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -181,18 +208,13 @@
         },
         "detail": {
           "name": "detail",
-          "type": "text",
+          "type": "jsonb",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "ip": {
           "name": "ip",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ip_hash": {
-          "name": "ip_hash",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -286,9 +308,10 @@
         },
         "payload": {
           "name": "payload",
-          "type": "text",
+          "type": "jsonb",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "expires_at": {
           "name": "expires_at",
@@ -403,72 +426,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.encryption_keys": {
-      "name": "encryption_keys",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "always",
-            "name": "encryption_keys_id_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
-        },
-        "purpose": {
-          "name": "purpose",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "wrapped": {
-          "name": "wrapped",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "master_key_id": {
-          "name": "master_key_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "retired_at": {
-          "name": "retired_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "encryption_keys_purpose_check": {
-          "name": "encryption_keys_purpose_check",
-          "value": "\"encryption_keys\".\"purpose\" in ('data', 'index')"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.households": {
@@ -810,6 +767,19 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "display_currency": {
+          "name": "display_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ILS'"
+        },
+        "onboarded_at": {
+          "name": "onboarded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -1186,7 +1156,7 @@
         },
         "amount_minor": {
           "name": "amount_minor",
-          "type": "text",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true
         },
@@ -1199,7 +1169,7 @@
         },
         "original_minor": {
           "name": "original_minor",
-          "type": "text",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": false
         },

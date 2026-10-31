@@ -13,6 +13,7 @@ import {
   unusedRecoveryCodeCount,
 } from '@/server/repo'
 import { requireSession } from '@/server/session'
+import { ProfileForm, RestartWelcome } from '../welcome/client'
 import {
   InviteCreator,
   MemberControls,
@@ -48,10 +49,17 @@ export default async function SettingsPage() {
         <p>
           <span className="text-body-strong">{member.name}</span> · {ROLE_LABEL[member.role]}
         </p>
+        <ProfileForm
+          name={member.name}
+          displayCurrency={member.displayCurrency}
+          {...(isOwner ? { householdName: household.name } : {})}
+          submitLabel="Save"
+        />
         <div className="flex flex-wrap gap-2">
           <ThemeToggle />
           <SignOutButton />
         </div>
+        <RestartWelcome />
       </Card>
 
       <Card aria-labelledby="passkeys">

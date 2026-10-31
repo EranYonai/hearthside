@@ -13,6 +13,7 @@ moves the Unreleased notes under the new version.
 - Importing household records and a transactions view (#39).
 - Accounts tab grouped by type, separate views per account type, and accounts linked to the
   household member who holds them (#43, #46).
+- Welcome steps for each new member, and profile settings with a display currency (#40).
 
 ### Security
 

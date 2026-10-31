@@ -13,7 +13,7 @@ export function SetupForm() {
   const [busy, setBusy] = useState(false)
   const [codes, setCodes] = useState<string[]>()
 
-  if (codes) return <RecoveryCodes codes={codes} onDone={() => router.replace('/')} />
+  if (codes) return <RecoveryCodes codes={codes} onDone={() => router.replace('/welcome')} />
 
   return (
     <Card>

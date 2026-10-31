@@ -33,8 +33,15 @@
     {
       "idx": 4,
       "version": "7",
-      "when": 1793431220374,
-      "tag": "0004_encryption",
+      "when": 1793431063989,
+      "tag": "0004_onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793431450650,
+      "tag": "0005_encryption",
       "breakpoints": true
     }
   ]

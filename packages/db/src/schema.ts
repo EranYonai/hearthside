@@ -72,6 +72,10 @@ export const members = pgTable(
       .references(() => households.id, { onDelete: 'cascade' }),
     name: encText('members', 'name').notNull(),
     role: text('role', { enum: ['owner', 'adult', 'viewer'] }).notNull(),
+    /** ISO 4217 code amounts are shown in. */
+    displayCurrency: text('display_currency').notNull().default('ILS'),
+    /** Set when the member finishes or skips the welcome steps. */
+    onboardedAt: ts('onboarded_at'),
     createdAt: createdAt(),
     removedAt: ts('removed_at'),
   },
