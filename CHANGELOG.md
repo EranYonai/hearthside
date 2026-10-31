@@ -19,6 +19,9 @@ moves the Unreleased notes under the new version.
 
 ### Security
 
+- People who join with an invite link wait for the owner's approval before they can see
+  anything. The owner approves or declines them in Settings, under Members. Existing members
+  are approved automatically on upgrade.
 - Private fields are encrypted in the database, with key rotation (#44). Existing data is
   encrypted on the first start after upgrading, which needs a new key file (see
   [Self-hosting](docs/self-hosting.md)).

@@ -16,6 +16,7 @@ import {
   planImport,
   type ImportGroup,
 } from '@/server/ledger'
+import { isApproved } from '@/server/repo'
 import { authRoute } from '@/server/route'
 import { currentSession } from '@/server/session'
 import { sha256 } from '@/server/tokens'
@@ -56,6 +57,7 @@ function describe(g: ImportGroup) {
 export const POST = authRoute(async ({ request, db }) => {
   const session = await currentSession()
   if (!session || session.session.viaRecovery) return fail('Please sign in again', 401)
+  if (!isApproved(session.member)) return fail('Waiting for the owner to approve you', 403)
   const { member } = session
 
   const form = await request.formData().catch(() => undefined)
