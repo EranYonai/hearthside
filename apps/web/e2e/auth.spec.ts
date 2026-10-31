@@ -330,6 +330,9 @@ test('dropping a card statement picks or creates its account and imports it', as
   await expect(owner.getByTestId('custom-categories')).toContainText('Decor')
   await owner.goto('/transactions?month=2026-10')
   await expect(owner.getByRole('button', { name: /^Home Store, Decor/ })).toBeVisible()
+  // Nothing here looks odd, so the alerts filter is empty.
+  await owner.goto('/transactions?month=2026-10&category=alerts')
+  await expect(owner.getByText('Nothing here for October 2026.')).toBeVisible()
 })
 
 test('a bank statement PDF imports by column position', async () => {

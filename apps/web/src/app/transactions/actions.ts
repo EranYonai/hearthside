@@ -3,7 +3,7 @@
 import { requireDb } from '@/lib/db'
 import { runAction } from '@/server/action'
 import { resetCategorizer, scheduleCategorize } from '@/server/categorize'
-import { canEdit, setCategory } from '@/server/ledger'
+import { canEdit, dismissAlert, setCategory } from '@/server/ledger'
 import { AuthError } from '@/server/repo'
 import { requireSession } from '@/server/session'
 
@@ -29,5 +29,14 @@ export async function categorizeNowAction() {
     return done
       ? { filed: done.filed, waiting: done.waiting, background: false }
       : { filed: 0, waiting: false, background: true }
+  })
+}
+
+/** The person checked an alert and it's fine. */
+export async function dismissAlertAction(id: string) {
+  const { member } = await requireSession()
+  return runAction(['/transactions', '/'], async () => {
+    await dismissAlert(requireDb(), member, String(id))
+    return {}
   })
 }
