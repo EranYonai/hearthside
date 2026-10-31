@@ -380,6 +380,22 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await expect(owner.getByTestId('unconverted')).toContainText('$1,005')
   await switcher.getByRole('radio', { name: 'USD' }).click()
   await expect(owner.getByTestId('unconverted')).toContainText('₪500')
+
+  // A holdings file (synthetic) adds to the account after a preview.
+  await owner.getByTestId('investment-accounts').getByRole('link').first().click()
+  const importer = owner.getByRole('region', { name: 'Import holdings from a file' })
+  await importer.getByText('Import holdings from a file').click()
+  await importer.getByLabel('Holdings file').setInputFiles({
+    name: 'holdings.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('Symbol,Name,Quantity,Price,Currency\nTSTZ,Test Bond Fund,4,25,USD\n'),
+  })
+  await importer.getByRole('button', { name: 'Read file' }).click()
+  await expect(importer.getByTestId('holdings-preview')).toContainText('1 holding found')
+  await importer.getByRole('button', { name: 'Import 1 holding' }).click()
+  await expect(importer.getByText('Added 1, updated 0, removed 0.')).toBeVisible()
+  await expect(owner.getByTestId('holdings').getByRole('listitem')).toHaveCount(3)
+  await expect(owner.getByTestId('holdings')).toContainText('Test Bond Fund')
 })
 
 test('settings show the app version and sign-in activity', async () => {

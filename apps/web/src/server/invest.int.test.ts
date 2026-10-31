@@ -8,6 +8,7 @@ import {
   createInvestmentAccount,
   deleteInvestmentAccount,
   getVisibleInvestmentAccount,
+  importHoldings,
   listHoldings,
   listInvestmentAccounts,
   mayManage,
@@ -61,6 +62,10 @@ const fund = {
   price: '100',
 }
 
+afterAll(async () => {
+  await client?.sql.end()
+})
+
 describe.skipIf(!url)('investments (Postgres)', () => {
   beforeAll(async () => {
     await db.execute(
@@ -72,10 +77,6 @@ describe.skipIf(!url)('investments (Postgres)', () => {
 
   beforeEach(async () => {
     await db.execute(raw`truncate households, audit_log, auth_challenges cascade`)
-  })
-
-  afterAll(async () => {
-    await client?.sql.end()
   })
 
   it('keeps private accounts to their owner and holder', async () => {
@@ -229,6 +230,72 @@ describe.skipIf(!url)('investments (Postgres)', () => {
   })
 })
 
+describe.skipIf(!url)('holdings import (Postgres)', () => {
+  it('adds, updates and removes imported holdings, keeping hand-added ones', async () => {
+    await db.execute(raw`truncate households, audit_log, auth_challenges cascade`)
+    const { alex, sam } = await home()
+    const account = await createInvestmentAccount(db, alex, {
+      name: 'Imported',
+      currency: 'ILS',
+      visibility: 'household',
+    })
+    await saveHolding(db, alex, account.id, { kind: 'cash', currency: 'ILS', units: '100' })
+    // A member's own name and asset type for a symbol survive later imports.
+    await saveHolding(db, alex, account.id, {
+      kind: 'security',
+      symbol: '1111111',
+      name: 'My name for it',
+      currency: 'ILS',
+      assetClass: 'bonds',
+      units: '1',
+    })
+    const row = (symbol: string, units: string, price: string | null = '10') => ({
+      symbol,
+      name: `Fund ${symbol}`,
+      units,
+      price: price ?? undefined,
+      currency: 'ILS',
+      assetClass: 'local_stocks',
+    })
+
+    expect(
+      await importHoldings(db, alex, account.id, [row('1111111', '5'), row('2222222', '7')], {
+        removeMissing: true,
+      }),
+    ).toEqual({ added: 1, updated: 1, removed: 0 })
+    expect(
+      await importHoldings(db, alex, account.id, [row('2222222', '8', null)], {
+        removeMissing: true,
+      }),
+    ).toEqual({ added: 0, updated: 1, removed: 1 })
+
+    const list = await listHoldings(db, alex)
+    expect(list.map((h) => [h.symbol, h.units, h.price])).toEqual([
+      ['ILS', '100', '1'],
+      ['2222222', '8', '10'],
+    ])
+    await importHoldings(db, alex, account.id, [row('1111111', '2')], { removeMissing: false })
+    const again = await listHoldings(db, alex)
+    expect(again.find((h) => h.symbol === '1111111')).toMatchObject({
+      name: 'My name for it',
+      assetClass: 'bonds',
+    })
+    expect(again).toHaveLength(3)
+
+    await expect(
+      importHoldings(db, sam, account.id, [row('3', '1')], { removeMissing: false }),
+    ).rejects.toThrow(AuthError)
+    await expect(
+      importHoldings(db, alex, account.id, [], { removeMissing: false }),
+    ).rejects.toThrow(AuthError)
+    await expect(
+      importHoldings(db, alex, account.id, [{ ...row('4', '1'), units: 'x' }], {
+        removeMissing: false,
+      }),
+    ).rejects.toThrow(AuthError)
+  })
+})
+
 describe('cleanHolding', () => {
   it('validates what the member typed', () => {
     expect(cleanHolding({ ...fund, cost: '1,050.5' })).toMatchObject({
@@ -248,7 +315,7 @@ describe('cleanHolding', () => {
       { units: '-1' },
       { symbol: '' },
       { name: '' },
-      { assetClass: 'cash' },
+      { assetClass: 'crypto' },
       { price: 'abc' },
       { cost: 'abc' },
     ]
