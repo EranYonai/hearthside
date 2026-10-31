@@ -1,4 +1,4 @@
-import { Card, Label, SummaryCard, buttonClasses } from '@hearthside/ui'
+import { Card, Label, Notice, SummaryCard, buttonClasses } from '@hearthside/ui'
 import { FileUp, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -6,7 +6,7 @@ import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
 import { householdCategorySet } from '@/server/categories'
 import { canEdit, listMonths, totals } from '@/server/ledger'
-import { getHousehold, listMembers } from '@/server/repo'
+import { getHousehold, isApproved, listMembers } from '@/server/repo'
 import { currentSession, requireSession } from '@/server/session'
 
 export const dynamic = 'force-dynamic'
@@ -16,10 +16,13 @@ export default async function Home() {
   const { member, household } = await requireSession()
   if (!member.onboardedAt) redirect('/welcome')
   const db = requireDb()
-  const [people, months] = await Promise.all([
-    listMembers(db, household.id),
+  const isOwner = member.role === 'owner'
+  const [everyone, months] = await Promise.all([
+    listMembers(db, household.id, { includePending: isOwner }),
     listMonths(db, member),
   ])
+  const people = everyone.filter(isApproved)
+  const waiting = everyone.length - people.length
   const solo = people.length === 1
   const latest = months[0]
   const [sum, categories] = await Promise.all([
@@ -35,6 +38,14 @@ export default async function Home() {
   return (
     <AppShell household={household.name} current="/">
       <h1 className="font-display text-title">Hi {member.name}</h1>
+      {waiting > 0 && (
+        <Notice tone="warning">
+          {waiting === 1 ? 'Someone is' : `${waiting} people are`} waiting for your approval.{' '}
+          <Link href="/settings#members" className="underline">
+            Review in Settings
+          </Link>
+        </Notice>
+      )}
       {sum ? (
         <>
           <SummaryCard

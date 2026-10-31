@@ -1,6 +1,6 @@
 import type { Db, MemberRow, PasskeyRow } from '@hearthside/db'
 import { blindIndex, schema } from '@hearthside/db'
-import { and, asc, count, desc, eq, gt, isNull } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, isNotNull, isNull } from 'drizzle-orm'
 import { CHALLENGE_TTL_MS, INVITE_TTL_MS, SESSION_REFRESH_MS, SESSION_TTL_MS } from './config'
 import {
   RECOVERY_CODE_COUNT,
@@ -70,7 +70,12 @@ export async function createHousehold(
       .returning()
     const [member] = await tx
       .insert(members)
-      .values({ householdId: household!.id, name: input.ownerName, role: 'owner' })
+      .values({
+        householdId: household!.id,
+        name: input.ownerName,
+        role: 'owner',
+        approvedAt: new Date(),
+      })
       .returning()
     await tx.insert(passkeys).values({ ...input.passkey, memberId: member!.id })
     const codes = await replaceRecoveryCodes(tx, member!.id)
@@ -83,12 +88,31 @@ export async function createHousehold(
   })
 }
 
-export async function listMembers(db: Conn, householdId: string) {
+/**
+ * Current members. People who joined by invite but are still waiting for the owner's
+ * approval are left out unless asked for, so they never show up in pickers or totals.
+ */
+export async function listMembers(
+  db: Conn,
+  householdId: string,
+  opts: { includePending?: boolean } = {},
+) {
   return db
     .select()
     .from(members)
-    .where(and(eq(members.householdId, householdId), isNull(members.removedAt)))
+    .where(
+      and(
+        eq(members.householdId, householdId),
+        isNull(members.removedAt),
+        opts.includePending ? undefined : isNotNull(members.approvedAt),
+      ),
+    )
     .orderBy(asc(members.createdAt))
+}
+
+/** True once the owner has let this member in. */
+export function isApproved(member: Pick<MemberRow, 'approvedAt'>): boolean {
+  return member.approvedAt !== null
 }
 
 function assertOwner(actor: MemberRow) {
@@ -117,6 +141,31 @@ export async function changeRole(db: Db, actor: MemberRow, memberId: string, rol
     memberId: actor.id,
     action: 'member.role_changed',
     detail: { memberId, role },
+  })
+  return row
+}
+
+/** Lets a member who joined by invite see the household. Declining is `removeMember`. */
+export async function approveMember(db: Conn, actor: MemberRow, memberId: string) {
+  assertOwner(actor)
+  const [row] = await db
+    .update(members)
+    .set({ approvedAt: new Date() })
+    .where(
+      and(
+        eq(members.id, memberId),
+        eq(members.householdId, actor.householdId),
+        isNull(members.removedAt),
+        isNull(members.approvedAt),
+      ),
+    )
+    .returning()
+  if (!row) throw new AuthError('not_found', 'Member not found')
+  await audit(db, {
+    householdId: actor.householdId,
+    memberId: actor.id,
+    action: 'member.approved',
+    detail: { memberId },
   })
   return row
 }
@@ -351,7 +400,7 @@ export async function acceptInvite(
       householdId: member!.householdId,
       memberId: member!.id,
       action: 'member.joined',
-      detail: { role: member!.role },
+      detail: { role: member!.role, pending: true },
     })
     return { member: member!, recoveryCodes: codes }
   })

@@ -21,9 +21,13 @@ moves the Unreleased notes under the new version.
   the statement's total, and rows show when the two disagree.
 - Account looks: each account shows a color and a short badge for where it comes from, and
   you can pick its source and your own color when editing it. Transactions show a matching dot.
+- Delete an account, with its imports and transactions, from its edit page (asks first).
 
 ### Security
 
+- People who join with an invite link wait for the owner's approval before they can see
+  anything. The owner approves or declines them in Settings, under Members. Existing members
+  are approved automatically on upgrade.
 - Private fields are encrypted in the database, with key rotation (#44). Existing data is
   encrypted on the first start after upgrading, which needs a new key file (see
   [Self-hosting](docs/self-hosting.md)).

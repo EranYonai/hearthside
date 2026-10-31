@@ -77,6 +77,8 @@ export const members = pgTable(
     displayCurrency: text('display_currency').notNull().default('ILS'),
     /** Set when the member finishes or skips the welcome steps. */
     onboardedAt: ts('onboarded_at'),
+    /** Set when the owner lets an invited member in. Until then they see nothing. */
+    approvedAt: ts('approved_at'),
     createdAt: createdAt(),
     removedAt: ts('removed_at'),
   },

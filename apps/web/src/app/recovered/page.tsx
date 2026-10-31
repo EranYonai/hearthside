@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Add a passkey · Hearthside' }
 export const dynamic = 'force-dynamic'
 
 export default async function RecoveredPage() {
-  const { session, member } = await requireSession({ allowRecovery: true })
+  const { session, member } = await requireSession({ allowRecovery: true, allowPending: true })
   if (!session.viaRecovery) redirect('/')
   return (
     <AuthShell

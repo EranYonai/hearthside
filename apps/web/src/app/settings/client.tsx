@@ -1,11 +1,12 @@
 'use client'
 
 import { Button, Notice } from '@hearthside/ui'
-import { Copy, Trash2, UserPlus } from 'lucide-react'
+import { Check, Copy, Trash2, UserPlus, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { RecoveryCodes } from '@/components/RecoveryCodes'
 import {
+  approveMemberAction,
   changeRoleAction,
   createInviteAction,
   regenerateCodesAction,
@@ -161,6 +162,50 @@ export function MemberControls({
           aria-label={`Remove ${name}`}
         >
           Remove
+        </Button>
+      )}
+      {error && <Notice tone="negative">{error}</Notice>}
+    </div>
+  )
+}
+
+/** Approve or decline someone who joined by invite. Declining removes them. */
+export function PendingControls({ id, name }: { id: string; name: string }) {
+  const { pending, error, run } = useAction()
+  const [confirming, setConfirming] = useState(false)
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        variant="primary"
+        disabled={pending}
+        icon={<Check aria-hidden />}
+        aria-label={`Approve ${name}`}
+        onClick={() => run(() => approveMemberAction(id))}
+      >
+        Approve
+      </Button>
+      {confirming ? (
+        <>
+          <Button
+            variant="secondary"
+            disabled={pending}
+            onClick={() => run(() => removeMemberAction(id))}
+          >
+            Decline {name}
+          </Button>
+          <Button variant="ghost" onClick={() => setConfirming(false)}>
+            Cancel
+          </Button>
+        </>
+      ) : (
+        <Button
+          variant="ghost"
+          disabled={pending}
+          icon={<X aria-hidden />}
+          aria-label={`Decline ${name}`}
+          onClick={() => setConfirming(true)}
+        >
+          Decline
         </Button>
       )}
       {error && <Notice tone="negative">{error}</Notice>}

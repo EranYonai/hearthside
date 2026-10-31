@@ -10,7 +10,7 @@ import {
   SESSION_TTL_MS,
   authConfig,
 } from './config'
-import { getSession } from './repo'
+import { getSession, isApproved } from './repo'
 
 function cookieBase() {
   return { httpOnly: true, sameSite: 'lax' as const, secure: authConfig().secureCookies, path: '/' }
@@ -49,11 +49,15 @@ export const currentSession = cache(async () => {
 
 /**
  * For pages that need a signed-in member. A session that came from a recovery code
- * can only reach the "add a passkey" page until it adds one.
+ * can only reach the "add a passkey" page until it adds one. A member who joined by
+ * invite only reaches the waiting page until the owner approves them.
  */
-export async function requireSession(options: { allowRecovery?: boolean } = {}) {
+export async function requireSession(
+  options: { allowRecovery?: boolean; allowPending?: boolean } = {},
+) {
   const session = await currentSession()
   if (!session) redirect('/login')
   if (session.session.viaRecovery && !options.allowRecovery) redirect('/recovered')
+  if (!isApproved(session.member) && !options.allowPending) redirect('/pending')
   return session
 }

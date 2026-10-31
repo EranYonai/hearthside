@@ -14,6 +14,7 @@ import { resetCategorizer, scheduleCategorize } from '@/server/categorize'
 import { authConfig } from '@/server/config'
 import {
   AuthError,
+  approveMember,
   changeRole,
   createInvite,
   regenerateRecoveryCodes,
@@ -64,6 +65,15 @@ export async function changeRoleAction(memberId: string, role: Role) {
   const { member } = await requireSession()
   return run(async () => {
     await changeRole(requireDb(), member, memberId, role)
+    return {}
+  })
+}
+
+export async function approveMemberAction(memberId: string) {
+  const { member } = await requireSession()
+  return run(async () => {
+    await approveMember(requireDb(), member, String(memberId))
+    revalidatePath('/')
     return {}
   })
 }

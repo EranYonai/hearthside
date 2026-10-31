@@ -68,8 +68,15 @@
     {
       "idx": 9,
       "version": "7",
-      "when": 1793450509299,
-      "tag": "0009_card_bills",
+      "when": 1793450477869,
+      "tag": "0009_member_approval",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793451633540,
+      "tag": "0010_card_bills",
       "breakpoints": true
     }
   ]

@@ -118,6 +118,18 @@ async function invite(role: 'adult' | 'viewer') {
   return url
 }
 
+async function approve(name: string) {
+  await owner.goto('/')
+  await expect(owner.getByText(/waiting for your approval/)).toBeVisible()
+  await owner.getByRole('link', { name: 'Review in Settings' }).click()
+  const waiting = owner.getByTestId('pending-members')
+  await expect(waiting).toContainText(name)
+  await expect(owner.getByTestId('member-list')).not.toContainText(name)
+  await waiting.getByRole('button', { name: `Approve ${name}` }).click()
+  await expect(owner.getByTestId('pending-members')).toHaveCount(0)
+  await expect(owner.getByTestId('member-list')).toContainText(name)
+}
+
 async function join(
   browser: Browser,
   url: string,
@@ -131,6 +143,18 @@ async function join(
   await page.getByRole('button', { name: 'Create passkey and join' }).click()
   await expect(page.getByTestId('recovery-codes').getByRole('listitem')).toHaveCount(10)
   await page.getByRole('button', { name: 'I’ve saved them' }).click()
+
+  // New members wait for the owner before they see anything.
+  await expect(page).toHaveURL(/\/pending$/)
+  await expect(page.getByTestId('pending-status')).toHaveText('Pending approval')
+  await expect(page.getByText('The Test Home')).toHaveCount(0)
+  for (const path of ['/', '/transactions', '/accounts', '/settings', '/welcome']) {
+    await page.goto(path)
+    await expect(page).toHaveURL(/\/pending$/)
+  }
+  await approve(name)
+  await page.getByRole('button', { name: 'Check again' }).click()
+  await expect(page).toHaveURL(/\/welcome$/)
   await expect(page.getByRole('heading', { name: `Welcome, ${name}` })).toBeVisible()
   // Until they finish or skip the welcome steps, home sends them back.
   await page.goto('/')
@@ -182,6 +206,34 @@ test('the owner invites an adult and a viewer', async ({ browser }) => {
   await expect(members).toHaveCount(3)
   await expect(members.filter({ hasText: 'Sam' })).toContainText('Adult')
   await expect(members.filter({ hasText: 'Robin' })).toContainText('Viewer')
+})
+
+test('the owner can decline someone who joined by invite', async ({ browser }) => {
+  const url = await invite('viewer')
+  const page = await newDevice(browser)
+  await page.goto(url)
+  await page.getByLabel('Your name').fill('Stranger')
+  await page.getByRole('button', { name: 'Create passkey and join' }).click()
+  await page.getByRole('button', { name: 'I’ve saved them' }).click()
+  await expect(page).toHaveURL(/\/pending$/)
+
+  // Nothing to read from the import endpoint either.
+  const res = await page.request.post('/api/import', {
+    multipart: { file: { name: 'a.csv', mimeType: 'text/csv', buffer: Buffer.from('x') } },
+  })
+  expect(res.status()).toBe(403)
+
+  await owner.goto('/settings')
+  const waiting = owner.getByTestId('pending-members')
+  await waiting.getByRole('button', { name: 'Decline Stranger' }).click()
+  await waiting.getByRole('button', { name: 'Decline Stranger' }).click()
+  await expect(owner.getByTestId('pending-members')).toHaveCount(0)
+  await expect(owner.getByTestId('member-list')).not.toContainText('Stranger')
+
+  // Their session ends with it.
+  await page.goto('/')
+  await expect(page).toHaveURL(/\/login$/)
+  await page.context().close()
 })
 
 test('a recovery code signs in once and asks for a new passkey', async ({ browser }) => {
