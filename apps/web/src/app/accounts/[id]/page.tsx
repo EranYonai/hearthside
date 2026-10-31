@@ -6,10 +6,10 @@ import { notFound } from 'next/navigation'
 import { AccountCard } from '@/components/AccountCard'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
-import { canEdit, getVisibleAccount, holderOf } from '@/server/ledger'
+import { canEdit, countAccountTransactions, getVisibleAccount, holderOf } from '@/server/ledger'
 import { AuthError, listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
-import { EditAccountForm } from './client'
+import { DeleteAccount, EditAccountForm } from './client'
 
 export const metadata: Metadata = { title: 'Account · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -22,7 +22,10 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
     if (err instanceof AuthError) notFound()
     throw err
   })
-  const people = await listMembers(db, household.id)
+  const [people, count] = await Promise.all([
+    listMembers(db, household.id),
+    countAccountTransactions(db, member, account.id),
+  ])
   const mayEdit = canEdit(member) && (account.ownerId === member.id || member.role === 'owner')
 
   return (
@@ -64,6 +67,11 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
           </>
         )}
       </Card>
+      {mayEdit && (
+        <Card aria-label="Delete account">
+          <DeleteAccount id={account.id} name={account.name} transactions={count} />
+        </Card>
+      )}
     </AppShell>
   )
 }

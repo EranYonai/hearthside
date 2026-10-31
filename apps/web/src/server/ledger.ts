@@ -403,6 +403,36 @@ export async function undoBatch(db: Conn, member: MemberRow, batchId: string) {
   })
 }
 
+/** How many transactions an account holds, to warn before deleting it. */
+export async function countAccountTransactions(db: Conn, member: MemberRow, id: string) {
+  await getVisibleAccount(db, member, id)
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(transactions)
+    .where(eq(transactions.accountId, id))
+  return row?.n ?? 0
+}
+
+/**
+ * Delete an account with all its imports and transactions. Only whoever added it, or the
+ * household owner, may do this. It can't be undone.
+ */
+export async function deleteAccount(db: Conn, member: MemberRow, id: string) {
+  assertEditor(member)
+  const account = await getVisibleAccount(db, member, id)
+  if (account.ownerId !== member.id && member.role !== 'owner')
+    throw new AuthError('not_allowed', 'Only the person who added this account can delete it')
+  const removed = await countAccountTransactions(db, member, id)
+  await db.delete(accounts).where(eq(accounts.id, id))
+  await audit(db, {
+    householdId: member.householdId,
+    memberId: member.id,
+    action: 'account.deleted',
+    detail: { accountId: id, kind: account.kind, removed },
+  })
+  return { removed }
+}
+
 // ---------- Transactions ----------
 
 /** First day of the month and of the next one, for a YYYY-MM string. */

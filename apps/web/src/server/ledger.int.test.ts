@@ -23,6 +23,8 @@ import {
   totals,
   undoBatch,
   updateAccount,
+  countAccountTransactions,
+  deleteAccount,
 } from './ledger'
 import { acceptInvite, AuthError, createHousehold, createInvite, type NewPasskey } from './repo'
 
@@ -355,6 +357,35 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
       holderId: sam.id,
     })
     expect(done!.account.holderId).toBe(sam.id)
+  })
+
+  it('deletes an account with its transactions, only for whoever added it or the owner', async () => {
+    const { alex, sam, robin } = await home()
+    const card = await createAccount(db, alex, {
+      name: 'Old card',
+      kind: 'card',
+      visibility: 'household',
+    })
+    const rows = await prepareImport(db, card, october)
+    await commitImport(db, alex, card, { fileName: 'd', fileHash: 'd', rows, skipped: 0 })
+    expect(await countAccountTransactions(db, sam, card.id)).toBe(5)
+
+    await expect(deleteAccount(db, sam, card.id)).rejects.toBeInstanceOf(AuthError)
+    await expect(deleteAccount(db, robin, card.id)).rejects.toBeInstanceOf(AuthError)
+    expect(await deleteAccount(db, alex, card.id)).toEqual({ removed: 5 })
+    await expect(getVisibleAccount(db, alex, card.id)).rejects.toBeInstanceOf(AuthError)
+    expect(await listTransactions(db, alex, { month: '2026-10', accountId: card.id })).toHaveLength(
+      0,
+    )
+    await expect(deleteAccount(db, alex, card.id)).rejects.toBeInstanceOf(AuthError)
+
+    // The household owner may delete an account someone else added.
+    const sams = await createAccount(db, sam, {
+      name: 'Sam bank',
+      kind: 'bank',
+      visibility: 'household',
+    })
+    expect(await deleteAccount(db, alex, sams.id)).toEqual({ removed: 0 })
   })
 
   it('keeps card and bank views apart and counts card bills once', async () => {

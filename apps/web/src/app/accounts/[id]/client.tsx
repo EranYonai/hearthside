@@ -9,12 +9,12 @@ import {
   type ProviderId,
 } from '@hearthside/core'
 import { Button, Notice, TextField, cx } from '@hearthside/ui'
-import { Check } from 'lucide-react'
+import { Check, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { AccountCard } from '@/components/AccountCard'
 import { useAction } from '@/lib/use-action'
-import { updateAccountAction } from '../actions'
+import { deleteAccountAction, updateAccountAction } from '../actions'
 
 const PROVIDER_IDS = Object.keys(PROVIDERS) as ProviderId[]
 const BANKS = PROVIDER_IDS.filter((id) => PROVIDERS[id].kind === 'bank')
@@ -221,5 +221,58 @@ export function EditAccountForm(props: {
         Save
       </Button>
     </form>
+  )
+}
+
+/** Two steps: ask, then confirm with the count of what goes with it. */
+export function DeleteAccount(props: { id: string; name: string; transactions: number }) {
+  const router = useRouter()
+  const [confirming, setConfirming] = useState(false)
+  const { pending, error, run } = useAction()
+  const what =
+    props.transactions === 0
+      ? 'It has no transactions.'
+      : props.transactions === 1
+        ? 'Its 1 transaction goes with it.'
+        : `Its ${props.transactions} transactions go with it.`
+  return (
+    <div className="grid gap-3">
+      {confirming ? (
+        <>
+          <Notice tone="negative">
+            Delete “{props.name}”? {what} This can’t be undone.
+          </Notice>
+          <span className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              disabled={pending}
+              icon={<Trash2 aria-hidden />}
+              className="text-negative"
+              onClick={() =>
+                run(
+                  () => deleteAccountAction(props.id),
+                  () => router.replace('/accounts'),
+                )
+              }
+            >
+              Delete account
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>
+              Keep it
+            </Button>
+          </span>
+        </>
+      ) : (
+        <Button
+          variant="ghost"
+          icon={<Trash2 aria-hidden />}
+          className="justify-self-start text-negative"
+          onClick={() => setConfirming(true)}
+        >
+          Delete this account
+        </Button>
+      )}
+      {error && <Notice tone="negative">{error}</Notice>}
+    </div>
   )
 }
