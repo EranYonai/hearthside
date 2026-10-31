@@ -5,6 +5,7 @@ import { sql as raw } from 'drizzle-orm'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
+  accountSummaries,
   commitImport,
   commitPlan,
   planImport,
@@ -21,6 +22,7 @@ import {
   setCategory,
   totals,
   undoBatch,
+  updateAccount,
 } from './ledger'
 import { acceptInvite, AuthError, createHousehold, createInvite, type NewPasskey } from './repo'
 
@@ -294,6 +296,116 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
     await expect(planImport(db, robin, source, parsed)).rejects.toBeInstanceOf(AuthError)
     const empty = await planImport(db, alex, { ...source, last4: '9' }, [])
     expect(empty[0]!.proposed.name).toBe('Max ·9')
+  })
+
+  it('links accounts to the member who holds them', async () => {
+    const { alex, sam, robin } = await home()
+    // Alex imports Sam's card, privately.
+    const card = await createAccount(db, alex, {
+      name: 'Sam card',
+      kind: 'card',
+      visibility: 'private',
+      holderId: sam.id,
+    })
+    expect(card.holderId).toBe(sam.id)
+    expect((await getVisibleAccount(db, sam, card.id)).id).toBe(card.id)
+    await expect(getVisibleAccount(db, robin, card.id)).rejects.toBeInstanceOf(AuthError)
+
+    const rows = await prepareImport(db, card, october)
+    await commitImport(db, alex, card, { fileName: 'o', fileHash: 'o', rows, skipped: 0 })
+    expect(await listTransactions(db, alex, { month: '2026-10', holderId: sam.id })).toHaveLength(5)
+    expect(await listTransactions(db, alex, { month: '2026-10', holderId: alex.id })).toHaveLength(
+      0,
+    )
+
+    // Only the person who added it (or the owner) changes it; holders must be in the home.
+    await expect(updateAccount(db, sam, card.id, { holderId: sam.id })).rejects.toBeInstanceOf(
+      AuthError,
+    )
+    await expect(
+      updateAccount(db, alex, card.id, { holderId: '00000000-0000-0000-0000-000000000000' }),
+    ).rejects.toBeInstanceOf(AuthError)
+    const back = await updateAccount(db, alex, card.id, { holderId: alex.id, name: 'Shared' })
+    expect([back.holderId, back.name]).toEqual([null, 'Shared'])
+    await expect(getVisibleAccount(db, sam, card.id)).rejects.toBeInstanceOf(AuthError)
+
+    // New accounts from an import can be given to someone else.
+    const parsed = statement([['01/10/2026', 'Shop', '10', '']])
+    const source = { provider: 'cal' as const, kind: 'card' as const, network: null, last4: '7' }
+    const plan = await planImport(db, alex, source, parsed)
+    const [done] = await commitPlan(db, alex, plan, {
+      fileName: 'c',
+      fileHash: 'c',
+      skipped: 0,
+      holderId: sam.id,
+    })
+    expect(done!.account.holderId).toBe(sam.id)
+  })
+
+  it('keeps card and bank views apart and counts card bills once', async () => {
+    const { alex } = await home()
+    const card = await createAccount(db, alex, {
+      name: 'Card',
+      kind: 'card',
+      visibility: 'household',
+    })
+    const bank = await createAccount(db, alex, {
+      name: 'Bank',
+      kind: 'bank',
+      visibility: 'household',
+    })
+    await commitImport(db, alex, card, {
+      fileName: 'c',
+      fileHash: 'c',
+      rows: await prepareImport(db, card, statement([['05/10/2026', 'Grocer', '300', '']])),
+      skipped: 0,
+    })
+    const bankRows = parseStatement(
+      [
+        {
+          name: 'B',
+          rows: [
+            ['תאריך', 'תיאור', 'חובה', 'זכות'],
+            ['10/10/2026', 'ISRACARD', '300', ''],
+            ['11/10/2026', 'Rent', '1000', ''],
+            ['12/10/2026', 'Salary', '', '5000'],
+          ],
+        },
+      ],
+      { spendingIsPositive: false },
+    ).transactions
+    await commitImport(db, alex, bank, {
+      fileName: 'b',
+      fileHash: 'b',
+      rows: await prepareImport(db, bank, bankRows),
+      skipped: 0,
+    })
+
+    expect(await totals(db, alex, { month: '2026-10', kind: 'card' })).toMatchObject({
+      spent: -30000,
+      cardBills: 0,
+    })
+    expect(await totals(db, alex, { month: '2026-10', kind: 'bank' })).toMatchObject({
+      spent: -130000,
+      received: 500000,
+      cardBills: 0,
+    })
+    // Together, the card bill from the bank is left out.
+    expect(await totals(db, alex, { month: '2026-10' })).toMatchObject({
+      spent: -130000,
+      received: 500000,
+      cardBills: -30000,
+      count: 4,
+    })
+    expect(await listTransactions(db, alex, { month: '2026-10', kind: 'bank' })).toHaveLength(3)
+
+    const summary = await accountSummaries(db, alex, '2026-10')
+    expect(summary.map((s) => [s.account.name, s.out, s.in, s.count])).toEqual([
+      ['Card', -30000, 0, 1],
+      ['Bank', -130000, 500000, 3],
+    ])
+    const empty = await accountSummaries(db, alex, '2026-01')
+    expect(empty.map((s) => s.count)).toEqual([0, 0])
   })
 
   it('validates months', () => {

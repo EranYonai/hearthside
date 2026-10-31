@@ -127,3 +127,29 @@ export function detectSource(
   }
   return { provider, kind, network, last4 }
 }
+
+/**
+ * Bank descriptions that pay a card bill (case-insensitive; valid as both a JS and a
+ * Postgres regular expression). Used to avoid counting card spending twice.
+ */
+export const CARD_PAYMENT_PATTERN = [
+  'ישראכרט',
+  'isracard',
+  'כרטיסי אשראי',
+  'כ\\.א\\.ל',
+  'כאל',
+  'max it',
+  'מקס איט',
+  'לאומי קארד',
+  'leumi card',
+  'אמריקן אקספרס',
+  'american express',
+  'דיינרס',
+  'diners',
+].join('|')
+
+const cardPayment = new RegExp(CARD_PAYMENT_PATTERN, 'i')
+
+export function isCardPayment(description: string): boolean {
+  return cardPayment.test(description)
+}

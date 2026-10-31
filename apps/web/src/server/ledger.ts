@@ -1,5 +1,6 @@
 import {
   countsAsSpending,
+  isCardPayment,
   duplicateKeys,
   suggestAccountName,
   type DetectedSource,
@@ -14,7 +15,7 @@ import { and, desc, eq, gte, inArray, isNull, lt, or, sql, type SQL } from 'driz
 import { audit, AuthError, type Tx } from './repo'
 import { sha256 } from './tokens'
 
-const { accounts, importBatches, transactions, categoryRules } = schema
+const { accounts, importBatches, transactions, categoryRules, members } = schema
 
 type Conn = Parameters<typeof audit>[0]
 
@@ -30,12 +31,34 @@ function assertEditor(member: MemberRow) {
   if (!canEdit(member)) throw new AuthError('not_allowed', 'Viewers can’t change data')
 }
 
-/** Accounts this member may see: shared ones and their own private ones. */
+/** The member an account belongs to: its holder, or whoever added it. */
+const holder = sql<string>`coalesce(${accounts.holderId}, ${accounts.ownerId})`
+
+/** Accounts this member may see: shared ones, and private ones they added or hold. */
 function visibleTo(member: MemberRow): SQL {
   return and(
     eq(accounts.householdId, member.householdId),
-    or(eq(accounts.visibility, 'household'), eq(accounts.ownerId, member.id)),
+    or(
+      eq(accounts.visibility, 'household'),
+      eq(accounts.ownerId, member.id),
+      eq(accounts.holderId, member.id),
+    ),
   )!
+}
+
+/** A member of this household who is still active. */
+async function assertHolder(db: Conn, member: MemberRow, holderId: string) {
+  const [row] = await db
+    .select({ id: members.id })
+    .from(members)
+    .where(
+      and(
+        eq(members.id, holderId),
+        eq(members.householdId, member.householdId),
+        isNull(members.removedAt),
+      ),
+    )
+  if (!row) throw new AuthError('not_found', 'That person isn’t in this home')
 }
 
 // ---------- Accounts ----------
@@ -54,12 +77,21 @@ export async function createAccount(
     provider?: string | null
     network?: string | null
     last4?: string | null
+    /** Who holds it, when that isn't the member adding it. */
+    holderId?: string | null
   },
 ) {
   assertEditor(member)
+  const { holderId, ...rest } = input
+  if (holderId && holderId !== member.id) await assertHolder(db, member, holderId)
   const [row] = await db
     .insert(accounts)
-    .values({ householdId: member.householdId, ownerId: member.id, ...input })
+    .values({
+      householdId: member.householdId,
+      ownerId: member.id,
+      holderId: holderId && holderId !== member.id ? holderId : null,
+      ...rest,
+    })
     .returning()
   await audit(db, {
     householdId: member.householdId,
@@ -86,6 +118,43 @@ export async function getOwnAccount(db: Conn, member: MemberRow, id: string) {
   if (row.ownerId !== member.id)
     throw new AuthError('not_allowed', 'Only the person who added this account can import into it')
   return row
+}
+
+/** The person who added an account, or the household owner, may change its details. */
+export async function updateAccount(
+  db: Conn,
+  member: MemberRow,
+  id: string,
+  input: { name?: string; holderId?: string; visibility?: AccountVisibility },
+) {
+  assertEditor(member)
+  const account = await getVisibleAccount(db, member, id)
+  if (account.ownerId !== member.id && member.role !== 'owner')
+    throw new AuthError('not_allowed', 'Only the person who added this account can change it')
+  if (input.holderId) await assertHolder(db, member, input.holderId)
+  const [row] = await db
+    .update(accounts)
+    .set({
+      ...(input.name ? { name: input.name } : {}),
+      ...(input.visibility ? { visibility: input.visibility } : {}),
+      ...(input.holderId
+        ? { holderId: input.holderId === account.ownerId ? null : input.holderId }
+        : {}),
+    })
+    .where(eq(accounts.id, id))
+    .returning()
+  await audit(db, {
+    householdId: member.householdId,
+    memberId: member.id,
+    action: 'account.updated',
+    detail: { accountId: id, fields: Object.keys(input) },
+  })
+  return row!
+}
+
+/** The member who holds an account. */
+export function holderOf(account: Pick<AccountRow, 'holderId' | 'ownerId'>): string {
+  return account.holderId ?? account.ownerId
 }
 
 // ---------- Import ----------
@@ -188,14 +257,16 @@ export async function commitPlan(
   db: Conn,
   member: MemberRow,
   groups: readonly ImportGroup[],
-  input: { fileName: string; fileHash: string; skipped: number },
+  input: { fileName: string; fileHash: string; skipped: number; holderId?: string | null },
 ) {
+  const { holderId, ...batchInput } = input
   const batches = []
   for (const [i, g] of groups.entries()) {
     const account =
-      g.account ?? (await createAccount(db, member, { ...g.proposed, visibility: 'household' }))
+      g.account ??
+      (await createAccount(db, member, { ...g.proposed, visibility: 'household', holderId }))
     const batch = await commitImport(db, member, account, {
-      ...input,
+      ...batchInput,
       rows: g.rows,
       skipped: i === 0 ? input.skipped : 0,
     })
@@ -340,6 +411,10 @@ export function monthRange(month: string): [string, string] {
 export interface TransactionFilter {
   month: string
   accountId?: string
+  /** Only cards, or only bank accounts. */
+  kind?: AccountKind
+  /** Only accounts this member holds. */
+  holderId?: string
   /** A category slug, or 'none' for uncategorized. */
   category?: string
   search?: string
@@ -354,6 +429,8 @@ function filterConditions(member: MemberRow, f: TransactionFilter): SQL {
     lt(transactions.occurredOn, to),
   ]
   if (f.accountId) conditions.push(eq(transactions.accountId, f.accountId))
+  if (f.kind) conditions.push(eq(accounts.kind, f.kind))
+  if (f.holderId) conditions.push(sql`${holder} = ${f.holderId}`)
   if (f.category === 'none') conditions.push(isNull(transactions.category))
   else if (f.category && isCategory(f.category))
     conditions.push(eq(transactions.category, f.category))
@@ -379,11 +456,26 @@ export async function listTransactions(db: Conn, member: MemberRow, f: Transacti
   return rows.filter((r) => matchesSearch(r.t.description, f.search)).slice(0, 1000)
 }
 
+/**
+ * A bank row that pays a card bill. When cards and bank accounts are counted together,
+ * these are left out: the card purchases behind them are already counted.
+ */
+function isCardBill(kind: AccountKind, amount: number, description: string): boolean {
+  return kind === 'bank' && amount < 0 && isCardPayment(description)
+}
+
+/** True when a filter mixes cards and bank accounts, so card bills would count twice. */
+function mixesKinds(f: TransactionFilter) {
+  return !f.kind && !f.accountId
+}
+
 /** Money out and in for the filter, leaving out transfers and savings. */
 export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) {
+  const mixed = mixesKinds(f)
   const rows = await db
     .select({
       category: transactions.category,
+      kind: accounts.kind,
       description: transactions.description,
       amount: transactions.amountMinor,
     })
@@ -393,19 +485,67 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
   let spent = 0
   let received = 0
   let count = 0
-  const out = new Map<string | null, number>()
+  let cardBills = 0
+  const byCategory = new Map<string | null, number>()
   for (const r of rows) {
     if (!matchesSearch(r.description, f.search)) continue
     count++
+    if (mixed && isCardBill(r.kind, r.amount, r.description)) {
+      cardBills += r.amount
+      continue
+    }
     if (!countsAsSpending(r.category)) continue
     if (r.amount < 0) {
       spent += r.amount
-      out.set(r.category, (out.get(r.category) ?? 0) + r.amount)
+      byCategory.set(r.category, (byCategory.get(r.category) ?? 0) + r.amount)
     } else received += r.amount
   }
-  const byCategory = [...out].map(([category, minor]) => ({ category, minor }))
-  byCategory.sort((a, b) => a.minor - b.minor)
-  return { spent, received, count, byCategory }
+  return {
+    spent,
+    received,
+    count,
+    /** Card bills paid from a bank account that were left out (only when mixing kinds). */
+    cardBills,
+    byCategory: [...byCategory]
+      .map(([category, minor]) => ({ category, minor }))
+      .sort((a, b) => a.minor - b.minor),
+  }
+}
+
+/** This month's money out and in for each visible account. */
+export async function accountSummaries(db: Conn, member: MemberRow, month: string) {
+  const [from, to] = monthRange(month)
+  const rows = await db
+    .select({
+      account: accounts,
+      category: transactions.category,
+      amount: transactions.amountMinor,
+    })
+    .from(accounts)
+    .leftJoin(
+      transactions,
+      and(
+        eq(transactions.accountId, accounts.id),
+        gte(transactions.occurredOn, from),
+        lt(transactions.occurredOn, to),
+      ),
+    )
+    .where(visibleTo(member))
+    .orderBy(accounts.createdAt)
+  const byAccount = new Map<
+    string,
+    { account: AccountRow; out: number; in: number; count: number }
+  >()
+  for (const r of rows) {
+    const entry = byAccount.get(r.account.id) ?? { account: r.account, out: 0, in: 0, count: 0 }
+    byAccount.set(r.account.id, entry)
+    if (r.amount === null) continue
+    entry.count++
+    if (!countsAsSpending(r.category)) continue
+    if (r.amount < 0) entry.out += r.amount
+    else entry.in += r.amount
+  }
+  return [...byAccount.values()]
 }
 
 /** Months that have transactions, newest first. */
