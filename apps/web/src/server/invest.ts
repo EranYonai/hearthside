@@ -250,7 +250,7 @@ export function cleanHolding(input: HoldingInput): CleanHolding {
     throw new AuthError('not_allowed', 'Enter the ticker or fund number')
   const name = cleanName(input.name, 100)
   if (!name) throw new AuthError('not_allowed', 'Give the holding a name, up to 100 characters')
-  if (!isAssetClass(input.assetClass) || input.assetClass === 'cash')
+  if (!isAssetClass(input.assetClass))
     throw new AuthError('not_allowed', 'Pick what kind of asset it is')
   const price = input.price === undefined || input.price === '' ? null : parseDecimal(input.price)
   if (price === null && input.price !== undefined && input.price !== '')
@@ -258,7 +258,13 @@ export function cleanHolding(input: HoldingInput): CleanHolding {
   return { kind, symbol, name, currency, assetClass: input.assetClass, units, price, costMinor }
 }
 
-async function upsertInstrument(db: Conn, member: MemberRow, h: CleanHolding) {
+async function upsertInstrument(
+  db: Conn,
+  member: MemberRow,
+  h: CleanHolding,
+  /** Imports guess the name and asset type; don't overwrite what a member set. */
+  keepExisting = false,
+) {
   const symbolKey = blindIndex(instrumentKey(h.kind, h.symbol, h.currency))
   const [row] = await db
     .insert(instruments)
@@ -273,7 +279,9 @@ async function upsertInstrument(db: Conn, member: MemberRow, h: CleanHolding) {
     })
     .onConflictDoUpdate({
       target: [instruments.householdId, instruments.symbolKey],
-      set: { name: h.name, assetClass: h.assetClass },
+      set: keepExisting
+        ? { symbolKey: sql`excluded.symbol_key` }
+        : { name: h.name, assetClass: h.assetClass },
     })
     .returning()
   return row!
@@ -324,6 +332,75 @@ export async function saveHolding(
       detail: { accountId, holdingId: row!.id },
     })
     return row!
+  })
+}
+
+/**
+ * Bring an account in line with a holdings file: add or update each row and, with
+ * `removeMissing`, drop imported holdings the file no longer lists. Hand-added ones stay.
+ */
+export async function importHoldings(
+  db: Db,
+  member: MemberRow,
+  accountId: string,
+  rows: readonly Omit<HoldingInput, 'kind'>[],
+  options: { removeMissing: boolean },
+  now = new Date(),
+) {
+  const account = await getVisibleInvestmentAccount(db, member, accountId)
+  assertManage(member, account)
+  if (rows.length === 0 || rows.length > 500)
+    throw new AuthError('not_allowed', 'A file can have 1 to 500 holdings')
+  const clean = rows.map((r) => cleanHolding({ ...r, kind: 'security' }))
+  return db.transaction(async (tx) => {
+    const before = await tx
+      .select({ id: holdings.id, instrumentId: holdings.instrumentId, source: holdings.source })
+      .from(holdings)
+      .where(eq(holdings.accountId, accountId))
+    const seen = new Set<string>()
+    let added = 0
+    for (const h of clean) {
+      const instrument = await upsertInstrument(tx, member, h, true)
+      if (seen.has(instrument.id)) continue
+      seen.add(instrument.id)
+      if (!before.some((b) => b.instrumentId === instrument.id)) added++
+      await tx
+        .insert(holdings)
+        .values({
+          householdId: member.householdId,
+          accountId,
+          instrumentId: instrument.id,
+          units: h.units,
+          costMinor: h.costMinor,
+          source: 'import',
+        })
+        .onConflictDoUpdate({
+          target: [holdings.accountId, holdings.instrumentId],
+          set: { units: h.units, source: 'import', updatedAt: now },
+        })
+      if (h.price)
+        await tx
+          .insert(instrumentPrices)
+          .values({ instrumentId: instrument.id, price: h.price, pricedAt: now, source: 'import' })
+    }
+    const stale = options.removeMissing
+      ? before.filter((b) => b.source === 'import' && !seen.has(b.instrumentId))
+      : []
+    if (stale.length)
+      await tx.delete(holdings).where(
+        inArray(
+          holdings.id,
+          stale.map((b) => b.id),
+        ),
+      )
+    const result = { added, updated: seen.size - added, removed: stale.length }
+    await audit(tx, {
+      householdId: member.householdId,
+      memberId: member.id,
+      action: 'holdings.imported',
+      detail: { accountId, ...result },
+    })
+    return result
   })
 }
 

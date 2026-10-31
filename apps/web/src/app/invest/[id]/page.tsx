@@ -20,6 +20,7 @@ import { requireSession } from '@/server/session'
 import {
   DeleteAccountButton,
   HoldingForm,
+  HoldingsImport,
   InvestmentAccountForm,
   RemoveHoldingButton,
 } from '../client'
@@ -185,6 +186,16 @@ export default async function InvestmentAccountPage({
               </summary>
               <div className="pt-3">
                 <HoldingForm accountId={account.id} accountCurrency={account.currency} />
+              </div>
+            </details>
+          </Card>
+          <Card aria-labelledby="import-title">
+            <details>
+              <summary id="import-title" className="cursor-pointer text-body-strong text-brand-ink">
+                Import holdings from a file
+              </summary>
+              <div className="pt-3">
+                <HoldingsImport accountId={account.id} />
               </div>
             </details>
           </Card>

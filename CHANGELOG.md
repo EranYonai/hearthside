@@ -16,6 +16,8 @@ moves the Unreleased notes under the new version.
 - Welcome steps for each new member, and profile settings with a display currency (#40).
 - Invest tab: investment accounts per member, holdings added by hand, portfolio value and
   allocation (#25, #28, #31).
+- Investments in each member's currency with daily exchange rates, delayed market prices, and
+  holdings import from Excel or CSV (#29, #30, #28).
 
 ### Security
 

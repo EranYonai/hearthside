@@ -9,6 +9,8 @@ import { useAction } from '@/lib/use-action'
 import {
   createInvestmentAccountAction,
   deleteInvestmentAccountAction,
+  importHoldingsAction,
+  previewHoldingsFileAction,
   removeHoldingAction,
   saveHoldingAction,
   setDisplayCurrencyAction,
@@ -449,6 +451,135 @@ export function CurrencySwitch(props: {
         })}
       </div>
       {error && <Notice tone="negative">{error}</Notice>}
+    </div>
+  )
+}
+
+interface PreviewRow {
+  symbol: string
+  name: string
+  units: string
+  price: string | null
+  currency: string | null
+  assetClass: string
+}
+
+/** Upload a holdings export, check what was read, then bring the account in line with it. */
+export function HoldingsImport({ accountId }: { accountId: string }) {
+  const router = useRouter()
+  const [preview, setPreview] = useState<{
+    holdings: PreviewRow[]
+    skipped: { row: number; reason: string }[]
+    priceInHundredths: boolean
+  }>()
+  const [removeMissing, setRemoveMissing] = useState(true)
+  const [done, setDone] = useState<string>()
+  const { pending, error, run } = useAction()
+  return (
+    <div className="grid gap-4">
+      <p className="text-caption text-ink-muted">
+        An Excel or CSV export with a symbol or security number and a quantity per row. Prices and
+        values are used when the file has them; live prices take over where we find them.
+      </p>
+      <form
+        className="grid gap-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          const form = new FormData(e.currentTarget)
+          setDone(undefined)
+          run(async () => {
+            const result = await previewHoldingsFileAction(accountId, form)
+            if (result.ok) setPreview(result)
+            return result
+          })
+        }}
+      >
+        <label className="grid gap-1">
+          <span className="text-body-strong">Holdings file</span>
+          <input
+            type="file"
+            name="file"
+            required
+            accept=".xlsx,.csv,.xls,.html,.htm,.txt"
+            className="min-h-11 text-body"
+          />
+        </label>
+        <Button type="submit" variant="secondary" disabled={pending} className="justify-self-start">
+          Read file
+        </Button>
+      </form>
+      {preview && (
+        <div className="grid gap-3" data-testid="holdings-preview">
+          <p className="text-body-strong">
+            {preview.holdings.length} {preview.holdings.length === 1 ? 'holding' : 'holdings'} found
+            {preview.skipped.length > 0 && `, ${preview.skipped.length} rows skipped`}
+          </p>
+          {preview.priceInHundredths && (
+            <Notice tone="info">
+              Prices in the file were in agorot and were turned into shekels.
+            </Notice>
+          )}
+          <ul className="grid gap-1 text-caption">
+            {preview.holdings.map((h) => (
+              <li key={h.symbol} className="flex justify-between gap-2">
+                <span className="truncate">
+                  {h.name} <span className="text-ink-muted">{h.symbol}</span>
+                </span>
+                <span className="whitespace-nowrap tabular-nums">
+                  {h.units}
+                  {h.price ? ` × ${h.price} ${h.currency}` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {preview.skipped.length > 0 && (
+            <details className="text-caption text-ink-muted">
+              <summary className="cursor-pointer">Skipped rows</summary>
+              <ul>
+                {preview.skipped.map((s) => (
+                  <li key={s.row}>
+                    Row {s.row}: {s.reason}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          <label className="flex min-h-11 items-center gap-2">
+            <input
+              type="checkbox"
+              checked={removeMissing}
+              onChange={(e) => setRemoveMissing(e.target.checked)}
+            />
+            Remove imported holdings that aren’t in this file (sold)
+          </label>
+          <Button
+            disabled={pending}
+            className="justify-self-start"
+            onClick={() =>
+              run(async () => {
+                const result = await importHoldingsAction(
+                  accountId,
+                  preview.holdings,
+                  removeMissing,
+                )
+                if (result.ok) {
+                  setDone(
+                    `Added ${result.added}, updated ${result.updated}, removed ${result.removed}.`,
+                  )
+                  setPreview(undefined)
+                  router.refresh()
+                }
+                return result
+              })
+            }
+          >
+            Import {preview.holdings.length}{' '}
+            {preview.holdings.length === 1 ? 'holding' : 'holdings'}
+          </Button>
+        </div>
+      )}
+      {error && <Notice tone="negative">{error}</Notice>}
+      {done && <Notice tone="positive">{done}</Notice>}
     </div>
   )
 }
