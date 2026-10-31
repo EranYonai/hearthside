@@ -352,3 +352,13 @@ describe('detectSource fallbacks', () => {
     expect(providerLabel(null)).toBeNull()
   })
 })
+
+describe('isCardPayment', () => {
+  it('spots card bills in bank descriptions', async () => {
+    const { isCardPayment } = await import('./detect')
+    expect(isCardPayment('ישראכרט חיוב')).toBe(true)
+    expect(isCardPayment('MAX IT FINANCE')).toBe(true)
+    expect(isCardPayment('Fresh Market')).toBe(false)
+    expect(isCardPayment('Salary')).toBe(false)
+  })
+})

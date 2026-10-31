@@ -5,44 +5,25 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
+import { isMonth, monthName, shiftMonth } from '@/lib/month'
 import {
   canEdit,
+  holderOf,
   listAccounts,
   listMonths,
   listTransactions,
-  monthRange,
   totals,
   type TransactionFilter,
 } from '@/server/ledger'
+import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
 import { CategorisedRow, type TxView } from './client'
 
 export const metadata: Metadata = { title: 'Transactions · Hearthside' }
 export const dynamic = 'force-dynamic'
 
-const monthName = new Intl.DateTimeFormat('en-GB', {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-})
 const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 const selectClass = 'min-h-11 rounded-md border border-line bg-surface-2 px-3'
-
-function shift(month: string, by: number) {
-  const [y, m] = month.split('-').map(Number) as [number, number]
-  const d = new Date(Date.UTC(y, m - 1 + by, 1))
-  return d.toISOString().slice(0, 7)
-}
-
-function isMonth(v: unknown): v is string {
-  if (typeof v !== 'string') return false
-  try {
-    monthRange(v)
-    return true
-  } catch {
-    return false
-  }
-}
 
 type Search = Record<string, string | string[] | undefined>
 
@@ -56,13 +37,24 @@ export default async function TransactionsPage({
   const params = await searchParams
   const one = (k: string) => (typeof params[k] === 'string' ? (params[k] as string) : undefined)
 
-  const [months, accounts] = await Promise.all([listMonths(db, member), listAccounts(db, member)])
+  const [months, allAccounts, people] = await Promise.all([
+    listMonths(db, member),
+    listAccounts(db, member),
+    listMembers(db, household.id),
+  ])
   const month = isMonth(one('month'))
     ? one('month')!
     : (months[0] ?? new Date().toISOString().slice(0, 7))
+  const type = one('type') === 'card' || one('type') === 'bank' ? one('type') : undefined
+  const holderId = people.some((p) => p.id === one('who')) ? one('who') : undefined
+  const accounts = allAccounts.filter(
+    (a) => (!type || a.kind === type) && (!holderId || holderOf(a) === holderId),
+  )
   const accountId = accounts.some((a) => a.id === one('account')) ? one('account') : undefined
   const filter: TransactionFilter = {
     month,
+    ...(type ? { kind: type as 'card' | 'bank' } : {}),
+    ...(holderId ? { holderId } : {}),
     ...(accountId ? { accountId } : {}),
     ...(one('category') ? { category: one('category')! } : {}),
     ...(one('q') ? { search: one('q')!.slice(0, 100) } : {}),
@@ -72,10 +64,18 @@ export default async function TransactionsPage({
     totals(db, member, filter),
   ])
   const editable = canEdit(member)
-  const query = (m: string) => {
-    const p = new URLSearchParams({ ...(params as Record<string, string>), month: m })
+  const query = (change: Record<string, string | undefined>) => {
+    const p = new URLSearchParams()
+    for (const [k, v] of Object.entries({ ...(params as Record<string, string>), ...change }))
+      if (typeof v === 'string' && v) p.set(k, v)
     return `/transactions?${p}`
   }
+  const kinds = new Set(allAccounts.map((a) => a.kind))
+  const tabs = [
+    { label: 'All', value: undefined },
+    ...(kinds.has('card') ? [{ label: 'Cards', value: 'card' }] : []),
+    ...(kinds.has('bank') ? [{ label: 'Bank accounts', value: 'bank' }] : []),
+  ]
   const spent = Math.abs(sum.spent)
   const segments = sum.byCategory.map((c) => ({
     name: categoryLabel(c.category),
@@ -101,7 +101,7 @@ export default async function TransactionsPage({
     <AppShell household={household.name} current="/transactions">
       <div className="flex items-center justify-between gap-2">
         <Link
-          href={query(shift(month, -1))}
+          href={query({ month: shiftMonth(month, -1) })}
           aria-label="Previous month"
           className={buttonClasses('ghost')}
         >
@@ -109,7 +109,7 @@ export default async function TransactionsPage({
         </Link>
         <h1 className="font-display text-title">{label}</h1>
         <Link
-          href={query(shift(month, 1))}
+          href={query({ month: shiftMonth(month, 1) })}
           aria-label="Next month"
           className={buttonClasses('ghost')}
         >
@@ -117,19 +117,63 @@ export default async function TransactionsPage({
         </Link>
       </div>
 
-      <SummaryCard label={`Spent in ${label}`} minor={-spent} segments={segments} />
-      {sum.received > 0 && (
-        <p className="-mt-3 text-caption text-ink-muted">
-          Money in: <Amount minor={sum.received} signed whole className="text-caption" />
+      {tabs.length > 2 && (
+        <nav aria-label="Account type" className="flex gap-1 rounded-md bg-surface-2 p-1">
+          {tabs.map((t) => (
+            <Link
+              key={t.label}
+              href={query({ type: t.value ?? '', account: '' })}
+              aria-current={type === t.value ? 'page' : undefined}
+              className="flex min-h-11 flex-1 items-center justify-center rounded-sm px-2 text-center text-body-strong text-ink-muted aria-[current=page]:bg-surface-1 aria-[current=page]:text-ink aria-[current=page]:shadow-card"
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+      )}
+
+      <SummaryCard
+        label={type === 'bank' ? `Money out in ${label}` : `Spent in ${label}`}
+        minor={-spent}
+        segments={segments}
+      />
+      {(sum.received > 0 || sum.cardBills < 0) && (
+        <p className="-mt-3 grid gap-1 text-caption text-ink-muted">
+          {sum.received > 0 && (
+            <span>
+              Money in: <Amount minor={sum.received} signed whole className="text-caption" />
+            </span>
+          )}
+          {sum.cardBills < 0 && (
+            <span data-testid="card-bills">
+              Card bills paid from the bank (
+              <Amount minor={sum.cardBills} whole className="text-caption" />) aren’t counted again,
+              since the card purchases already are.
+            </span>
+          )}
         </p>
       )}
 
       <form
-        className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]"
+        className={`grid gap-2 ${people.length > 1 ? 'sm:grid-cols-[1fr_1fr_1fr_1fr_auto]' : 'sm:grid-cols-[1fr_1fr_1fr_auto]'}`}
         action="/transactions"
         role="search"
       >
         <input type="hidden" name="month" value={month} />
+        {type && <input type="hidden" name="type" value={type} />}
+        {people.length > 1 && (
+          <label className="grid gap-1">
+            <span className="text-caption text-ink-muted">Whose</span>
+            <select name="who" defaultValue={holderId ?? ''} className={selectClass}>
+              <option value="">Everyone</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.id === member.id ? `${p.name} (you)` : p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="grid gap-1">
           <span className="text-caption text-ink-muted">Account</span>
           <select name="account" defaultValue={accountId ?? ''} className={selectClass}>

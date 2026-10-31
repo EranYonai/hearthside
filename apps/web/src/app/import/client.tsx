@@ -78,11 +78,21 @@ async function post(form: FormData) {
  * Drop a statement (or pick one): the file is checked right away, its account is
  * recognised or created, and one click imports it.
  */
-export function ImportForm({ accounts }: { accounts: AccountOption[] }) {
+export function ImportForm({
+  accounts,
+  people = [],
+  me,
+}: {
+  accounts: AccountOption[]
+  /** Members who can hold a new account; the picker shows when there's more than one. */
+  people?: { id: string; name: string }[]
+  me?: string
+}) {
   const router = useRouter()
   const input = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File>()
   const [accountId, setAccountId] = useState('')
+  const [holderId, setHolderId] = useState(me ?? '')
   const [dragging, setDragging] = useState(false)
   const [preview, setPreview] = useState<Preview>()
   const [done, setDone] = useState<Done>()
@@ -94,6 +104,7 @@ export function ImportForm({ accounts }: { accounts: AccountOption[] }) {
     form.set('file', f)
     if (target) form.set('accountId', target)
     if (commit) form.set('commit', '1')
+    if (commit && holderId) form.set('holderId', holderId)
     setBusy(commit ? 'import' : 'check')
     setError(undefined)
     try {
@@ -240,6 +251,23 @@ export function ImportForm({ accounts }: { accounts: AccountOption[] }) {
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {created.length > 0 && people.length > 1 && (
+            <label className="grid gap-1">
+              <span className="text-caption text-ink-muted">Whose is the new account</span>
+              <select
+                className={selectClass}
+                value={holderId}
+                onChange={(e) => setHolderId(e.target.value)}
+              >
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
                   </option>
                 ))}
               </select>

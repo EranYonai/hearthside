@@ -158,6 +158,8 @@ export const accounts = pgTable(
     ownerId: uuid('owner_id')
       .notNull()
       .references(() => members.id, { onDelete: 'cascade' }),
+    /** The member who holds the card or account; null means the owner. */
+    holderId: uuid('holder_id').references(() => members.id, { onDelete: 'set null' }),
     name: text('name').notNull(),
     kind: text('kind', { enum: ['card', 'bank', 'other'] }).notNull(),
     /** Where statements come from (see PROVIDERS in core); null when unknown. */

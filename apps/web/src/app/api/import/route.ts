@@ -64,6 +64,8 @@ export const POST = authRoute(async ({ request, db }) => {
   const accountIdValue = form?.get('accountId')
   const accountId =
     typeof accountIdValue === 'string' && accountIdValue ? accountIdValue : undefined
+  const holderValue = form?.get('holderId')
+  const holderId = typeof holderValue === 'string' && holderValue ? holderValue : null
 
   const bytes = new Uint8Array(await file.arrayBuffer())
   const fileHash = sha256(Buffer.from(bytes).toString('base64'))
@@ -91,6 +93,7 @@ export const POST = authRoute(async ({ request, db }) => {
       fileName: file.name,
       fileHash,
       skipped: parsed.skipped.length,
+      holderId,
     })
     const latest = parsed.transactions.reduce((m, r) => (r.occurredOn > m ? r.occurredOn : m), '')
     return json({
