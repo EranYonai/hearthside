@@ -1,10 +1,10 @@
 'use client'
 
-import { CATEGORIES, categoryLabel, type Minor } from '@hearthside/core'
+import type { CategoryIconName, Minor } from '@hearthside/core'
 import { Button, CategoryIcon, Notice, TransactionRow, type Category } from '@hearthside/ui'
 import { useRef, useState } from 'react'
 import { useAction } from '@/lib/use-action'
-import { setCategoryAction } from './actions'
+import { categorizeNowAction, setCategoryAction } from './actions'
 
 export interface TxView {
   id: string
@@ -12,27 +12,74 @@ export interface TxView {
   meta: string
   minor: Minor
   category: string | null
+  label: string
+  icon: CategoryIconName
+  /** Filed by the categorizer rather than a person or a rule. */
+  auto?: boolean
   original?: { minor: Minor; currency: string }
   installment?: { n: number; total: number }
 }
 
 function rowProps(tx: TxView) {
   return {
-    category: (tx.category ?? 'other') as Category,
+    category: tx.icon as Category,
     merchant: tx.description,
-    meta: `${categoryLabel(tx.category)} · ${tx.meta}`,
+    meta: `${tx.label}${tx.auto ? ' (auto)' : ''} · ${tx.meta}`,
     minor: tx.minor,
     ...(tx.original ? { original: tx.original } : {}),
     ...(tx.installment ? { installment: tx.installment } : {}),
   }
 }
 
-export function CategorisedRow({ tx, editable }: { tx: TxView; editable: boolean }) {
-  if (!editable) return <TransactionRow {...rowProps(tx)} />
-  return <EditableRow tx={tx} />
+export interface CategoryChoice {
+  slug: string
+  label: string
+  icon: CategoryIconName
 }
 
-function EditableRow({ tx }: { tx: TxView }) {
+export function CategorisedRow({
+  tx,
+  editable,
+  options,
+}: {
+  tx: TxView
+  editable: boolean
+  options: readonly CategoryChoice[]
+}) {
+  if (!editable) return <TransactionRow {...rowProps(tx)} />
+  return <EditableRow tx={tx} options={options} />
+}
+
+/** Run the categorizer on everything that has no category yet. */
+export function CategorizeNow() {
+  const [note, setNote] = useState<string>()
+  const { pending, error, run } = useAction()
+  const go = () =>
+    run(async () => {
+      setNote(undefined)
+      const result = await categorizeNowAction()
+      if (result.ok)
+        setNote(
+          result.background
+            ? 'Categorizing in the background. Refresh in a minute to see the results.'
+            : result.waiting
+              ? `Filed ${result.filed}. The model isn’t ready yet, so the rest wait for it.`
+              : `Filed ${result.filed} ${result.filed === 1 ? 'transaction' : 'transactions'}.`,
+        )
+      return result
+    })
+  return (
+    <div className="grid justify-items-start gap-2">
+      <Button variant="secondary" disabled={pending} onClick={go}>
+        {pending ? 'Categorizing…' : 'Categorize now'}
+      </Button>
+      {note && <Notice tone="positive">{note}</Notice>}
+      {error && <Notice tone="negative">{error}</Notice>}
+    </div>
+  )
+}
+
+function EditableRow({ tx, options }: { tx: TxView; options: readonly CategoryChoice[] }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [remember, setRemember] = useState(true)
   const [note, setNote] = useState<string>()
@@ -56,7 +103,7 @@ function EditableRow({ tx }: { tx: TxView }) {
         setNote(undefined)
         dialog.current?.showModal()
       }}
-      selectLabel={`${tx.description}, ${categoryLabel(tx.category)}. Change category`}
+      selectLabel={`${tx.description}, ${tx.label}. Change category`}
     >
       {note && <Notice tone="positive">{note}</Notice>}
       <dialog
@@ -68,7 +115,7 @@ function EditableRow({ tx }: { tx: TxView }) {
           Category for <bdi>{tx.description}</bdi>
         </h2>
         <ul className="grid grid-cols-2 gap-2">
-          {CATEGORIES.map((c) => (
+          {options.map((c) => (
             <li key={c.slug}>
               <button
                 type="button"
@@ -78,7 +125,7 @@ function EditableRow({ tx }: { tx: TxView }) {
                 className="flex min-h-11 w-full items-center gap-2 rounded-md border border-line px-2 text-start aria-pressed:border-brand aria-pressed:bg-brand-soft"
               >
                 <CategoryIcon
-                  category={c.slug}
+                  category={c.icon}
                   active={tx.category === c.slug}
                   className="size-7"
                 />

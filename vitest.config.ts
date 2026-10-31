@@ -56,6 +56,10 @@ export default defineConfig({
         extends: true,
         test: { name: 'worker', include: ['apps/worker/src/**/*.test.ts'], environment: 'node' },
       },
+      {
+        extends: true,
+        test: { name: 'decide', include: ['apps/decide/src/**/*.test.ts'], environment: 'node' },
+      },
     ],
     coverage: {
       provider: 'v8',
@@ -64,6 +68,7 @@ export default defineConfig({
         '**/*.test.*',
         '**/index.ts',
         'apps/worker/src/main.ts',
+        'apps/decide/src/main.ts',
         // Pages, route handlers and browser glue are covered by the Playwright suite.
         'apps/web/src/app/**',
         'apps/web/src/components/**',

@@ -3,6 +3,8 @@ packages:
   - packages/*
 allowBuilds:
   esbuild: false
+  # CPU binaries ship in the package; its install script only fetches GPU extras.
+  onnxruntime-node: false
   unrs-resolver: false
 minimumReleaseAgeExclude:
   - lucide-react@1.65.0

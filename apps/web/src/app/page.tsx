@@ -1,10 +1,10 @@
-import { categoryLabel } from '@hearthside/core'
 import { Card, Label, SummaryCard, buttonClasses } from '@hearthside/ui'
 import { FileUp, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
+import { householdCategorySet } from '@/server/categories'
 import { canEdit, listMonths, totals } from '@/server/ledger'
 import { getHousehold, listMembers } from '@/server/repo'
 import { currentSession, requireSession } from '@/server/session'
@@ -22,7 +22,10 @@ export default async function Home() {
   ])
   const solo = people.length === 1
   const latest = months[0]
-  const sum = latest ? await totals(db, member, { month: latest }) : undefined
+  const [sum, categories] = await Promise.all([
+    latest ? totals(db, member, { month: latest }) : undefined,
+    householdCategorySet(db, member.householdId),
+  ])
   const spent = sum ? Math.abs(sum.spent) : 0
   const monthLabel = latest
     ? new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' }).format(
@@ -38,7 +41,7 @@ export default async function Home() {
             label={`Spent in ${monthLabel}`}
             minor={-spent}
             segments={sum.byCategory.map((c) => ({
-              name: categoryLabel(c.category),
+              name: categories.label(c.category),
               minor: Math.abs(c.minor),
               percent: spent ? (Math.abs(c.minor) / spent) * 100 : 0,
             }))}

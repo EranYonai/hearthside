@@ -9,6 +9,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  real,
   smallint,
   text,
   timestamp,
@@ -236,7 +237,14 @@ export const transactions = pgTable(
     reference: text('reference'),
     notes: text('notes'),
     category: text('category'),
-    categorySource: text('category_source', { enum: ['rule', 'manual'] }),
+    /** rule: an "always use this" rule; manual: someone picked it; auto: the categorizer. */
+    categorySource: text('category_source', { enum: ['rule', 'manual', 'auto'] }),
+    /** For auto: history, keyword or model. */
+    categoryVia: text('category_via'),
+    /** For auto: 0..1. */
+    categoryConfidence: real('category_confidence'),
+    /** When the categorizer (with the model) last looked at it. null means it is waiting. */
+    categoryCheckedAt: timestamp('category_checked_at', { withTimezone: true }),
     /** SHA-256 of the duplicate key from the parser. */
     dedupKey: text('dedup_key').notNull(),
     createdAt: createdAt(),
@@ -246,6 +254,9 @@ export const transactions = pgTable(
     index('transactions_household_date_idx').on(t.householdId, t.occurredOn),
     index('transactions_batch_idx').on(t.batchId),
     index('transactions_description_idx').on(t.householdId, t.descriptionKey),
+    index('transactions_uncategorized_idx')
+      .on(t.householdId)
+      .where(sql`${t.category} is null and ${t.categoryCheckedAt} is null`),
   ],
 )
 
@@ -266,6 +277,32 @@ export const categoryRules = pgTable(
   (t) => [uniqueIndex('category_rules_match_idx').on(t.householdId, t.match)],
 )
 
+/** Categories a household added on top of the built-in ones. */
+export const householdCategories = pgTable(
+  'household_categories',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    /** "c-" plus random characters; what transactions and rules store. */
+    slug: text('slug').notNull(),
+    label: text('label').notNull(),
+    icon: text('icon').notNull(),
+    direction: text('direction', { enum: ['out', 'in'] })
+      .notNull()
+      .default('out'),
+    keywords: jsonb('keywords').$type<string[]>().notNull().default([]),
+    createdBy: uuid('created_by').references(() => members.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('household_categories_slug_idx').on(t.householdId, t.slug),
+    uniqueIndex('household_categories_label_idx').on(t.householdId, sql`lower(${t.label})`),
+    check('household_categories_direction_check', sql`${t.direction} in ('out', 'in')`),
+  ],
+)
+
 export type Household = typeof households.$inferSelect
 export type MemberRow = typeof members.$inferSelect
 export type PasskeyRow = typeof passkeys.$inferSelect
@@ -274,3 +311,4 @@ export type InviteRow = typeof invites.$inferSelect
 export type AccountRow = typeof accounts.$inferSelect
 export type TransactionRow = typeof transactions.$inferSelect
 export type ImportBatchRow = typeof importBatches.$inferSelect
+export type HouseholdCategoryRow = typeof householdCategories.$inferSelect
