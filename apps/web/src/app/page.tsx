@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic'
 export default async function Home() {
   if (!(await currentSession()) && !(await getHousehold(requireDb()))) redirect('/setup')
   const { member, household } = await requireSession()
+  if (!member.onboardedAt) redirect('/welcome')
   const db = requireDb()
   const [people, months] = await Promise.all([
     listMembers(db, household.id),
