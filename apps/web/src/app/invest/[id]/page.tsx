@@ -28,7 +28,6 @@ import {
   RemoveMovementButton,
 } from '../client'
 import { AccountMark } from '@/components/AccountCard'
-import { listBrandLogos } from '@/server/logos'
 
 export const metadata: Metadata = { title: 'Investment account · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -61,11 +60,10 @@ export default async function InvestmentAccountPage({
     throw err
   })
   await keepQuotesFresh(db)
-  const [list, people, movements, logos] = await Promise.all([
+  const [list, people, movements] = await Promise.all([
     listHoldings(db, member, [account.id]),
     listMembers(db, household.id),
     listMovements(db, member, [account.id]),
-    listBrandLogos(db, household.id),
   ])
   const { rates } = await currentRates(db)
   const summary = summarizePortfolio(list, account.currency, rates)
@@ -85,7 +83,7 @@ export default async function InvestmentAccountPage({
       </Link>
       <div className="grid gap-1">
         <h1 className="flex items-center gap-2 font-display text-title">
-          <AccountMark name={account.name} provider={account.provider} logos={logos} />
+          <AccountMark name={account.name} provider={account.provider} />
           {account.name}
         </h1>
         <p className="text-caption text-ink-muted">

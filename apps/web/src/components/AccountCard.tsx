@@ -1,12 +1,9 @@
-import { accountLook } from '@hearthside/core'
+import { accountLook, logoPath } from '@hearthside/core'
 import { cx } from '@hearthside/ui'
 import { CreditCard, Landmark, TrendingUp, Wallet } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
-/**
- * Card networks as styled names on a small chip. Their logos are trademarks, so we write the
- * name in a color close to theirs instead of drawing the mark.
- */
+/** Card networks: their logo on a small white chip, or the styled name when there's no logo. */
 export const NETWORKS: Record<string, { label: string; className: string; style: CSSProperties }> =
   {
     visa: {
@@ -38,6 +35,21 @@ export const NETWORKS: Record<string, { label: string; className: string; style:
 
 export function NetworkMark({ network }: { network: string }) {
   const n = NETWORKS[network]
+  const logo = logoPath(network)
+  if (logo)
+    return (
+      <span
+        className="flex h-5 flex-none items-center rounded-sm bg-white px-1 shadow-[0_0_0_1px_rgb(0_0_0/0.08)]"
+        data-testid="network-mark"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- a tiny static logo */}
+        <img
+          src={logo}
+          alt={n?.label ?? network}
+          className="h-3.5 w-auto max-w-14 object-contain"
+        />
+      </span>
+    )
   return (
     <span
       className={cx(
@@ -64,8 +76,6 @@ export interface AccountCardProps {
   provider?: string | null
   /** The person's own color; overrides the provider's. */
   color?: string | null
-  /** The household's uploaded logos by brand id (data: URLs); the provider's one is shown. */
-  logos?: Partial<Record<string, string>>
   network?: string | null
   last4?: string | null
   /** Small caption under the card, e.g. "Only you" or "New account". */
@@ -78,31 +88,30 @@ export function AccountMark({
   name,
   provider,
   color,
-  logos,
   size = 'md',
   onColor = false,
   className,
-}: Pick<AccountCardProps, 'name' | 'provider' | 'color' | 'logos' | 'className'> & {
+}: Pick<AccountCardProps, 'name' | 'provider' | 'color' | 'className'> & {
   size?: 'sm' | 'md'
   /** Sits on a painted card: a glassy badge in the card's own ink. */
   onColor?: boolean
 }) {
   const look = accountLook({ name, provider, color })
   const filled = look.color !== null && !onColor
-  const logo = look.brand ? logos?.[look.brand] : undefined
+  const logo = logoPath(look.brand)
   if (logo)
     return (
       <span
         aria-hidden
         className={cx(
-          'grid flex-none place-items-center overflow-hidden rounded-md bg-white p-0.5 ring-1 ring-black/10',
-          size === 'sm' ? 'size-6' : 'size-8',
+          'flex flex-none items-center justify-center overflow-hidden rounded-md bg-white ring-1 ring-black/10',
+          size === 'sm' ? 'h-6 min-w-6 max-w-16 px-0.5' : 'h-8 min-w-8 max-w-24 px-1',
           className,
         )}
         data-testid="account-mark"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- a small data: URL, nothing to optimize */}
-        <img src={logo} alt="" className="size-full object-contain" />
+        {/* eslint-disable-next-line @next/next/no-img-element -- a tiny static logo */}
+        <img src={logo} alt="" className="h-[75%] w-auto max-w-full object-contain" />
       </span>
     )
   return (
@@ -116,7 +125,7 @@ export function AccountMark({
           : !filled && 'bg-surface-1 text-ink-muted',
         className,
       )}
-      style={filled ? { background: look.color!, color: look.ink! } : undefined}
+      style={filled ? { background: look.face!, color: look.ink! } : undefined}
       data-testid="account-mark"
     >
       {look.mono}
@@ -126,15 +135,14 @@ export function AccountMark({
 
 /**
  * A small card-shaped tile. Cards wear their provider's color like the plastic does; bank
- * accounts get a colored stripe and badge on a calm surface. We ship no logos; a household can
- * upload its own, which then replaces the initials.
+ * accounts get a colored stripe and badge on a calm surface. Known providers show their logo
+ * (apps/web/public/logos), the rest their initials.
  */
 export function AccountCard({
   name,
   kind,
   provider,
   color,
-  logos,
   network,
   last4,
   note,
@@ -154,7 +162,7 @@ export function AccountCard({
 
   const style: CSSProperties | undefined = painted
     ? {
-        background: `radial-gradient(120% 90% at 100% 0%, ${look.accent}55, transparent 60%), linear-gradient(135deg, ${look.color}, ${look.deep})`,
+        background: `radial-gradient(120% 90% at 100% 0%, ${look.accent}55, transparent 60%), linear-gradient(135deg, ${look.face}, ${look.deep})`,
         color: look.ink!,
       }
     : undefined
@@ -185,14 +193,10 @@ export function AccountCard({
       )}
       <div className="flex min-w-0 items-start justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
-          <AccountMark
-            name={name}
-            provider={provider}
-            color={color}
-            logos={logos}
-            onColor={painted}
-          />
-          <span className="truncate text-body-strong">{look.label ?? name}</span>
+          <AccountMark name={name} provider={provider} color={color} onColor={painted} />
+          <span className={cx('truncate text-body-strong', logoPath(look.brand) && 'sr-only')}>
+            {look.label ?? name}
+          </span>
         </span>
         <Icon size={20} aria-hidden className={cx('flex-none', muted)} />
       </div>

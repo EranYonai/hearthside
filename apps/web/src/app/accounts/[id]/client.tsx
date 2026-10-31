@@ -4,7 +4,6 @@ import {
   ACCOUNT_SWATCHES,
   BRANDS,
   CARD_NETWORKS,
-  isProviderId,
   PROVIDERS,
   accountLook,
   normalizeHexColor,
@@ -15,7 +14,6 @@ import { Check, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { AccountCard, NETWORKS } from '@/components/AccountCard'
-import { BrandLogoPicker } from '@/components/BrandLogoPicker'
 import { useAction } from '@/lib/use-action'
 import { deleteAccountAction, updateAccountAction } from '../actions'
 
@@ -62,7 +60,6 @@ export function EditAccountForm(props: {
   color: string | null
   network: string | null
   last4: string | null
-  logos: Partial<Record<string, string>>
   holderId: string
   visibility: 'household' | 'private'
   people: { id: string; name: string }[]
@@ -107,7 +104,6 @@ export function EditAccountForm(props: {
           kind={props.kind}
           provider={provider}
           color={color}
-          logos={props.logos}
           network={network}
           last4={props.last4}
         />
@@ -145,16 +141,6 @@ export function EditAccountForm(props: {
           </optgroup>
         </select>
       </label>
-      {provider && isProviderId(provider) && (
-        <div className="grid gap-1">
-          <span className="text-body-strong">Logo</span>
-          <BrandLogoPicker brand={provider} logo={props.logos[provider]} compact />
-          <span className="text-caption text-ink-muted">
-            Shared by every {PROVIDERS[provider].label} account in your home. It stays private to
-            your home.
-          </span>
-        </div>
-      )}
       {props.kind === 'card' && (
         <label className="grid gap-1">
           <span className="text-body-strong">Card network</span>

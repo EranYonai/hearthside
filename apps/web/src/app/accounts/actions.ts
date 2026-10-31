@@ -6,7 +6,6 @@ import { runAction } from '@/server/action'
 import { cleanName } from '@/server/http'
 import { deleteAccount, updateAccount, type AccountVisibility } from '@/server/ledger'
 import { AuthError } from '@/server/repo'
-import { removeBrandLogo, setBrandLogo } from '@/server/logos'
 import { requireSession } from '@/server/session'
 
 const VISIBILITIES: AccountVisibility[] = ['household', 'private']
@@ -51,22 +50,4 @@ export async function deleteAccountAction(id: string) {
   return runAction(['/accounts', '/transactions', '/import', '/'], () =>
     deleteAccount(requireDb(), member, id),
   )
-}
-
-const LOGO_PATHS = ['/accounts', '/invest', '/import', '/settings', '/welcome', '/']
-
-export async function setBrandLogoAction(brand: string, image: string) {
-  const { member } = await requireSession()
-  return runAction(LOGO_PATHS, async () => {
-    await setBrandLogo(requireDb(), member, brand, image)
-    return {}
-  })
-}
-
-export async function removeBrandLogoAction(brand: string) {
-  const { member } = await requireSession()
-  return runAction(LOGO_PATHS, async () => {
-    await removeBrandLogo(requireDb(), member, brand)
-    return {}
-  })
 }

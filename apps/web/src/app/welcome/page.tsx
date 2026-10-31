@@ -21,7 +21,6 @@ import { requireSession } from '@/server/session'
 import { AccountForm, ImportForm } from '../import/client'
 import { InviteCreator } from '../settings/client'
 import { FinishButton, ProfileForm } from './client'
-import { listBrandLogos } from '@/server/logos'
 
 export const metadata: Metadata = { title: 'Welcome · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -61,10 +60,9 @@ export default async function WelcomePage({
       </Card>
     )
   } else if (step === 'accounts') {
-    const [all, people, logos] = await Promise.all([
+    const [all, people] = await Promise.all([
       listAccounts(db, member),
       listMembers(db, household.id),
-      listBrandLogos(db, household.id),
     ])
     const mine = all.filter((a) => a.ownerId === member.id)
     body = (
@@ -89,7 +87,6 @@ export default async function WelcomePage({
                     name={a.name}
                     kind={a.kind}
                     provider={a.provider}
-                    logos={logos}
                     color={a.color}
                     network={a.network}
                     last4={a.last4}
