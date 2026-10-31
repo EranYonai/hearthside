@@ -9,6 +9,7 @@ import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
 import { InvestImport } from '../invest/client'
 import { ImportForm, UndoImport } from './client'
+import { listBrandLogos } from '@/server/logos'
 
 export const metadata: Metadata = { title: 'Import · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -31,11 +32,12 @@ export default async function ImportPage() {
       </AppShell>
     )
   }
-  const [accounts, batches, people, investAccounts] = await Promise.all([
+  const [accounts, batches, people, investAccounts, logos] = await Promise.all([
     listAccounts(db, member),
     listBatches(db, member),
     listMembers(db, household.id),
     listInvestmentAccounts(db, member),
+    listBrandLogos(db, household.id),
   ])
   const investable = investAccounts.filter((a) => mayManage(member, a))
   const mine = accounts.filter((a) => a.ownerId === member.id)
@@ -51,6 +53,7 @@ export default async function ImportPage() {
             .filter((p) => p.role !== 'viewer')
             .map((p) => ({ id: p.id, name: p.id === member.id ? `${p.name} (you)` : p.name }))}
           me={member.id}
+          logos={logos}
         />
       </Card>
 

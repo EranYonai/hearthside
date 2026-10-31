@@ -3,6 +3,8 @@
 import {
   ACCOUNT_SWATCHES,
   BRANDS,
+  CARD_NETWORKS,
+  isProviderId,
   PROVIDERS,
   accountLook,
   normalizeHexColor,
@@ -12,7 +14,8 @@ import { Button, Notice, TextField, cx } from '@hearthside/ui'
 import { Check, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { AccountCard } from '@/components/AccountCard'
+import { AccountCard, NETWORKS } from '@/components/AccountCard'
+import { BrandLogoPicker } from '@/components/BrandLogoPicker'
 import { useAction } from '@/lib/use-action'
 import { deleteAccountAction, updateAccountAction } from '../actions'
 
@@ -59,6 +62,7 @@ export function EditAccountForm(props: {
   color: string | null
   network: string | null
   last4: string | null
+  logos: Partial<Record<string, string>>
   holderId: string
   visibility: 'household' | 'private'
   people: { id: string; name: string }[]
@@ -69,6 +73,7 @@ export function EditAccountForm(props: {
   const [visibility, setVisibility] = useState(props.visibility)
   const [provider, setProvider] = useState<string | null>(props.provider)
   const [color, setColor] = useState<string | null>(normalizeHexColor(props.color))
+  const [network, setNetwork] = useState<string | null>(props.network)
   const brandColor = provider && provider in BRANDS ? BRANDS[provider as ProviderId].color : null
   const custom = color !== null && !(ACCOUNT_SWATCHES as readonly string[]).includes(color)
   const [saved, setSaved] = useState(false)
@@ -80,7 +85,15 @@ export function EditAccountForm(props: {
         e.preventDefault()
         setSaved(false)
         run(
-          () => updateAccountAction(props.id, { name, holderId, visibility, provider, color }),
+          () =>
+            updateAccountAction(props.id, {
+              name,
+              holderId,
+              visibility,
+              provider,
+              color,
+              ...(props.kind === 'card' ? { network } : {}),
+            }),
           () => {
             setSaved(true)
             router.refresh()
@@ -94,7 +107,8 @@ export function EditAccountForm(props: {
           kind={props.kind}
           provider={provider}
           color={color}
-          network={props.network}
+          logos={props.logos}
+          network={network}
           last4={props.last4}
         />
       </div>
@@ -131,6 +145,33 @@ export function EditAccountForm(props: {
           </optgroup>
         </select>
       </label>
+      {provider && isProviderId(provider) && (
+        <div className="grid gap-1">
+          <span className="text-body-strong">Logo</span>
+          <BrandLogoPicker brand={provider} logo={props.logos[provider]} compact />
+          <span className="text-caption text-ink-muted">
+            Shared by every {PROVIDERS[provider].label} account in your home. It stays private to
+            your home.
+          </span>
+        </div>
+      )}
+      {props.kind === 'card' && (
+        <label className="grid gap-1">
+          <span className="text-body-strong">Card network</span>
+          <select
+            className={selectClass}
+            value={network ?? ''}
+            onChange={(e) => setNetwork(e.target.value || null)}
+          >
+            <option value="">Not shown</option>
+            {CARD_NETWORKS.map((n) => (
+              <option key={n} value={n}>
+                {NETWORKS[n]?.label ?? n}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <fieldset className="grid gap-2">
         <legend className="mb-1 text-body-strong">Color</legend>
         <div role="radiogroup" aria-label="Color" className="flex flex-wrap items-center gap-2">

@@ -118,6 +118,7 @@ export const ENCRYPTED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   ],
   household_categories: ['label', 'keywords'],
   investment_accounts: ['name', 'provider'],
+  brand_logos: ['image'],
   instruments: ['symbol', 'name', 'quote_symbol', 'prev_close', 'facts'],
   holdings: ['units', 'cost_minor'],
   instrument_prices: ['price'],
@@ -134,6 +135,7 @@ export const BLIND_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   household_categories: ['label_key'],
   instruments: ['symbol_key'],
   investment_transactions: ['dedup_key'],
+  brand_logos: ['brand_key'],
 }
 
 const CHUNK = 1000

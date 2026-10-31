@@ -34,3 +34,21 @@ describe('AccountCard', () => {
     expect(mark.getAttribute('style')).toBeNull()
   })
 })
+
+describe('logos and networks', () => {
+  it('shows the household’s logo instead of the initials', () => {
+    render(
+      <AccountMark name="Home" provider="leumi" logos={{ leumi: 'data:image/png;base64,AA==' }} />,
+    )
+    const mark = screen.getByTestId('account-mark')
+    expect(mark.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,AA==')
+    expect(mark.textContent).toBe('')
+  })
+
+  it('finds a broker from free text and draws the card network chip', () => {
+    render(<AccountMark name="Savings" provider="Interactive Brokers" />)
+    expect(screen.getByTestId('account-mark').textContent).toBe('IB')
+    render(<AccountCard name="x" kind="card" provider="cal" network="visa" />)
+    expect(screen.getByTestId('network-mark').textContent).toBe('VISA')
+  })
+})
