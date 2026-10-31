@@ -16,6 +16,8 @@ moves the Unreleased notes under the new version.
 - Welcome steps for each new member, and profile settings with a display currency (#40).
 - Automatic categories: rules, past choices and keywords at import, then a local model for the rest (#42).
 - Household categories: add, edit and remove your own in Settings, with an icon and keywords.
+- Invest tab: investment accounts per member, holdings added by hand, portfolio value and
+  allocation (#25, #28, #31).
 
 ### Security
 
