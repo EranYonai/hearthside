@@ -1,5 +1,6 @@
+import { randomBytes } from 'node:crypto'
 import { parseStatement } from '@hearthside/core'
-import { createDb, migrateDb, schema } from '@hearthside/db'
+import { createDb, initEncryption, migrateDb, schema } from '@hearthside/db'
 import { eq, sql as raw } from 'drizzle-orm'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -12,7 +13,14 @@ import {
   updateCategory,
 } from './categories'
 import { categorizePending, loadContext } from './categorize'
-import { commitImport, createAccount, listTransactions, prepareImport, setCategory } from './ledger'
+import {
+  commitImport,
+  createAccount,
+  descriptionIndex,
+  listTransactions,
+  prepareImport,
+  setCategory,
+} from './ledger'
 import { acceptInvite, AuthError, createHousehold, createInvite, type NewPasskey } from './repo'
 
 const url = process.env.TEST_DATABASE_URL
@@ -59,6 +67,7 @@ describe.skipIf(!url)('household categories (Postgres)', () => {
       raw`drop schema if exists public cascade; drop schema if exists drizzle cascade; create schema public`,
     )
     await migrateDb(db, join(import.meta.dirname, '../../../../packages/db/migrations'))
+    await initEncryption(db, [randomBytes(32)])
   })
   beforeEach(async () => {
     await db.execute(raw`truncate households, audit_log, auth_challenges cascade`)
@@ -135,7 +144,9 @@ describe.skipIf(!url)('household categories (Postgres)', () => {
     expect(vet.t).toMatchObject({ category: slug, categoryVia: 'keyword' })
     const other = list.find((r) => r.t.description === 'Zorblax 42')!
     await setCategory(db, alex, other.t.id, slug, true)
-    expect((await loadContext(db, alex.householdId)).rules?.get('zorblax 42')).toBe(slug)
+    expect(
+      (await loadContext(db, alex.householdId)).rules?.get(descriptionIndex('Zorblax 42')),
+    ).toBe(slug)
     expect(await listTransactions(db, alex, { month: '2026-10', category: slug })).toHaveLength(2)
     await expect(setCategory(db, alex, other.t.id, 'c-missing')).rejects.toBeInstanceOf(AuthError)
   })

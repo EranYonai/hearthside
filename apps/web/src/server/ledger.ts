@@ -1,6 +1,6 @@
 import {
-  CARD_PAYMENT_PATTERN,
   countsAsSpending,
+  isCardPayment,
   duplicateKeys,
   suggestAccountName,
   type DetectedSource,
@@ -10,8 +10,8 @@ import {
   type ParsedTransaction,
 } from '@hearthside/core'
 import type { AccountRow, MemberRow } from '@hearthside/db'
-import { schema } from '@hearthside/db'
-import { and, desc, eq, gte, ilike, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm'
+import { blindIndex, schema } from '@hearthside/db'
+import { and, desc, eq, gte, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm'
 import { householdCategorySet } from './categories'
 import { loadContext, quickCategory } from './categorize'
 import { audit, AuthError, type Tx } from './repo'
@@ -166,13 +166,18 @@ export interface PreparedRow extends ParsedTransaction {
   duplicate: boolean
 }
 
+/** Keyed hash of a description, as stored in description_key and category_rules.match. */
+export function descriptionIndex(description: string): string {
+  return blindIndex(normalizeDescription(description))
+}
+
 /** Hash the parser's duplicate keys and mark rows already stored for this account. */
 export async function prepareImport(
   db: Conn,
   account: AccountRow | null,
   parsed: readonly ParsedTransaction[],
 ): Promise<PreparedRow[]> {
-  const keys = duplicateKeys(parsed).map(sha256)
+  const keys = duplicateKeys(parsed).map((k) => blindIndex(sha256(k)))
   const existing = new Set<string>()
   for (let i = 0; account && i < keys.length; i += 1000) {
     const chunk = keys.slice(i, i + 1000)
@@ -276,7 +281,9 @@ export async function findBatchByHash(db: Conn, accountId: string, fileHash: str
   const [row] = await db
     .select()
     .from(importBatches)
-    .where(and(eq(importBatches.accountId, accountId), eq(importBatches.fileHash, fileHash)))
+    .where(
+      and(eq(importBatches.accountId, accountId), eq(importBatches.fileHash, blindIndex(fileHash))),
+    )
     .limit(1)
   return row
 }
@@ -297,7 +304,7 @@ export async function commitImport(
         accountId: account.id,
         memberId: member.id,
         fileName: input.fileName.slice(0, 200),
-        fileHash: input.fileHash,
+        fileHash: blindIndex(input.fileHash),
         added: 0,
         duplicates: 0,
         skipped: input.skipped,
@@ -307,7 +314,7 @@ export async function commitImport(
     let added = 0
     for (let i = 0; i < fresh.length; i += 500) {
       const values = fresh.slice(i, i + 500).map((r) => {
-        const key = normalizeDescription(r.description)
+        const key = descriptionIndex(r.description)
         return {
           householdId: member.householdId,
           accountId: account.id,
@@ -410,6 +417,7 @@ export interface TransactionFilter {
   search?: string
 }
 
+// Descriptions and amounts are encrypted, so search and totals run here after reading.
 function filterConditions(member: MemberRow, f: TransactionFilter): SQL {
   const [from, to] = monthRange(f.month)
   const conditions: SQL[] = [
@@ -423,13 +431,16 @@ function filterConditions(member: MemberRow, f: TransactionFilter): SQL {
   if (f.category === 'none') conditions.push(isNull(transactions.category))
   else if (f.category && (isCategory(f.category) || f.category.startsWith(CUSTOM_PREFIX)))
     conditions.push(eq(transactions.category, f.category))
-  const q = f.search?.trim()
-  if (q) conditions.push(ilike(transactions.description, `%${q.replace(/[\\%_]/g, '\\$&')}%`))
   return and(...conditions)!
 }
 
+function matchesSearch(description: string, search: string | undefined): boolean {
+  const q = search?.trim().toLocaleLowerCase()
+  return !q || description.toLocaleLowerCase().includes(q)
+}
+
 export async function listTransactions(db: Conn, member: MemberRow, f: TransactionFilter) {
-  return db
+  const rows = await db
     .select({
       t: transactions,
       accountName: accounts.name,
@@ -439,14 +450,16 @@ export async function listTransactions(db: Conn, member: MemberRow, f: Transacti
     .innerJoin(accounts, eq(accounts.id, transactions.accountId))
     .where(filterConditions(member, f))
     .orderBy(desc(transactions.occurredOn), desc(transactions.createdAt), transactions.id)
-    .limit(1000)
+  return rows.filter((r) => matchesSearch(r.t.description, f.search)).slice(0, 1000)
 }
 
 /**
  * A bank row that pays a card bill. When cards and bank accounts are counted together,
  * these are left out: the card purchases behind them are already counted.
  */
-const cardBill = sql<boolean>`(${accounts.kind} = 'bank' and ${transactions.amountMinor} < 0 and ${transactions.description} ~* ${CARD_PAYMENT_PATTERN})`
+function isCardBill(kind: AccountKind, amount: number, description: string): boolean {
+  return kind === 'bank' && amount < 0 && isCardPayment(description)
+}
 
 /** True when a filter mixes cards and bank accounts, so card bills would count twice. */
 function mixesKinds(f: TransactionFilter) {
@@ -459,31 +472,30 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
   const rows = await db
     .select({
       category: transactions.category,
-      bill: mixed ? cardBill : sql<boolean>`false`,
-      out: sql<string>`coalesce(sum(case when ${transactions.amountMinor} < 0 then ${transactions.amountMinor} else 0 end), 0)`,
-      in: sql<string>`coalesce(sum(case when ${transactions.amountMinor} > 0 then ${transactions.amountMinor} else 0 end), 0)`,
-      n: sql<string>`count(*)`,
+      kind: accounts.kind,
+      description: transactions.description,
+      amount: transactions.amountMinor,
     })
     .from(transactions)
     .innerJoin(accounts, eq(accounts.id, transactions.accountId))
     .where(filterConditions(member, f))
-    .groupBy(transactions.category, sql`2`)
   let spent = 0
   let received = 0
   let count = 0
   let cardBills = 0
   const byCategory = new Map<string | null, number>()
   for (const r of rows) {
-    count += Number(r.n)
-    if (r.bill) {
-      cardBills += Number(r.out)
+    if (!matchesSearch(r.description, f.search)) continue
+    count++
+    if (mixed && isCardBill(r.kind, r.amount, r.description)) {
+      cardBills += r.amount
       continue
     }
     if (!countsAsSpending(r.category)) continue
-    spent += Number(r.out)
-    received += Number(r.in)
-    if (Number(r.out) !== 0)
-      byCategory.set(r.category, (byCategory.get(r.category) ?? 0) + Number(r.out))
+    if (r.amount < 0) {
+      spent += r.amount
+      byCategory.set(r.category, (byCategory.get(r.category) ?? 0) + r.amount)
+    } else received += r.amount
   }
   return {
     spent,
@@ -504,9 +516,7 @@ export async function accountSummaries(db: Conn, member: MemberRow, month: strin
     .select({
       account: accounts,
       category: transactions.category,
-      out: sql<string>`coalesce(sum(case when ${transactions.amountMinor} < 0 then ${transactions.amountMinor} else 0 end), 0)`,
-      in: sql<string>`coalesce(sum(case when ${transactions.amountMinor} > 0 then ${transactions.amountMinor} else 0 end), 0)`,
-      n: sql<string>`count(${transactions.id})`,
+      amount: transactions.amountMinor,
     })
     .from(accounts)
     .leftJoin(
@@ -518,7 +528,6 @@ export async function accountSummaries(db: Conn, member: MemberRow, month: strin
       ),
     )
     .where(visibleTo(member))
-    .groupBy(accounts.id, transactions.category)
     .orderBy(accounts.createdAt)
   const byAccount = new Map<
     string,
@@ -526,12 +535,12 @@ export async function accountSummaries(db: Conn, member: MemberRow, month: strin
   >()
   for (const r of rows) {
     const entry = byAccount.get(r.account.id) ?? { account: r.account, out: 0, in: 0, count: 0 }
-    entry.count += Number(r.n)
-    if (countsAsSpending(r.category)) {
-      entry.out += Number(r.out)
-      entry.in += Number(r.in)
-    }
     byAccount.set(r.account.id, entry)
+    if (r.amount === null) continue
+    entry.count++
+    if (!countsAsSpending(r.category)) continue
+    if (r.amount < 0) entry.out += r.amount
+    else entry.in += r.amount
   }
   return [...byAccount.values()]
 }

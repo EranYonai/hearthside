@@ -10,6 +10,7 @@ export default defineConfig({
         test: {
           name: 'core',
           include: ['packages/{core,db}/src/**/*.test.ts'],
+          exclude: ['**/*.int.test.ts'],
           environment: 'node',
         },
       },

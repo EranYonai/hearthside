@@ -3,8 +3,12 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
 import * as schema from './schema'
 
+import { encryptExisting, loadKeys } from './keys'
+
 export * as schema from './schema'
 export type * from './schema'
+export { blindIndex, hasKeyring, KeyError, setKeyring } from './crypto'
+export { masterKeysFromEnv } from './keys'
 
 export type Sql = ReturnType<typeof postgres>
 
@@ -19,6 +23,16 @@ export type Db = ReturnType<typeof createDb>['db']
 /** Apply pending migrations. Safe to run on every start. */
 export async function migrateDb(db: Db, migrationsFolder: string): Promise<void> {
   await migrate(db, { migrationsFolder })
+}
+
+/**
+ * Load the data keys (creating them on first start, rewrapping them after a master key
+ * rotation) and encrypt anything not yet under the active key. Run after migrations.
+ */
+export async function initEncryption(db: Db, masterKeys: readonly Buffer[]) {
+  const { keyring, rewrapped, newDataKey } = await loadKeys(db, masterKeys)
+  const encrypted = await encryptExisting(db, keyring)
+  return { activeKeyId: keyring.activeId, rewrapped, newDataKey, encrypted }
 }
 
 export type PingResult = { ok: true; latencyMs: number } | { ok: false; error: string }

@@ -5,3 +5,4 @@
 - [Self-hosting](self-hosting.md): running your own instance.
 - [Releases](releases.md): versions and the changelog.
 - [Privacy principles](privacy.md): how household data is treated.
+- [Encryption](encryption.md): how private fields are encrypted, and key rotation.

@@ -21,8 +21,12 @@
 ```sh
 pnpm install
 docker compose -f compose.test.yml up -d db     # Postgres on 127.0.0.1:5433
+echo "ENCRYPTION_KEY=$(openssl rand -base64 32)" >> apps/web/.env.local   # once
 DATABASE_URL=postgres://hearthside:hearthside@localhost:5433/hearthside pnpm dev
 ```
+
+The app won't start without a master key (see [Encryption](encryption.md)). Keep the same
+key for a given dev database; a new key can't read data sealed by the old one.
 
 Migrations run when the app starts. Passkeys need a secure context, which `localhost`
 counts as, so sign-in works on `http://localhost:3000` without HTTPS.

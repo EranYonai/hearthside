@@ -1,4 +1,5 @@
-import { createDb, migrateDb, schema } from '@hearthside/db'
+import { randomBytes } from 'node:crypto'
+import { createDb, initEncryption, migrateDb, schema } from '@hearthside/db'
 import { sql as raw } from 'drizzle-orm'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -60,6 +61,7 @@ describe.skipIf(!url)('repo (Postgres)', () => {
       raw`drop schema if exists public cascade; drop schema if exists drizzle cascade; create schema public`,
     )
     await migrateDb(db, join(import.meta.dirname, '../../../../packages/db/migrations'))
+    await initEncryption(db, [randomBytes(32)])
   })
 
   beforeEach(async () => {

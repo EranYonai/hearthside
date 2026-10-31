@@ -5,7 +5,7 @@ Hearthside holds private household data, so it is built to keep that data close.
 - **Self-hosted.** Data stays on the instance you run. There is no central service.
 - **Least exposure.** Only the web app is reachable, and it binds to loopback by default.
 - **Private data is encrypted at rest.** Household data is stored encrypted in the app
-  database, never in plain text.
+  database, never in plain text. See [Encryption](encryption.md).
 - **No private data in source code or GitHub, ever.** Not in code, tests, fixtures, docs,
   issues, PRs, commits or logs.
 - **No real data in the repo.** Tests and fixtures use synthetic data only. Never commit real
@@ -24,7 +24,8 @@ Every PR review checks that:
 - [ ] No real personal or household data appears anywhere in the diff, including tests,
       fixtures, snapshots, screenshots and comments.
 - [ ] No secrets, keys or deployment details are committed.
-- [ ] New stored fields that hold private data are encrypted in the database.
+- [ ] New stored fields that hold private data are encrypted in the database (`encText` and
+      friends in `packages/db/src/schema.ts`, listed in `ENCRYPTED_COLUMNS`).
 - [ ] Logs and error messages don't print private data.
 - [ ] PR title, description and commits stay generic.
 

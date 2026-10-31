@@ -1,5 +1,6 @@
+import { randomBytes } from 'node:crypto'
 import { categorySet, parseStatement, type DecisionEngine } from '@hearthside/core'
-import { createDb, migrateDb, schema } from '@hearthside/db'
+import { createDb, initEncryption, migrateDb, schema } from '@hearthside/db'
 import { eq, sql as raw } from 'drizzle-orm'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -11,7 +12,14 @@ import {
   scheduleCategorize,
   sweepPending,
 } from './categorize'
-import { commitImport, createAccount, listTransactions, prepareImport, setCategory } from './ledger'
+import {
+  commitImport,
+  createAccount,
+  descriptionIndex,
+  listTransactions,
+  prepareImport,
+  setCategory,
+} from './ledger'
 import { createHousehold, type NewPasskey } from './repo'
 
 const url = process.env.TEST_DATABASE_URL
@@ -75,6 +83,7 @@ describe.skipIf(!url)('categorize (Postgres)', () => {
       raw`drop schema if exists public cascade; drop schema if exists drizzle cascade; create schema public`,
     )
     await migrateDb(db, join(import.meta.dirname, '../../../../packages/db/migrations'))
+    await initEncryption(db, [randomBytes(32)])
   })
   beforeEach(async () => {
     await db.execute(raw`truncate households, audit_log, auth_challenges cascade`)
@@ -173,9 +182,10 @@ describe.skipIf(!url)('categorize (Postgres)', () => {
     // Cleared by hand stays cleared, even after a re-run.
     await recategorize(db, alex.householdId, 'uncategorized', engine)
     expect((await list()).get('Quindle Ltd -3000')!.category).toBeNull()
-    expect((await loadContext(db, alex.householdId)).history?.get('zorblax 42')?.category).toBe(
-      'kids',
-    )
+    expect(
+      (await loadContext(db, alex.householdId)).history?.get(descriptionIndex('Zorblax 42'))
+        ?.category,
+    ).toBe('kids')
   })
 
   it('re-runs on request, optionally redoing its own choices', async () => {

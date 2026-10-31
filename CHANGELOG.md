@@ -17,6 +17,12 @@ moves the Unreleased notes under the new version.
 - Automatic categories: rules, past choices and keywords at import, then a local model for the rest (#42).
 - Household categories: add, edit and remove your own in Settings, with an icon and keywords.
 
+### Security
+
+- Private fields are encrypted in the database, with key rotation (#44). Existing data is
+  encrypted on the first start after upgrading, which needs a new key file (see
+  [Self-hosting](docs/self-hosting.md)).
+
 ## [0.1.0] - 2026-10-30
 
 ### Added

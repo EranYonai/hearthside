@@ -9,8 +9,8 @@ import {
   type CustomCategory,
 } from '@hearthside/core'
 import type { MemberRow } from '@hearthside/db'
-import { schema } from '@hearthside/db'
-import { and, asc, eq, sql } from 'drizzle-orm'
+import { blindIndex, schema } from '@hearthside/db'
+import { and, asc, eq } from 'drizzle-orm'
 import { audit, AuthError } from './repo'
 import { randomToken } from './tokens'
 
@@ -74,6 +74,11 @@ export function cleanCategoryInput(input: CategoryInput): CategoryInput {
   return { label, icon: input.icon, direction: input.direction, keywords }
 }
 
+/** Keyed hash of a category name, so names stay unique while stored encrypted. */
+function labelKey(label: string): string {
+  return blindIndex(label.toLowerCase())
+}
+
 async function assertLabelFree(db: Conn, householdId: string, label: string, except?: string) {
   const [clash] = await db
     .select({ slug: householdCategories.slug })
@@ -81,7 +86,7 @@ async function assertLabelFree(db: Conn, householdId: string, label: string, exc
     .where(
       and(
         eq(householdCategories.householdId, householdId),
-        sql`lower(${householdCategories.label}) = lower(${label})`,
+        eq(householdCategories.labelKey, labelKey(label)),
       ),
     )
   if (clash && clash.slug !== except)
@@ -102,6 +107,7 @@ export async function createCategory(db: Conn, member: MemberRow, input: Categor
     householdId: member.householdId,
     slug,
     label: clean.label,
+    labelKey: labelKey(clean.label),
     icon: clean.icon,
     direction: clean.direction,
     keywords: [...clean.keywords],
@@ -142,6 +148,7 @@ export async function updateCategory(
     .update(householdCategories)
     .set({
       label: clean.label,
+      labelKey: labelKey(clean.label),
       icon: clean.icon,
       direction: clean.direction,
       keywords: [...clean.keywords],

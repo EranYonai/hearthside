@@ -49,9 +49,11 @@ services:
       DATABASE_PASSWORD_FILE: /run/secrets/db_password
       # The exact address you open the app at. Passkeys are bound to it.
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3300}
+      # Master key for private fields (docs/encryption.md). Back it up offline.
+      ENCRYPTION_KEY_FILE: /run/secrets/encryption_key
       # The local categorization model. If it is down, entries wait for it.
       DECIDE_URL: http://decide:8080
-    secrets: [db_password]
+    secrets: [db_password, encryption_key]
     ports:
       # Loopback only by default. WEB_BIND=0.0.0.0 in .env opens it to the LAN for testing.
       - ${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3300}:3000
@@ -117,6 +119,8 @@ services:
 secrets:
   db_password:
     file: ./secrets/db_password.txt
+  encryption_key:
+    file: ./secrets/encryption_key.txt
 
 volumes:
   db-data:

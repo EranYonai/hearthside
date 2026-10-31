@@ -1,5 +1,6 @@
+import { randomBytes } from 'node:crypto'
 import { parseStatement, type ParsedTransaction } from '@hearthside/core'
-import { createDb, migrateDb } from '@hearthside/db'
+import { createDb, initEncryption, migrateDb } from '@hearthside/db'
 import { sql as raw } from 'drizzle-orm'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -81,6 +82,7 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
       raw`drop schema if exists public cascade; drop schema if exists drizzle cascade; create schema public`,
     )
     await migrateDb(db, join(import.meta.dirname, '../../../../packages/db/migrations'))
+    await initEncryption(db, [randomBytes(32)])
   })
 
   beforeEach(async () => {

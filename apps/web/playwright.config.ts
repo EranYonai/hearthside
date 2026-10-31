@@ -21,6 +21,11 @@ export default defineConfig({
         command: 'pnpm build && pnpm start --port 3100',
         url: `${baseURL}/api/health`,
         reuseExistingServer: !process.env.CI,
+        // Throwaway key for test databases only.
+        env: {
+          ENCRYPTION_KEY:
+            process.env.ENCRYPTION_KEY ?? 'dGVzdC1vbmx5LWtleS1mb3ItZTJlLXRlc3RzLTAwMDA=',
+        },
         timeout: 180_000,
       },
 })

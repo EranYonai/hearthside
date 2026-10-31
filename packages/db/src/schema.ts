@@ -1,13 +1,12 @@
 import { sql } from 'drizzle-orm'
 import {
-  bigint,
   bigserial,
   boolean,
   check,
+  customType,
   date,
   index,
   integer,
-  jsonb,
   pgTable,
   real,
   smallint,
@@ -17,6 +16,40 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 
+import { decrypt, encrypt } from './crypto'
+
+/**
+ * Private values are sealed by the app before they reach Postgres (see crypto.ts), so a dump
+ * or a stray query shows ciphertext only. The column name is bound into each value. Encrypted
+ * columns can't be searched, sorted or summed in SQL; do that after reading. Exact matches go
+ * through a separate keyed-hash column (blindIndex).
+ */
+function encrypted<T>(column: string, encode: (v: T) => string, decode: (s: string) => T) {
+  return (table: string) =>
+    customType<{ data: T; driverData: string }>({
+      dataType: () => 'text',
+      toDriver: (value) => encrypt(encode(value), `${table}.${column}`),
+      fromDriver: (value) => decode(decrypt(value, `${table}.${column}`)),
+    })(column)
+}
+
+const encText = (table: string, column: string) => encrypted<string>(column, String, String)(table)
+const encInt = (table: string, column: string) =>
+  encrypted<number>(
+    column,
+    (n) => {
+      if (!Number.isSafeInteger(n)) throw new TypeError(`${column} must be a whole number`)
+      return String(n)
+    },
+    Number,
+  )(table)
+const encJson = <T>(table: string, column: string) =>
+  encrypted<T>(
+    column,
+    (v) => JSON.stringify(v),
+    (s) => JSON.parse(s) as T,
+  )(table)
+
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 const ts = (name: string) => timestamp(name, { withTimezone: true })
 
@@ -25,7 +58,7 @@ export const households = pgTable(
   'households',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    name: text('name').notNull(),
+    name: encText('households', 'name').notNull(),
     createdAt: createdAt(),
   },
   () => [uniqueIndex('households_singleton').on(sql`(true)`)],
@@ -38,7 +71,7 @@ export const members = pgTable(
     householdId: uuid('household_id')
       .notNull()
       .references(() => households.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
+    name: encText('members', 'name').notNull(),
     role: text('role', { enum: ['owner', 'adult', 'viewer'] }).notNull(),
     /** ISO 4217 code amounts are shown in. */
     displayCurrency: text('display_currency').notNull().default('ILS'),
@@ -70,7 +103,7 @@ export const passkeys = pgTable(
       .default(sql`'{}'::text[]`),
     deviceType: text('device_type').notNull(),
     backedUp: boolean('backed_up').notNull(),
-    name: text('name').notNull(),
+    name: encText('passkeys', 'name').notNull(),
     createdAt: createdAt(),
     lastUsedAt: ts('last_used_at'),
   },
@@ -134,7 +167,7 @@ export const authChallenges = pgTable('auth_challenges', {
   id: text('id').primaryKey(),
   challenge: text('challenge').notNull(),
   purpose: text('purpose', { enum: ['setup', 'login', 'invite', 'add-passkey'] }).notNull(),
-  payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+  payload: encJson<Record<string, unknown>>('auth_challenges', 'payload').notNull(),
   expiresAt: ts('expires_at').notNull(),
 })
 
@@ -146,8 +179,10 @@ export const auditLog = pgTable(
     householdId: uuid('household_id').references(() => households.id, { onDelete: 'cascade' }),
     memberId: uuid('member_id').references(() => members.id, { onDelete: 'set null' }),
     action: text('action').notNull(),
-    detail: jsonb('detail').$type<Record<string, unknown>>().notNull().default({}),
-    ip: text('ip'),
+    detail: encJson<Record<string, unknown>>('audit_log', 'detail').notNull(),
+    ip: encText('audit_log', 'ip'),
+    /** blindIndex(ip), for rate limits. */
+    ipHash: text('ip_hash'),
     createdAt: createdAt(),
   },
   (t) => [index('audit_log_action_time_idx').on(t.action, t.createdAt)],
@@ -165,14 +200,14 @@ export const accounts = pgTable(
       .references(() => members.id, { onDelete: 'cascade' }),
     /** The member who holds the card or account; null means the owner. */
     holderId: uuid('holder_id').references(() => members.id, { onDelete: 'set null' }),
-    name: text('name').notNull(),
+    name: encText('accounts', 'name').notNull(),
     kind: text('kind', { enum: ['card', 'bank', 'other'] }).notNull(),
     /** Where statements come from (see PROVIDERS in core); null when unknown. */
-    provider: text('provider'),
+    provider: encText('accounts', 'provider'),
     /** Card network for card styling, e.g. visa or mastercard. */
-    network: text('network'),
-    /** Last four digits of the card or account number. */
-    last4: text('last4'),
+    network: encText('accounts', 'network'),
+    /** Last four digits of the card or account number. Matched after reading. */
+    last4: encText('accounts', 'last4'),
     /** household: everyone sees it; private: only the owner. */
     visibility: text('visibility', { enum: ['household', 'private'] })
       .notNull()
@@ -181,7 +216,6 @@ export const accounts = pgTable(
   },
   (t) => [
     index('accounts_household_idx').on(t.householdId),
-    index('accounts_source_idx').on(t.ownerId, t.provider, t.last4),
     check('accounts_kind_check', sql`${t.kind} in ('card', 'bank', 'other')`),
     check('accounts_visibility_check', sql`${t.visibility} in ('household', 'private')`),
   ],
@@ -200,8 +234,8 @@ export const importBatches = pgTable(
     memberId: uuid('member_id')
       .notNull()
       .references(() => members.id, { onDelete: 'cascade' }),
-    fileName: text('file_name').notNull(),
-    /** SHA-256 of the file, to warn about uploading the same file twice. */
+    fileName: encText('import_batches', 'file_name').notNull(),
+    /** blindIndex(SHA-256 of the file), to warn about uploading the same file twice. */
     fileHash: text('file_hash').notNull(),
     added: integer('added').notNull(),
     duplicates: integer('duplicates').notNull(),
@@ -224,18 +258,18 @@ export const transactions = pgTable(
     batchId: uuid('batch_id').references(() => importBatches.id, { onDelete: 'cascade' }),
     occurredOn: date('occurred_on', { mode: 'string' }).notNull(),
     postedOn: date('posted_on', { mode: 'string' }),
-    description: text('description').notNull(),
-    /** normalizeDescription(description), for category rules. */
+    description: encText('transactions', 'description').notNull(),
+    /** blindIndex(normalizeDescription(description)), for category rules. */
     descriptionKey: text('description_key').notNull(),
     /** Integer minor units; negative is money out. */
-    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+    amountMinor: encInt('transactions', 'amount_minor').notNull(),
     currency: text('currency').notNull().default('ILS'),
-    originalMinor: bigint('original_minor', { mode: 'number' }),
+    originalMinor: encInt('transactions', 'original_minor'),
     originalCurrency: text('original_currency'),
     installmentN: smallint('installment_n'),
     installmentTotal: smallint('installment_total'),
-    reference: text('reference'),
-    notes: text('notes'),
+    reference: encText('transactions', 'reference'),
+    notes: encText('transactions', 'notes'),
     category: text('category'),
     /** rule: an "always use this" rule; manual: someone picked it; auto: the categorizer. */
     categorySource: text('category_source', { enum: ['rule', 'manual', 'auto'] }),
@@ -245,7 +279,7 @@ export const transactions = pgTable(
     categoryConfidence: real('category_confidence'),
     /** When the categorizer (with the model) last looked at it. null means it is waiting. */
     categoryCheckedAt: timestamp('category_checked_at', { withTimezone: true }),
-    /** SHA-256 of the duplicate key from the parser. */
+    /** blindIndex(SHA-256 of the duplicate key from the parser). */
     dedupKey: text('dedup_key').notNull(),
     createdAt: createdAt(),
   },
@@ -268,7 +302,7 @@ export const categoryRules = pgTable(
     householdId: uuid('household_id')
       .notNull()
       .references(() => households.id, { onDelete: 'cascade' }),
-    /** normalizeDescription() of the transaction description. */
+    /** Same keyed hash as transactions.description_key. */
     match: text('match').notNull(),
     category: text('category').notNull(),
     createdBy: uuid('created_by').references(() => members.id, { onDelete: 'set null' }),
@@ -287,20 +321,40 @@ export const householdCategories = pgTable(
       .references(() => households.id, { onDelete: 'cascade' }),
     /** "c-" plus random characters; what transactions and rules store. */
     slug: text('slug').notNull(),
-    label: text('label').notNull(),
+    label: encText('household_categories', 'label').notNull(),
+    /** blindIndex(lowercased label), so names stay unique per household. */
+    labelKey: text('label_key').notNull(),
     icon: text('icon').notNull(),
     direction: text('direction', { enum: ['out', 'in'] })
       .notNull()
       .default('out'),
-    keywords: jsonb('keywords').$type<string[]>().notNull().default([]),
+    keywords: encJson<string[]>('household_categories', 'keywords').notNull(),
     createdBy: uuid('created_by').references(() => members.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
   },
   (t) => [
     uniqueIndex('household_categories_slug_idx').on(t.householdId, t.slug),
-    uniqueIndex('household_categories_label_idx').on(t.householdId, sql`lower(${t.label})`),
+    uniqueIndex('household_categories_label_idx').on(t.householdId, t.labelKey),
     check('household_categories_direction_check', sql`${t.direction} in ('out', 'in')`),
   ],
+)
+
+/**
+ * Data keys, wrapped by the master key. Purpose 'data' seals values (newest active one is used;
+ * retired ones only decrypt until rows are re-encrypted); 'index' keys the blind indexes.
+ */
+export const encryptionKeys = pgTable(
+  'encryption_keys',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    purpose: text('purpose', { enum: ['data', 'index'] }).notNull(),
+    wrapped: text('wrapped').notNull(),
+    /** masterKeyId() of the key that wrapped it. */
+    masterKeyId: text('master_key_id').notNull(),
+    createdAt: createdAt(),
+    retiredAt: ts('retired_at'),
+  },
+  (t) => [check('encryption_keys_purpose_check', sql`${t.purpose} in ('data', 'index')`)],
 )
 
 export type Household = typeof households.$inferSelect
