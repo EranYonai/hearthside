@@ -10,7 +10,8 @@ describe('built-in logos', () => {
     const files = readdirSync(dir).filter((f) => f !== 'SOURCES.md')
     expect(Object.values(LOGO_FILES).sort()).toEqual(files.sort())
     const sources = readFileSync(join(dir, 'SOURCES.md'), 'utf8')
-    for (const id of Object.keys(LOGO_FILES)) expect(sources).toContain(`| ${id} |`)
+    for (const id of Object.keys(LOGO_FILES))
+      expect(sources).toMatch(new RegExp(`^\\| ${id} +\\|`, 'm'))
   })
 
   it('has a logo for every brand except the few marked approximate', () => {
