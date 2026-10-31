@@ -14,6 +14,7 @@ moves the Unreleased notes under the new version.
 - Accounts tab grouped by type, separate views per account type, and accounts linked to the
   household member who holds them (#43, #46).
 - Welcome steps for each new member, and profile settings with a display currency (#40).
+- Automatic categories: rules, past choices and keywords at import, then a local model for the rest (#42).
 
 ## [0.1.0] - 2026-10-30
 

@@ -17,7 +17,7 @@ import {
 } from '@/server/ledger'
 import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
-import { CategorisedRow, type TxView } from './client'
+import { CategorisedRow, CategorizeNow, type TxView } from './client'
 
 export const metadata: Metadata = { title: 'Transactions · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -88,6 +88,7 @@ export default async function TransactionsPage({
     meta: `${accountName} · ${day.format(new Date(t.occurredOn))}`,
     minor: t.amountMinor,
     category: t.category,
+    ...(t.categorySource === 'auto' ? { auto: true } : {}),
     ...(t.originalMinor != null && t.originalCurrency
       ? { original: { minor: t.originalMinor, currency: t.originalCurrency } }
       : {}),
@@ -213,9 +214,12 @@ export default async function TransactionsPage({
       </form>
 
       <Card aria-labelledby="list-title">
-        <Label id="list-title">
-          {sum.count} {sum.count === 1 ? 'transaction' : 'transactions'}
-        </Label>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label id="list-title">
+            {sum.count} {sum.count === 1 ? 'transaction' : 'transactions'}
+          </Label>
+          {editable && views.some((v) => !v.category) && <CategorizeNow />}
+        </div>
         {views.length === 0 ? (
           <div className="grid gap-3">
             <p className="text-ink-muted">Nothing here for {label}.</p>

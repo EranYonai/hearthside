@@ -9,6 +9,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  real,
   smallint,
   text,
   timestamp,
@@ -236,7 +237,14 @@ export const transactions = pgTable(
     reference: text('reference'),
     notes: text('notes'),
     category: text('category'),
-    categorySource: text('category_source', { enum: ['rule', 'manual'] }),
+    /** rule: an "always use this" rule; manual: someone picked it; auto: the categorizer. */
+    categorySource: text('category_source', { enum: ['rule', 'manual', 'auto'] }),
+    /** For auto: history, keyword or model. */
+    categoryVia: text('category_via'),
+    /** For auto: 0..1. */
+    categoryConfidence: real('category_confidence'),
+    /** When the categorizer (with the model) last looked at it. null means it is waiting. */
+    categoryCheckedAt: timestamp('category_checked_at', { withTimezone: true }),
     /** SHA-256 of the duplicate key from the parser. */
     dedupKey: text('dedup_key').notNull(),
     createdAt: createdAt(),
@@ -246,6 +254,9 @@ export const transactions = pgTable(
     index('transactions_household_date_idx').on(t.householdId, t.occurredOn),
     index('transactions_batch_idx').on(t.batchId),
     index('transactions_description_idx').on(t.householdId, t.descriptionKey),
+    index('transactions_uncategorized_idx')
+      .on(t.householdId)
+      .where(sql`${t.category} is null and ${t.categoryCheckedAt} is null`),
   ],
 )
 

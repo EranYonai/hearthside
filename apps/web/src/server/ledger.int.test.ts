@@ -172,7 +172,14 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
     await setCategory(db, alex, coffee[0]!.t.id, 'eating-out', true)
     const after = await listTransactions(db, alex, { month: '2026-10', category: 'eating-out' })
     expect(after).toHaveLength(1)
-    expect(await listTransactions(db, alex, { month: '2026-10', category: 'none' })).toHaveLength(2)
+    // Built-in keywords filed the rest at import.
+    expect(await listTransactions(db, alex, { month: '2026-10', category: 'none' })).toHaveLength(0)
+    const furniture = rows.find((r) => r.t.description === 'Furniture')!
+    expect(furniture.t).toMatchObject({
+      category: 'home',
+      categorySource: 'auto',
+      categoryVia: 'keyword',
+    })
 
     // Future imports use the rule.
     const next = statement([['03/11/2026', 'COFFEE ', '18', '']])

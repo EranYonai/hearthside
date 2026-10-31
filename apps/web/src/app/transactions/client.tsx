@@ -4,7 +4,7 @@ import { CATEGORIES, categoryLabel, type Minor } from '@hearthside/core'
 import { Button, CategoryIcon, Notice, TransactionRow, type Category } from '@hearthside/ui'
 import { useRef, useState } from 'react'
 import { useAction } from '@/lib/use-action'
-import { setCategoryAction } from './actions'
+import { categorizeNowAction, setCategoryAction } from './actions'
 
 export interface TxView {
   id: string
@@ -12,6 +12,8 @@ export interface TxView {
   meta: string
   minor: Minor
   category: string | null
+  /** Filed by the categorizer rather than a person or a rule. */
+  auto?: boolean
   original?: { minor: Minor; currency: string }
   installment?: { n: number; total: number }
 }
@@ -20,7 +22,7 @@ function rowProps(tx: TxView) {
   return {
     category: (tx.category ?? 'other') as Category,
     merchant: tx.description,
-    meta: `${categoryLabel(tx.category)} · ${tx.meta}`,
+    meta: `${categoryLabel(tx.category)}${tx.auto ? ' (auto)' : ''} · ${tx.meta}`,
     minor: tx.minor,
     ...(tx.original ? { original: tx.original } : {}),
     ...(tx.installment ? { installment: tx.installment } : {}),
@@ -30,6 +32,35 @@ function rowProps(tx: TxView) {
 export function CategorisedRow({ tx, editable }: { tx: TxView; editable: boolean }) {
   if (!editable) return <TransactionRow {...rowProps(tx)} />
   return <EditableRow tx={tx} />
+}
+
+/** Run the categorizer on everything that has no category yet. */
+export function CategorizeNow() {
+  const [note, setNote] = useState<string>()
+  const { pending, error, run } = useAction()
+  const go = () =>
+    run(async () => {
+      setNote(undefined)
+      const result = await categorizeNowAction()
+      if (result.ok)
+        setNote(
+          result.background
+            ? 'Categorizing in the background. Refresh in a minute to see the results.'
+            : result.waiting
+              ? `Filed ${result.filed}. The model isn’t ready yet, so the rest wait for it.`
+              : `Filed ${result.filed} ${result.filed === 1 ? 'transaction' : 'transactions'}.`,
+        )
+      return result
+    })
+  return (
+    <div className="grid justify-items-start gap-2">
+      <Button variant="secondary" disabled={pending} onClick={go}>
+        {pending ? 'Categorizing…' : 'Categorize now'}
+      </Button>
+      {note && <Notice tone="positive">{note}</Notice>}
+      {error && <Notice tone="negative">{error}</Notice>}
+    </div>
+  )
 }
 
 function EditableRow({ tx }: { tx: TxView }) {

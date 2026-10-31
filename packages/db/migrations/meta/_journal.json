@@ -36,6 +36,13 @@
       "when": 1793431063989,
       "tag": "0004_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793431491890,
+      "tag": "0005_auto_category",
+      "breakpoints": true
     }
   ]
 }

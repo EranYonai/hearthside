@@ -6,6 +6,8 @@ import {
   providerLabel,
   readStatementFile,
 } from '@hearthside/core'
+import { after } from 'next/server'
+import { scheduleCategorize } from '@/server/categorize'
 import { fail, json } from '@/server/http'
 import {
   commitPlan,
@@ -95,6 +97,8 @@ export const POST = authRoute(async ({ request, db }) => {
       skipped: parsed.skipped.length,
       holderId,
     })
+    // The model is slow; answer now and let it file the rest.
+    after(() => scheduleCategorize(db, member.householdId))
     const latest = parsed.transactions.reduce((m, r) => (r.occurredOn > m ? r.occurredOn : m), '')
     return json({
       added: results.reduce((n, r) => n + r.batch.added, 0),

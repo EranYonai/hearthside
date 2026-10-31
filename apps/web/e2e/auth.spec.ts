@@ -253,8 +253,10 @@ test('dropping a card statement picks or creates its account and imports it', as
   await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(3)
   await expect(owner.getByLabel('Spent in October 2026')).toContainText('₪161')
 
+  // The keyword list filed the bakery during import; the store waits for the model.
+  await expect(owner.getByRole('button', { name: /^Home Store, Uncategorized/ })).toBeVisible()
   await owner
-    .getByRole('button', { name: /^Corner Bakery, Uncategorized/ })
+    .getByRole('button', { name: /^Corner Bakery, Groceries/ })
     .first()
     .click()
   await owner.getByRole('dialog').getByRole('button', { name: 'Groceries' }).click()
