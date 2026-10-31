@@ -3,6 +3,7 @@ import {
   ACCOUNT_SWATCHES,
   BRAND_IDS,
   BRANDS,
+  brandFromText,
   BROKERS,
   brandOf,
   brokerFromText,
@@ -89,5 +90,16 @@ describe('brands', () => {
     const look = accountLook({ name: 'Long term', provider: 'Interactive Brokers' })
     expect(look).toMatchObject({ brand: 'ibkr', label: 'Interactive Brokers', mono: 'IB' })
     expect(brandOf('leumi')).toMatchObject({ kind: 'bank', label: 'Leumi' })
+  })
+
+  it('reads banks and cards from free text too, as investment accounts often name a bank', () => {
+    expect(brandFromText('Hapoalim')).toBe('hapoalim')
+    expect(brandFromText('FIBI')).toBe('fibi')
+    expect(brandFromText('הבנק הבינלאומי')).toBe('fibi')
+    expect(brandFromText('Bank Leumi trading')).toBe('leumi')
+    expect(brandFromText('Interactive Brokers')).toBe('ibkr')
+    expect(brandFromText('meitav')).toBe('meitav')
+    expect(brandFromText('JP Morgan')).toBeNull()
+    expect(accountLook({ name: 'Investments', provider: 'FIBI' }).brand).toBe('fibi')
   })
 })
