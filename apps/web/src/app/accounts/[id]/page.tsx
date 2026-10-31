@@ -10,7 +10,6 @@ import { canEdit, countAccountTransactions, getVisibleAccount, holderOf } from '
 import { AuthError, listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
 import { DeleteAccount, EditAccountForm } from './client'
-import { listBrandLogos } from '@/server/logos'
 
 export const metadata: Metadata = { title: 'Account · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -23,10 +22,9 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
     if (err instanceof AuthError) notFound()
     throw err
   })
-  const [people, count, logos] = await Promise.all([
+  const [people, count] = await Promise.all([
     listMembers(db, household.id),
     countAccountTransactions(db, member, account.id),
-    listBrandLogos(db, household.id),
   ])
   const mayEdit = canEdit(member) && (account.ownerId === member.id || member.role === 'owner')
 
@@ -47,7 +45,6 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
             color={account.color}
             network={account.network}
             last4={account.last4}
-            logos={logos}
             holderId={holderOf(account)}
             visibility={account.visibility}
             people={people
@@ -61,7 +58,6 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
                 name={account.name}
                 kind={account.kind}
                 provider={account.provider}
-                logos={logos}
                 color={account.color}
                 network={account.network}
                 last4={account.last4}

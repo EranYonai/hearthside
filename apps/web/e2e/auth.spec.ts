@@ -291,7 +291,7 @@ test('dropping a card statement picks or creates its account and imports it', as
   await expect(owner.getByText('Added 3 transactions to Card ·4821')).toBeVisible()
   await owner.getByRole('link', { name: 'See your accounts' }).click()
   await expect(owner.getByTestId('accounts-card')).toContainText('•••• 4821')
-  await expect(owner.getByTestId('accounts-card')).toContainText('VISA')
+  await expect(owner.getByTestId('accounts-card').getByRole('img', { name: 'VISA' })).toBeVisible()
 
   // The same file again finds the account and adds nothing.
   const again = await drop(owner, 'visa-october.csv', Buffer.from(csv), 'text/csv')

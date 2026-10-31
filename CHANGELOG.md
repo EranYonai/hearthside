@@ -43,7 +43,7 @@ moves the Unreleased notes under the new version.
 - Account looks: each account shows a color and a short badge for where it comes from, and
   you can pick its source and your own color when editing it. Transactions show a matching dot.
 - Delete an account, with its imports and transactions, from its edit page (asks first).
-- Card network chips and a network picker; colors and badges for investment providers; your own logos per provider, kept private to your home.
+- Card network chips and a network picker; colors and badges for investment providers; a built-in logo and color theme for common providers, with sources listed beside the logos.
 
 ### Fixed
 

@@ -372,27 +372,6 @@ export const householdCategories = pgTable(
   ],
 )
 
-/**
- * A logo someone in the household uploaded for a bank, card company or broker. We don't ship
- * logos (they're trademarks), so each home brings its own, kept private like everything else.
- */
-export const brandLogos = pgTable(
-  'brand_logos',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    householdId: uuid('household_id')
-      .notNull()
-      .references(() => households.id, { onDelete: 'cascade' }),
-    /** blindIndex(brand id), e.g. of "leumi" or "ibkr". */
-    brandKey: text('brand_key').notNull(),
-    /** A small image as a data: URL (PNG, JPEG or WebP). */
-    image: encText('brand_logos', 'image').notNull(),
-    createdBy: uuid('created_by').references(() => members.id, { onDelete: 'set null' }),
-    createdAt: createdAt(),
-  },
-  (t) => [uniqueIndex('brand_logos_brand_idx').on(t.householdId, t.brandKey)],
-)
-
 // ---------- Investments ----------
 
 /** A brokerage, fund or savings account holding investments. Separate from everyday accounts. */

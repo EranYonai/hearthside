@@ -1,10 +1,4 @@
-import {
-  CATEGORIES,
-  CATEGORY_ICON_NAMES,
-  MAX_CUSTOM_CATEGORIES,
-  accountLook,
-  type BrandId,
-} from '@hearthside/core'
+import { CATEGORIES, CATEGORY_ICON_NAMES, MAX_CUSTOM_CATEGORIES } from '@hearthside/core'
 import { Card, Label, Notice } from '@hearthside/ui'
 import type { Metadata } from 'next'
 import { AddPasskeyButton } from '@/components/AddPasskeyButton'
@@ -21,13 +15,9 @@ import {
   unusedRecoveryCodeCount,
 } from '@/server/repo'
 import { listCustomCategories } from '@/server/categories'
-import { listInvestmentAccounts } from '@/server/invest'
-import { listAccounts } from '@/server/ledger'
-import { listBrandLogos } from '@/server/logos'
 import { requireSession } from '@/server/session'
 import { ProfileForm, RestartWelcome } from '../welcome/client'
 import { CategoryManager } from './categories'
-import { LogoSettings } from './logos'
 import {
   InviteCreator,
   MemberControls,
@@ -47,25 +37,14 @@ export default async function SettingsPage() {
   const { member, household } = await requireSession()
   const db = requireDb()
   const isOwner = member.role === 'owner'
-  const [people, keys, codesLeft, invites, activity, custom, logos, everyday, investing] =
-    await Promise.all([
-      listMembers(db, household.id, { includePending: isOwner }),
-      listPasskeys(db, member.id),
-      unusedRecoveryCodeCount(db, member.id),
-      isOwner ? listOpenInvites(db, household.id) : Promise.resolve([]),
-      isOwner ? recentAudit(db, household.id, 15) : Promise.resolve([]),
-      listCustomCategories(db, household.id),
-      listBrandLogos(db, household.id),
-      listAccounts(db, member),
-      listInvestmentAccounts(db, member),
-    ])
-  const inUse = [
-    ...new Set(
-      [...everyday, ...investing]
-        .map((a) => accountLook(a).brand)
-        .filter((b): b is BrandId => b !== null),
-    ),
-  ]
+  const [people, keys, codesLeft, invites, activity, custom] = await Promise.all([
+    listMembers(db, household.id, { includePending: isOwner }),
+    listPasskeys(db, member.id),
+    unusedRecoveryCodeCount(db, member.id),
+    isOwner ? listOpenInvites(db, household.id) : Promise.resolve([]),
+    isOwner ? recentAudit(db, household.id, 15) : Promise.resolve([]),
+    listCustomCategories(db, household.id),
+  ])
   const editor = member.role !== 'viewer'
   const waiting = people.filter((p) => !isApproved(p))
   const current = people.filter(isApproved)
@@ -108,17 +87,6 @@ export default async function SettingsPage() {
           custom.length > 0 && <p>Yours: {custom.map((c) => c.label).join(', ')}.</p>
         )}
       </Card>
-
-      {member.role !== 'viewer' && (
-        <Card aria-labelledby="logos">
-          <Label id="logos">Bank and card logos</Label>
-          <p className="text-caption text-ink-muted">
-            Hearthside doesn’t come with logos. Add the ones you like and they replace the initials
-            on your accounts. They stay private to your home.
-          </p>
-          <LogoSettings inUse={inUse} logos={logos} />
-        </Card>
-      )}
 
       <Card aria-labelledby="passkeys">
         <Label id="passkeys">Passkeys</Label>
