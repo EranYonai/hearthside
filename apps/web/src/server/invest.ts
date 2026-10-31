@@ -7,6 +7,9 @@ import {
   summarizePortfolio,
   valueMinor,
   type AssetClass,
+  cleanFundFacts,
+  FundFactsError,
+  type FundFacts,
   type Rates,
 } from '@hearthside/core'
 import type { Db, InstrumentRow, InvestmentAccountRow, MemberRow } from '@hearthside/db'
@@ -444,6 +447,8 @@ export interface HoldingView {
   quoteStatus: InstrumentRow['quoteStatus']
   checkedAt: Date | null
   updatedAt: Date
+  quoteSymbol: string | null
+  facts: FundFacts | null
 }
 
 /** Holdings in the accounts this member may see, with their latest prices. */
@@ -501,6 +506,8 @@ async function loadHoldings(db: Conn, where: SQL): Promise<HoldingView[]> {
         quoteStatus: i.quoteStatus,
         checkedAt: i.checkedAt,
         updatedAt: h.updatedAt,
+        quoteSymbol: i.quoteSymbol,
+        facts: i.facts ?? null,
       }
     })
     .sort((a, b) => (b.valueMinor ?? -1) - (a.valueMinor ?? -1) || a.name.localeCompare(b.name))
@@ -546,4 +553,33 @@ export async function portfolio(db: Conn, member: MemberRow, rates: Rates = new 
   )
   const summary = summarizePortfolio(list, member.displayCurrency, rates)
   return { accounts, holdings: list, summary, allocation: allocation(summary.byClass) }
+}
+
+/** One holding the member can see, with its account. */
+export async function getHolding(db: Conn, member: MemberRow, holdingId: string) {
+  const [holding] = await loadHoldings(db, and(visibleTo(member), eq(holdings.id, holdingId))!)
+  if (!holding) throw new AuthError('not_found', 'That holding is gone')
+  const account = await getVisibleInvestmentAccount(db, member, holding.accountId)
+  return { holding, account }
+}
+
+/** Save the fund facts for a holding's instrument; whoever manages the account can. */
+export async function saveFundFacts(
+  db: Conn,
+  member: MemberRow,
+  holdingId: string,
+  input: Parameters<typeof cleanFundFacts>[0],
+): Promise<FundFacts> {
+  const { holding, account } = await getHolding(db, member, holdingId)
+  assertManage(member, account)
+  if (holding.kind !== 'security') throw new AuthError('not_allowed', 'Cash has no fund facts')
+  let facts: FundFacts
+  try {
+    facts = cleanFundFacts(input)
+  } catch (err) {
+    if (err instanceof FundFactsError) throw new AuthError('not_allowed', err.message)
+    throw err
+  }
+  await db.update(instruments).set({ facts }).where(eq(instruments.id, holding.instrumentId))
+  return facts
 }

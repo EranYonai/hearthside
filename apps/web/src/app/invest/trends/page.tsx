@@ -8,7 +8,7 @@ import { requireDb } from '@/lib/db'
 import { currentRates } from '@/server/fx'
 import { trends } from '@/server/trends'
 import { requireSession } from '@/server/session'
-import { TrendChart } from './chart'
+import { LineChart } from '@/components/LineChart'
 
 export const metadata: Metadata = { title: 'Trends · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -82,7 +82,16 @@ export default async function TrendsPage({
           </div>
         </div>
         {t.series.length >= 2 ? (
-          <TrendChart points={t.series} currency={t.currency} />
+          <LineChart
+            label="Value and money put in over time"
+            kind="money"
+            currency={t.currency}
+            points={t.series.map((p) => ({ on: p.on, values: [p.valueMinor, p.contributedMinor] }))}
+            series={[
+              { label: 'Value', color: 'chart-1' },
+              { label: 'Put in', color: 'chart-2', dashed: true },
+            ]}
+          />
         ) : (
           <p className="text-ink-muted" data-testid="trend-empty">
             {t.since

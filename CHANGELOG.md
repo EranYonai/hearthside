@@ -24,6 +24,8 @@ moves the Unreleased notes under the new version.
 - Investment trends: value against money put in, time-weighted returns, and deposits, fees
   and income per year. Money in and out is recorded per account (#32).
 - The Import page also imports investment holdings into a chosen account.
+- A page per holding: position, share of the portfolio, price history from 1M to 5Y, and fund
+  facts (yearly fee, index, domicile, document links) kept by the household (#33).
 
 ### Security
 

@@ -19,7 +19,7 @@ still apply on top of this.
 | `category_rules`          |                                                                       | `match`                        |
 | `household_categories`    | `label`, `keywords`                                                   | `label_key` (unique names)     |
 | `investment_accounts`     | `name`, `provider`                                                    |                                |
-| `instruments`             | `symbol`, `name`, `quote_symbol`, `prev_close`                        | `symbol_key`                   |
+| `instruments`             | `symbol`, `name`, `quote_symbol`, `prev_close`, `facts`               | `symbol_key`                   |
 | `holdings`                | `units`, `cost_minor`                                                 |                                |
 | `instrument_prices`       | `price`                                                               |                                |
 | `investment_transactions` | `units`, `amount_minor`                                               | `dedup_key`                    |

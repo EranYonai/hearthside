@@ -111,7 +111,7 @@ export const ENCRYPTED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   transactions: ['description', 'amount_minor', 'original_minor', 'reference', 'notes'],
   household_categories: ['label', 'keywords'],
   investment_accounts: ['name', 'provider'],
-  instruments: ['symbol', 'name', 'quote_symbol', 'prev_close'],
+  instruments: ['symbol', 'name', 'quote_symbol', 'prev_close', 'facts'],
   holdings: ['units', 'cost_minor'],
   instrument_prices: ['price'],
   investment_transactions: ['units', 'amount_minor'],

@@ -4,9 +4,22 @@ import { createDb, initEncryption, migrateDb } from '@hearthside/db'
 import { sql as raw } from 'drizzle-orm'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createInvestmentAccount, listHoldings, portfolio, saveHolding } from './invest'
-import { keepQuotesFresh, quoteSourceUrl, refreshQuotes } from './prices'
-import { createHousehold } from './repo'
+import {
+  createInvestmentAccount,
+  getHolding,
+  listHoldings,
+  portfolio,
+  saveFundFacts,
+  saveHolding,
+} from './invest'
+import {
+  clearHistoryCache,
+  keepQuotesFresh,
+  priceHistory,
+  quoteSourceUrl,
+  refreshQuotes,
+} from './prices'
+import { AuthError, createHousehold } from './repo'
 
 const url = process.env.TEST_DATABASE_URL
 const client = url ? createDb(url, { max: 2 }) : undefined
@@ -201,5 +214,125 @@ describe.skipIf(!url)('market prices (Postgres)', () => {
     await keepQuotesFresh(db, { url: source, fetch, now: later })
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(6))
     await keepQuotesFresh(db, { url: null })
+  })
+
+  it('reads price history from the source, or from prices stored here', async () => {
+    const { member } = await createHousehold(db, {
+      householdName: 'Home',
+      ownerName: 'Alex',
+      passkey: {
+        id: `history-${Math.random()}`,
+        publicKey: 'pk',
+        counter: 0,
+        transports: [],
+        deviceType: 'singleDevice',
+        backedUp: false,
+        name: 'Phone',
+      },
+    })
+    const account = await createInvestmentAccount(db, member, {
+      name: 'Test account',
+      currency: 'USD',
+      visibility: 'household',
+    })
+    const holding = await saveHolding(db, member, account.id, {
+      kind: 'security',
+      symbol: 'TSTH',
+      name: 'Test history fund',
+      currency: 'USD',
+      assetClass: 'global_stocks',
+      units: '1',
+      price: '10',
+    })
+    const { holding: h } = await getHolding(db, member, holding.id)
+    const instrument = { ...h, id: h.instrumentId }
+    const day = (on: string) => Date.parse(`${on}T20:00:00Z`) / 1000
+    const fetch = vi.fn(async (input: string | URL | Request) => {
+      expect(String(input)).toContain('/chart/TSTH?interval=1wk&range=5y')
+      return new Response(
+        JSON.stringify({
+          chart: {
+            result: [
+              {
+                meta: { currency: 'USD', instrumentType: 'ETF', exchangeName: 'TST' },
+                timestamp: [day('2026-01-02'), day('2026-01-09')],
+                indicators: { quote: [{ close: [9.5, 10.25] }] },
+              },
+            ],
+            error: null,
+          },
+        }),
+      )
+    }) as unknown as typeof globalThis.fetch
+    clearHistoryCache()
+    const fromSource = await priceHistory(db, instrument, '5y', { url: source, fetch, now: t0 })
+    expect(fromSource).toMatchObject({ from: 'source', type: 'ETF', exchange: 'TST' })
+    expect(fromSource.points).toEqual([
+      { on: '2026-01-02', price: '9.5' },
+      { on: '2026-01-09', price: '10.25' },
+    ])
+    // Cached for an hour.
+    await priceHistory(db, instrument, '5y', { url: source, fetch, now: t0 })
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    // Off, or not known to the source: the last stored price per day.
+    const stored = await priceHistory(db, instrument, '1mo', { url: null })
+    expect(stored.from).toBe('stored')
+    expect(stored.points.map((p) => p.price)).toEqual(['10'])
+    const unknown = await priceHistory(db, instrument, '1y', {
+      url: source,
+      fetch: fakeSource({}),
+      now: t0,
+    })
+    expect(unknown.from).toBe('stored')
+  })
+
+  it('keeps fund facts for whoever manages the account', async () => {
+    const { member } = await createHousehold(db, {
+      householdName: 'Home',
+      ownerName: 'Alex',
+      passkey: {
+        id: `facts-${Math.random()}`,
+        publicKey: 'pk',
+        counter: 0,
+        transports: [],
+        deviceType: 'singleDevice',
+        backedUp: false,
+        name: 'Phone',
+      },
+    })
+    const account = await createInvestmentAccount(db, member, {
+      name: 'Test account',
+      currency: 'USD',
+      visibility: 'household',
+    })
+    const fund = await saveHolding(db, member, account.id, {
+      kind: 'security',
+      symbol: 'TSTF',
+      name: 'Test facts fund',
+      currency: 'USD',
+      assetClass: 'global_stocks',
+      units: '1',
+    })
+    const cash = await saveHolding(db, member, account.id, {
+      kind: 'cash',
+      currency: 'USD',
+      units: '1',
+    })
+    const facts = await saveFundFacts(db, member, fund.id, {
+      fee: '0.2',
+      index: 'A test index',
+      documents: [{ label: 'Key facts', url: 'https://example.com/kf.pdf' }],
+    })
+    expect((await getHolding(db, member, fund.id)).holding.facts).toEqual(facts)
+    const [row] = (await db.execute(
+      raw`select facts from instruments where symbol_key is not null and facts is not null`,
+    )) as unknown as { facts: string }[]
+    expect(row!.facts).not.toContain('example.com')
+    await expect(saveFundFacts(db, member, fund.id, { fee: 'lots' })).rejects.toThrow(AuthError)
+    await expect(saveFundFacts(db, member, cash.id, {})).rejects.toThrow(AuthError)
+    await expect(getHolding(db, member, '00000000-0000-0000-0000-000000000000')).rejects.toThrow(
+      AuthError,
+    )
   })
 })

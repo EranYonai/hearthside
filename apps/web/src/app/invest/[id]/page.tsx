@@ -163,25 +163,37 @@ export default async function InvestmentAccountPage({
                     )}
                   </span>
                 </summary>
-                {manage && (
-                  <div className="grid gap-3 pt-3">
-                    <HoldingForm
-                      accountId={account.id}
-                      accountCurrency={account.currency}
-                      holding={{
-                        kind: h.kind,
-                        symbol: h.symbol,
-                        name: h.name,
-                        currency: h.currency,
-                        assetClass: h.assetClass,
-                        units: h.units,
-                      }}
-                    />
-                    <div className="justify-self-start">
-                      <RemoveHoldingButton accountId={account.id} holdingId={h.id} name={h.name} />
-                    </div>
-                  </div>
-                )}
+                <div className="grid gap-3 pt-3">
+                  <Link
+                    href={`/invest/holding/${h.id}`}
+                    className="inline-flex min-h-11 items-center gap-1 justify-self-start text-body-strong text-brand-ink underline"
+                  >
+                    {h.kind === 'security' ? 'Price history and fund facts' : 'Details'}
+                  </Link>
+                  {manage && (
+                    <>
+                      <HoldingForm
+                        accountId={account.id}
+                        accountCurrency={account.currency}
+                        holding={{
+                          kind: h.kind,
+                          symbol: h.symbol,
+                          name: h.name,
+                          currency: h.currency,
+                          assetClass: h.assetClass,
+                          units: h.units,
+                        }}
+                      />
+                      <div className="justify-self-start">
+                        <RemoveHoldingButton
+                          accountId={account.id}
+                          holdingId={h.id}
+                          name={h.name}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
               </details>
             </li>
           ))}

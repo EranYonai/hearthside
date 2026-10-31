@@ -5,8 +5,15 @@ import { useState } from 'react'
 
 export interface ChartPoint {
   on: string
-  valueMinor: number
-  contributedMinor: number
+  /** One number per series: minor units for money, main units for prices. */
+  values: number[]
+}
+
+export interface ChartSeries {
+  label: string
+  /** A chart token, e.g. "chart-1". */
+  color: 'chart-1' | 'chart-2'
+  dashed?: boolean
 }
 
 const W = 600
@@ -21,22 +28,51 @@ const dayFormat = new Intl.DateTimeFormat('en-GB', {
 
 const day = (on: string) => dayFormat.format(new Date(`${on}T00:00:00Z`))
 
+const SWATCH = { 'chart-1': 'border-chart-1', 'chart-2': 'border-chart-2' }
+const DOT = { 'chart-1': 'bg-chart-1', 'chart-2': 'bg-chart-2' }
+
 /**
- * Value (solid) against money put in (dashed) over time, on one money axis. Hover or touch shows
- * both for the nearest day; the table below carries the same numbers.
+ * Lines over time on one axis. Hover or touch shows every series for the nearest day; pages carry
+ * the same numbers in a table.
  */
-export function TrendChart({ points, currency }: { points: ChartPoint[]; currency: string }) {
+export function LineChart({
+  points,
+  series,
+  currency,
+  kind,
+  label,
+}: {
+  points: ChartPoint[]
+  series: ChartSeries[]
+  currency: string
+  /** money: values are minor units, axis from zero. price: main units, axis fits the range. */
+  kind: 'money' | 'price'
+  label: string
+}) {
   const [active, setActive] = useState<number | null>(null)
   const times = points.map((p) => Date.parse(`${p.on}T00:00:00Z`))
   const t0 = times[0]!
   const span = Math.max(times.at(-1)! - t0, 1)
-  const values = points.flatMap((p) => [p.valueMinor, p.contributedMinor])
-  const top = niceCeil(Math.max(...values, 1))
+  const values = points.flatMap((p) => p.values)
+  const [bottom, top] =
+    kind === 'money'
+      ? [0, niceCeil(Math.max(...values, 1))]
+      : padRange(Math.min(...values), Math.max(...values))
   const x = (i: number) => ((times[i]! - t0) / span) * W
-  const y = (v: number) => H - (Math.max(v, 0) / top) * H
-  const path = (pick: (p: ChartPoint) => number) =>
-    points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(pick(p)).toFixed(1)}`).join('')
-  const money = (minor: number) => formatMoney(minor, { currency, whole: true })
+  const y = (v: number) => H - ((Math.max(v, bottom) - bottom) / (top - bottom)) * H
+  const path = (s: number) =>
+    points
+      .map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.values[s]!).toFixed(1)}`)
+      .join('')
+  const format = (n: number) =>
+    kind === 'money'
+      ? formatMoney(Math.round(n), { currency, whole: true })
+      : new Intl.NumberFormat('en-IL', {
+          style: 'currency',
+          currencyDisplay: 'narrowSymbol',
+          currency,
+          maximumFractionDigits: n >= 100 ? 2 : 4,
+        }).format(n)
   const point = active === null ? null : points[active]!
 
   function pick(clientX: number, rect: DOMRect) {
@@ -49,28 +85,32 @@ export function TrendChart({ points, currency }: { points: ChartPoint[]; currenc
   }
 
   return (
-    <figure className="grid gap-2" aria-label="Value and money put in over time">
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-muted" aria-hidden>
-        <span className="flex items-center gap-1.5">
-          <span className="h-0.5 w-4 rounded-pill bg-chart-1" /> Value
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-4 border-t-2 border-dashed border-chart-2" /> Money put in
-        </span>
-      </div>
+    <figure className="grid gap-2" aria-label={label}>
+      {series.length > 1 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-muted" aria-hidden>
+          {series.map((s) => (
+            <span key={s.label} className="flex items-center gap-1.5">
+              <span
+                className={`w-4 border-t-2 ${s.dashed ? 'border-dashed' : ''} ${SWATCH[s.color]}`}
+              />{' '}
+              {s.label}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="relative">
         <div className="grid grid-cols-[auto_1fr] gap-2">
           <div className="flex flex-col justify-between text-[11px] text-ink-faint tabular-nums">
-            <span>{money(top)}</span>
-            <span>{money(Math.round(top / 2))}</span>
-            <span>{money(0)}</span>
+            <span>{format(top)}</span>
+            <span>{format((top + bottom) / 2)}</span>
+            <span>{format(bottom)}</span>
           </div>
           <div
             className="relative h-48 touch-none"
             onPointerMove={(e) => pick(e.clientX, e.currentTarget.getBoundingClientRect())}
             onPointerDown={(e) => pick(e.clientX, e.currentTarget.getBoundingClientRect())}
             onPointerLeave={() => setActive(null)}
-            data-testid="trend-chart"
+            data-testid="line-chart"
           >
             <svg
               viewBox={`0 0 ${W} ${H}`}
@@ -90,24 +130,22 @@ export function TrendChart({ points, currency }: { points: ChartPoint[]; currenc
                   vectorEffect="non-scaling-stroke"
                 />
               ))}
-              <path
-                d={path((p) => p.contributedMinor)}
-                fill="none"
-                stroke="var(--hs-chart-2)"
-                strokeWidth={2}
-                strokeDasharray="5 4"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-              />
-              <path
-                d={path((p) => p.valueMinor)}
-                fill="none"
-                stroke="var(--hs-chart-1)"
-                strokeWidth={2}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-              />
+              {series
+                .map((s, i) => ({ s, i }))
+                .reverse()
+                .map(({ s, i }) => (
+                  <path
+                    key={s.label}
+                    d={path(i)}
+                    fill="none"
+                    stroke={`var(--hs-${s.color})`}
+                    strokeWidth={2}
+                    strokeDasharray={s.dashed ? '5 4' : undefined}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
             </svg>
             {point && (
               <>
@@ -117,10 +155,10 @@ export function TrendChart({ points, currency }: { points: ChartPoint[]; currenc
                   aria-hidden
                 />
                 <span
-                  className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-pill border-2 border-surface-1 bg-chart-1"
+                  className={`pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-pill border-2 border-surface-1 ${DOT[series[0]!.color]}`}
                   style={{
                     left: `${(x(active!) / W) * 100}%`,
-                    top: `${(y(point.valueMinor) / H) * 100}%`,
+                    top: `${(y(point.values[0]!) / H) * 100}%`,
                   }}
                   aria-hidden
                 />
@@ -134,12 +172,11 @@ export function TrendChart({ points, currency }: { points: ChartPoint[]; currenc
                   }
                 >
                   <span className="text-ink-muted">{day(point.on)}</span>
-                  <span className="flex justify-between gap-3">
-                    Value <b className="tabular-nums">{money(point.valueMinor)}</b>
-                  </span>
-                  <span className="flex justify-between gap-3">
-                    Put in <b className="tabular-nums">{money(point.contributedMinor)}</b>
-                  </span>
+                  {series.map((s, i) => (
+                    <span key={s.label} className="flex justify-between gap-3">
+                      {s.label} <b className="tabular-nums">{format(point.values[i]!)}</b>
+                    </span>
+                  ))}
                 </div>
               </>
             )}
@@ -159,4 +196,10 @@ export function niceCeil(minor: number): number {
   const p = 10 ** Math.floor(Math.log10(minor))
   for (const m of [1, 2, 5, 10]) if (m * p >= minor) return m * p
   return 10 * p
+}
+
+/** A little room above and below a price line, so it doesn't touch the edges. */
+export function padRange(min: number, max: number): [number, number] {
+  const pad = (max - min) * 0.1 || Math.abs(max) * 0.05 || 1
+  return [Math.max(0, min - pad), max + pad]
 }

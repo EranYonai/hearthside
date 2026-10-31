@@ -1,7 +1,15 @@
-import { parseChartQuote, quoteIsDue, quoteSymbolFor, type Quote } from '@hearthside/core'
+import {
+  type HistoryRange,
+  parseChartHistory,
+  parseChartQuote,
+  type PriceHistory,
+  quoteIsDue,
+  quoteSymbolFor,
+  type Quote,
+} from '@hearthside/core'
 import type { Db } from '@hearthside/db'
 import { schema } from '@hearthside/db'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, gte } from 'drizzle-orm'
 
 const { instruments, holdings, instrumentPrices } = schema
 
@@ -147,4 +155,100 @@ export async function keepQuotesFresh(
       inFlight = undefined
     })
   if (held.some((i) => i.checkedAt === null)) await inFlight
+}
+
+const HISTORY_TTL_MS = 60 * 60 * 1000
+const RANGE_DAYS: Record<HistoryRange, number> = { '1mo': 31, '6mo': 183, '1y': 366, '5y': 1827 }
+const historyCache = new Map<string, { at: number; history: PriceHistory | null }>()
+
+export interface HistoryView {
+  points: { on: string; price: string }[]
+  /** Where the points came from: the quote source, or prices stored here. */
+  from: 'source' | 'stored'
+  type: string | null
+  exchange: string | null
+  longName: string | null
+}
+
+/**
+ * Daily closes for a security over a range: from the quote source (cached for an hour), or the
+ * prices stored here when the source is off or doesn't know it. Only the symbol is sent.
+ */
+export async function priceHistory(
+  db: Db,
+  instrument: { id: string; symbol: string; currency: string; quoteSymbol: string | null },
+  range: HistoryRange,
+  options: { url?: string | null; fetch?: typeof fetch; now?: Date } = {},
+): Promise<HistoryView> {
+  const url = options.url === undefined ? quoteSourceUrl() : options.url
+  const now = options.now ?? new Date()
+  if (url) {
+    const symbol = quoteSymbolFor(instrument.symbol, instrument.currency, instrument.quoteSymbol)
+    const key = `${url}|${symbol}|${range}`
+    let hit = historyCache.get(key)
+    if (!hit || now.getTime() - hit.at > HISTORY_TTL_MS) {
+      hit = {
+        at: now.getTime(),
+        history: await fetchHistory(url, symbol, range, options.fetch ?? fetch),
+      }
+      historyCache.set(key, hit)
+    }
+    const h = hit.history
+    if (h && h.currency === instrument.currency && h.points.length > 1)
+      return {
+        points: h.points,
+        from: 'source',
+        type: h.type,
+        exchange: h.exchange,
+        longName: h.longName,
+      }
+  }
+  const since = new Date(now.getTime() - RANGE_DAYS[range] * 86_400_000)
+  const rows = await db
+    .select({ price: instrumentPrices.price, pricedAt: instrumentPrices.pricedAt })
+    .from(instrumentPrices)
+    .where(
+      and(eq(instrumentPrices.instrumentId, instrument.id), gte(instrumentPrices.pricedAt, since)),
+    )
+    .orderBy(asc(instrumentPrices.pricedAt))
+  // The last price of each day.
+  const byDay = new Map(rows.map((r) => [r.pricedAt.toISOString().slice(0, 10), r.price]))
+  return {
+    points: [...byDay].map(([on, price]) => ({ on, price })),
+    from: 'stored',
+    type: null,
+    exchange: null,
+    longName: null,
+  }
+}
+
+async function fetchHistory(
+  base: string,
+  symbol: string,
+  range: HistoryRange,
+  doFetch: typeof fetch,
+): Promise<PriceHistory | null> {
+  try {
+    const interval = range === '5y' ? '1wk' : '1d'
+    const res = await doFetch(
+      `${base}/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`,
+      {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (Hearthside)' },
+      },
+    )
+    if (res.status === 404) return null
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return parseChartHistory(await res.json())
+  } catch (err) {
+    console.error(
+      JSON.stringify({ level: 'warn', msg: 'price history failed', error: String(err) }),
+    )
+    return null
+  }
+}
+
+/** For tests. */
+export function clearHistoryCache() {
+  historyCache.clear()
 }

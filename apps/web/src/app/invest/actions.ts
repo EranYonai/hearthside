@@ -11,6 +11,7 @@ import {
   importHoldings,
   mayManage,
   removeHolding,
+  saveFundFacts,
   saveHolding,
   updateInvestmentAccount,
   type HoldingInput,
@@ -128,6 +129,22 @@ export async function removeMovementAction(accountId: string, id: string) {
   const { member } = await requireSession()
   return runAction([...PATHS, `/invest/${accountId}`, '/invest/trends'], async () => {
     await removeMovement(requireDb(), member, id)
+    return {}
+  })
+}
+
+export async function saveFundFactsAction(
+  holdingId: string,
+  input: {
+    fee?: string
+    index?: string
+    domicile?: string
+    documents?: { label: string; url: string }[]
+  },
+) {
+  const { member } = await requireSession()
+  return runAction([`/invest/holding/${holdingId}`], async () => {
+    await saveFundFacts(requireDb(), member, holdingId, input)
     return {}
   })
 }

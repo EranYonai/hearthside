@@ -436,6 +436,26 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await holdingsImport.getByRole('button', { name: 'Read file' }).click()
   await holdingsImport.getByRole('button', { name: 'Import 1 holding' }).click()
   await expect(holdingsImport.getByText('Added 0, updated 1, removed')).toBeVisible()
+
+  // Each holding has a page with its position, price history and fund facts.
+  await owner
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Invest' })
+    .click()
+  await owner.getByTestId('investment-accounts').getByRole('link').first().click()
+  await owner.getByTestId('holdings').getByText('Test World Index').click()
+  await owner.getByRole('link', { name: 'Price history and fund facts' }).first().click()
+  await expect(owner.getByRole('heading', { name: 'Test World Index' })).toBeVisible()
+  await expect(owner.getByTestId('portfolio-share')).toContainText('%')
+  await owner.getByText('Edit fund facts').click()
+  await owner.getByLabel('Yearly fee (%)').fill('0.07')
+  await owner.getByLabel('Document 1 name').fill('Prospectus')
+  await owner.getByLabel('Document 1 link').fill('https://example.com/prospectus.pdf')
+  await owner.getByRole('button', { name: 'Save fund facts' }).click()
+  await expect(owner.getByTestId('fund-facts')).toContainText('0.07%')
+  await expect(
+    owner.getByTestId('fund-documents').getByRole('link', { name: 'Prospectus' }),
+  ).toHaveAttribute('href', 'https://example.com/prospectus.pdf')
 })
 
 test('settings show the app version and sign-in activity', async () => {

@@ -14,6 +14,7 @@ import {
   previewHoldingsFileAction,
   removeHoldingAction,
   removeMovementAction,
+  saveFundFactsAction,
   saveHoldingAction,
   setDisplayCurrencyAction,
   updateInvestmentAccountAction,
@@ -699,5 +700,106 @@ export function InvestImport(props: { accounts: { id: string; name: string }[] }
       )}
       <HoldingsImport key={accountId} accountId={accountId} />
     </div>
+  )
+}
+
+/** Edit the facts kept about a fund: yearly fee, index, domicile and document links. */
+export function FundFactsForm(props: {
+  holdingId: string
+  facts: {
+    fee: string | null
+    index: string | null
+    domicile: string | null
+    documents: { label: string; url: string }[]
+  } | null
+}) {
+  const router = useRouter()
+  const f = props.facts
+  const [fee, setFee] = useState(f?.fee ?? '')
+  const [index, setIndex] = useState(f?.index ?? '')
+  const [domicile, setDomicile] = useState(f?.domicile ?? '')
+  const [docs, setDocs] = useState(() => {
+    const list = (f?.documents ?? []).map((d) => ({ ...d }))
+    return list.length < 5 ? [...list, { label: '', url: '' }] : list
+  })
+  const [saved, setSaved] = useState(false)
+  const { pending, error, run } = useAction()
+  const setDoc = (i: number, key: 'label' | 'url', value: string) =>
+    setDocs((list) => {
+      const next = list.map((d, j) => (j === i ? { ...d, [key]: value } : d))
+      const last = next.at(-1)!
+      return last.url && next.length < 5 ? [...next, { label: '', url: '' }] : next
+    })
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        setSaved(false)
+        run(
+          () => saveFundFactsAction(props.holdingId, { fee, index, domicile, documents: docs }),
+          () => {
+            setSaved(true)
+            router.refresh()
+          },
+        )
+      }}
+    >
+      <TextField
+        label="Yearly fee (%)"
+        name="fee"
+        inputMode="decimal"
+        value={fee}
+        onChange={(e) => setFee(e.target.value)}
+        hint="The total expense ratio, like 0.07"
+        autoComplete="off"
+      />
+      <TextField
+        label="Index it tracks"
+        name="index"
+        maxLength={80}
+        value={index}
+        onChange={(e) => setIndex(e.target.value)}
+        autoComplete="off"
+      />
+      <TextField
+        label="Domicile"
+        name="domicile"
+        maxLength={40}
+        value={domicile}
+        onChange={(e) => setDomicile(e.target.value)}
+        hint="Where the fund is registered, which can matter for tax"
+        autoComplete="off"
+      />
+      <fieldset className="grid gap-3">
+        <legend className="mb-1 text-body-strong">Documents</legend>
+        {docs.map((d, i) => (
+          <div key={i} className="grid gap-2 sm:grid-cols-2">
+            <TextField
+              label={`Document ${i + 1} name`}
+              name={`doc-label-${i}`}
+              maxLength={40}
+              value={d.label}
+              onChange={(e) => setDoc(i, 'label', e.target.value)}
+              autoComplete="off"
+            />
+            <TextField
+              label={`Document ${i + 1} link`}
+              name={`doc-url-${i}`}
+              type="url"
+              placeholder="https://"
+              value={d.url}
+              onChange={(e) => setDoc(i, 'url', e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        ))}
+      </fieldset>
+      {error && <Notice tone="negative">{error}</Notice>}
+      {saved && !error && <Notice tone="positive">Saved.</Notice>}
+      <Button type="submit" disabled={pending} className="justify-self-start">
+        Save fund facts
+      </Button>
+    </form>
   )
 }

@@ -398,6 +398,13 @@ export const instruments = pgTable(
     /** Last time the quote source was asked, and what it said. */
     checkedAt: ts('checked_at'),
     quoteStatus: text('quote_status', { enum: ['ok', 'not_found', 'error'] }),
+    /** Fund facts a member typed: yearly fee, index tracked, domicile, document links. */
+    facts: encJson<{
+      fee: string | null
+      index: string | null
+      domicile: string | null
+      documents: { label: string; url: string }[]
+    }>('instruments', 'facts'),
     createdAt: createdAt(),
   },
   (t) => [

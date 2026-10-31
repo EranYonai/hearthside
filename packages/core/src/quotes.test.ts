@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { NOT_FOUND_RETRY_MS, parseChartQuote, quoteIsDue, quoteSymbolFor } from './quotes'
+import {
+  cleanFundFacts,
+  FundFactsError,
+  isHistoryRange,
+  NOT_FOUND_RETRY_MS,
+  parseChartHistory,
+  parseChartQuote,
+  quoteIsDue,
+  quoteSymbolFor,
+} from './quotes'
 
 // Made-up quotes in the source's shape.
 const chart = (meta: Record<string, unknown>) => ({ chart: { result: [{ meta }], error: null } })
@@ -75,5 +84,89 @@ describe('quoteIsDue', () => {
     expect(quoteIsDue(ago(16 * 60_000), 'error', now)).toBe(true)
     expect(quoteIsDue(ago(60 * 60_000), 'not_found', now)).toBe(false)
     expect(quoteIsDue(ago(NOT_FOUND_RETRY_MS + 1), 'not_found', now)).toBe(true)
+  })
+})
+
+describe('parseChartHistory', () => {
+  const day = (on: string) => Date.parse(`${on}T14:30:00Z`) / 1000
+  it('reads daily closes, skipping gaps and converting subunits', () => {
+    const h = parseChartHistory({
+      chart: {
+        result: [
+          {
+            meta: {
+              currency: 'ILA',
+              instrumentType: 'ETF',
+              exchangeName: 'TLV',
+              longName: ' Test Fund ',
+            },
+            timestamp: [day('2026-01-02'), day('2026-01-01'), day('2026-01-03'), 'x'],
+            indicators: { quote: [{ close: [1250, 1200, null, 5] }] },
+          },
+        ],
+        error: null,
+      },
+    })
+    expect(h).toEqual({
+      currency: 'ILS',
+      points: [
+        { on: '2026-01-01', price: '12' },
+        { on: '2026-01-02', price: '12.5' },
+      ],
+      type: 'ETF',
+      exchange: 'TLV',
+      longName: 'Test Fund',
+    })
+  })
+
+  it('knows unknown symbols and odd answers apart', () => {
+    expect(parseChartHistory({ chart: { result: null, error: { code: 'Not Found' } } })).toBeNull()
+    expect(parseChartHistory({ chart: { result: [{ meta: { currency: '' } }] } })).toBeNull()
+    expect(
+      parseChartHistory({ chart: { result: [{ meta: { currency: 'USD' } }], error: null } }),
+    ).toMatchObject({ points: [], type: null, exchange: null, longName: null })
+    expect(() => parseChartHistory({})).toThrow()
+    expect(() => parseChartHistory({ chart: { result: [] } })).toThrow()
+    expect(isHistoryRange('1y')).toBe(true)
+    expect(isHistoryRange('max')).toBe(false)
+  })
+})
+
+describe('cleanFundFacts', () => {
+  it('keeps what makes sense', () => {
+    expect(
+      cleanFundFacts({
+        fee: ' 0.07 % ',
+        index: '  A   world index ',
+        domicile: '',
+        documents: [
+          { label: 'Prospectus', url: 'https://example.com/p.pdf' },
+          { label: '', url: 'https://docs.example.org/kid' },
+          { label: 'blank', url: '' },
+        ],
+      }),
+    ).toEqual({
+      fee: '0.07',
+      index: 'A world index',
+      domicile: null,
+      documents: [
+        { label: 'Prospectus', url: 'https://example.com/p.pdf' },
+        { label: 'docs.example.org', url: 'https://docs.example.org/kid' },
+      ],
+    })
+    expect(cleanFundFacts({})).toEqual({ fee: null, index: null, domicile: null, documents: [] })
+  })
+
+  it('refuses what does not', () => {
+    for (const bad of [
+      { fee: 'cheap' },
+      { fee: '12' },
+      { index: 'x'.repeat(81) },
+      { documents: [{ url: 'http://example.com' }] },
+      { documents: [{ url: 'javascript:alert(1)' }] },
+      { documents: [{ url: 'not a link' }] },
+      { documents: Array.from({ length: 6 }, () => ({ url: 'https://example.com' })) },
+    ])
+      expect(() => cleanFundFacts(bad)).toThrow(FundFactsError)
   })
 })
