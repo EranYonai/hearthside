@@ -4,14 +4,16 @@ import {
   duplicateKeys,
   suggestAccountName,
   type DetectedSource,
+  CUSTOM_PREFIX,
   isCategory,
   normalizeDescription,
-  type CategorySlug,
   type ParsedTransaction,
 } from '@hearthside/core'
 import type { AccountRow, MemberRow } from '@hearthside/db'
 import { blindIndex, schema } from '@hearthside/db'
 import { and, desc, eq, gte, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm'
+import { householdCategorySet } from './categories'
+import { loadContext, quickCategory } from './categorize'
 import { audit, AuthError, type Tx } from './repo'
 import { sha256 } from './tokens'
 
@@ -286,14 +288,6 @@ export async function findBatchByHash(db: Conn, accountId: string, fileHash: str
   return row
 }
 
-async function ruleMap(db: Conn, householdId: string) {
-  const rules = await db
-    .select({ match: categoryRules.match, category: categoryRules.category })
-    .from(categoryRules)
-    .where(eq(categoryRules.householdId, householdId))
-  return new Map(rules.map((r) => [r.match, r.category]))
-}
-
 export async function commitImport(
   db: Conn,
   member: MemberRow,
@@ -302,7 +296,7 @@ export async function commitImport(
 ) {
   if (account.ownerId !== member.id) throw new AuthError('not_allowed', 'Not your account')
   const run = async (tx: Tx) => {
-    const rules = await ruleMap(tx, member.householdId)
+    const categories = await loadContext(tx, member.householdId)
     const [batch] = await tx
       .insert(importBatches)
       .values({
@@ -321,7 +315,6 @@ export async function commitImport(
     for (let i = 0; i < fresh.length; i += 500) {
       const values = fresh.slice(i, i + 500).map((r) => {
         const key = descriptionIndex(r.description)
-        const category = rules.get(key)
         return {
           householdId: member.householdId,
           accountId: account.id,
@@ -337,8 +330,12 @@ export async function commitImport(
           installmentTotal: r.installment?.total ?? null,
           reference: r.reference ?? null,
           notes: r.notes?.slice(0, 500) ?? null,
-          category: category ?? null,
-          categorySource: category ? ('rule' as const) : null,
+          // Rules, past choices and keywords now; the model fills the rest in the background.
+          ...quickCategory(categories, {
+            description: r.description,
+            descriptionKey: key,
+            amountMinor: r.amountMinor,
+          }),
           dedupKey: r.dedupKey,
         }
       })
@@ -432,7 +429,7 @@ function filterConditions(member: MemberRow, f: TransactionFilter): SQL {
   if (f.kind) conditions.push(eq(accounts.kind, f.kind))
   if (f.holderId) conditions.push(sql`${holder} = ${f.holderId}`)
   if (f.category === 'none') conditions.push(isNull(transactions.category))
-  else if (f.category && isCategory(f.category))
+  else if (f.category && (isCategory(f.category) || f.category.startsWith(CUSTOM_PREFIX)))
     conditions.push(eq(transactions.category, f.category))
   return and(...conditions)!
 }
@@ -567,11 +564,11 @@ export async function setCategory(
   db: Conn,
   member: MemberRow,
   transactionId: string,
-  category: CategorySlug | null,
+  category: string | null,
   remember = false,
 ) {
   assertEditor(member)
-  if (category !== null && !isCategory(category))
+  if (category !== null && !(await householdCategorySet(db, member.householdId)).has(category))
     throw new AuthError('not_found', 'Unknown category')
   const [row] = await db
     .select({ t: transactions })
@@ -581,7 +578,13 @@ export async function setCategory(
   if (!row) throw new AuthError('not_found', 'That transaction isn’t here')
   await db
     .update(transactions)
-    .set({ category, categorySource: category ? 'manual' : null })
+    .set({
+      category,
+      // Cleared by hand stays 'manual', so the categorizer leaves it alone.
+      categorySource: 'manual',
+      categoryVia: null,
+      categoryConfidence: null,
+    })
     .where(eq(transactions.id, transactionId))
   let also = 0
   if (remember && category) {
@@ -595,12 +598,15 @@ export async function setCategory(
       })
     const updated = await db
       .update(transactions)
-      .set({ category, categorySource: 'rule' })
+      .set({ category, categorySource: 'rule', categoryVia: null, categoryConfidence: null })
       .where(
         and(
           eq(transactions.householdId, member.householdId),
           eq(transactions.descriptionKey, key),
-          or(isNull(transactions.categorySource), eq(transactions.categorySource, 'rule')),
+          or(
+            isNull(transactions.categorySource),
+            inArray(transactions.categorySource, ['rule', 'auto']),
+          ),
         ),
       )
       .returning({ id: transactions.id })

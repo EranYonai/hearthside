@@ -2,7 +2,15 @@
 
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
+import { isCategoryIcon } from '@hearthside/core'
 import { requireDb } from '@/lib/db'
+import {
+  createCategory,
+  deleteCategory,
+  updateCategory,
+  type CategoryInput,
+} from '@/server/categories'
+import { resetCategorizer, scheduleCategorize } from '@/server/categorize'
 import { authConfig } from '@/server/config'
 import {
   AuthError,
@@ -79,4 +87,57 @@ export async function removePasskeyAction(passkeyId: string) {
 export async function regenerateCodesAction() {
   const { member } = await requireSession()
   return run(async () => ({ codes: await regenerateRecoveryCodes(requireDb(), member) }))
+}
+
+export interface CategoryForm {
+  label: string
+  icon: string
+  direction: 'out' | 'in'
+  keywords: string
+}
+
+function categoryInput(form: CategoryForm): CategoryInput {
+  if (!isCategoryIcon(form.icon)) throw new AuthError('not_found', 'Pick an icon')
+  return {
+    label: String(form.label ?? ''),
+    icon: form.icon,
+    direction: form.direction === 'in' ? 'in' : 'out',
+    keywords: String(form.keywords ?? '').split(','),
+  }
+}
+
+/** After categories change, give waiting entries another look with the new words. */
+async function refileAfterChange(householdId: string) {
+  const db = requireDb()
+  await resetCategorizer(db, householdId, 'uncategorized')
+  void scheduleCategorize(db, householdId)
+  revalidatePath('/transactions')
+  revalidatePath('/')
+}
+
+export async function createCategoryAction(form: CategoryForm) {
+  const { member } = await requireSession()
+  return run(async () => {
+    const result = await createCategory(requireDb(), member, categoryInput(form))
+    await refileAfterChange(member.householdId)
+    return result
+  })
+}
+
+export async function updateCategoryAction(slug: string, form: CategoryForm) {
+  const { member } = await requireSession()
+  return run(async () => {
+    await updateCategory(requireDb(), member, String(slug), categoryInput(form))
+    await refileAfterChange(member.householdId)
+    return {}
+  })
+}
+
+export async function deleteCategoryAction(slug: string) {
+  const { member } = await requireSession()
+  return run(async () => {
+    const result = await deleteCategory(requireDb(), member, String(slug))
+    await refileAfterChange(member.householdId)
+    return result
+  })
 }

@@ -31,6 +31,8 @@ async function legacyInstall() {
       ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000003', '2026-10-01', 'Coffee', 'coffee', -1800, 'abc');
     insert into category_rules (household_id, match, category) values
       ('00000000-0000-4000-8000-000000000001', 'coffee', 'eating-out');
+    insert into household_categories (household_id, slug, label, icon, keywords) values
+      ('00000000-0000-4000-8000-000000000001', 'c-test', 'Kids Club', 'star', '["zorblax"]');
     insert into audit_log (household_id, action, detail, ip) values
       ('00000000-0000-4000-8000-000000000001', 'test', '{"name":"Phone"}', '192.0.2.1');
   `),
@@ -70,9 +72,15 @@ describe.skipIf(!url)('encryption at rest (Postgres)', () => {
 
     const dump = JSON.stringify(
       await Promise.all(
-        ['households', 'members', 'accounts', 'transactions', 'category_rules', 'audit_log'].map(
-          (t) => raw(`select * from ${t}`),
-        ),
+        [
+          'households',
+          'members',
+          'accounts',
+          'transactions',
+          'category_rules',
+          'audit_log',
+          'household_categories',
+        ].map((t) => raw(`select * from ${t}`)),
       ),
     )
     for (const secret of [
@@ -84,6 +92,8 @@ describe.skipIf(!url)('encryption at rest (Postgres)', () => {
       '-1800',
       '192.0.2.1',
       'Phone',
+      'Kids Club',
+      'zorblax',
     ])
       expect(dump).not.toContain(secret)
 
@@ -91,6 +101,9 @@ describe.skipIf(!url)('encryption at rest (Postgres)', () => {
     expect(t).toMatchObject({ description: 'Coffee', amountMinor: -1800 })
     const [a] = await db.select().from(schema.accounts)
     expect(a).toMatchObject({ name: 'Alex card', provider: 'demo', last4: '1234' })
+    const [cat] = await db.select().from(schema.householdCategories)
+    expect(cat).toMatchObject({ label: 'Kids Club', keywords: ['zorblax'] })
+    expect(cat!.labelKey).toMatch(/^hb1:/)
     const [entry] = await db.select().from(schema.auditLog)
     expect(entry).toMatchObject({ detail: { name: 'Phone' }, ip: '192.0.2.1' })
 

@@ -1,3 +1,4 @@
+import { CATEGORIES, CATEGORY_ICON_NAMES, MAX_CUSTOM_CATEGORIES } from '@hearthside/core'
 import { Card, Label, Notice } from '@hearthside/ui'
 import type { Metadata } from 'next'
 import { AddPasskeyButton } from '@/components/AddPasskeyButton'
@@ -12,8 +13,10 @@ import {
   recentAudit,
   unusedRecoveryCodeCount,
 } from '@/server/repo'
+import { listCustomCategories } from '@/server/categories'
 import { requireSession } from '@/server/session'
 import { ProfileForm, RestartWelcome } from '../welcome/client'
+import { CategoryManager } from './categories'
 import {
   InviteCreator,
   MemberControls,
@@ -32,13 +35,15 @@ export default async function SettingsPage() {
   const { member, household } = await requireSession()
   const db = requireDb()
   const isOwner = member.role === 'owner'
-  const [people, keys, codesLeft, invites, activity] = await Promise.all([
+  const [people, keys, codesLeft, invites, activity, custom] = await Promise.all([
     listMembers(db, household.id),
     listPasskeys(db, member.id),
     unusedRecoveryCodeCount(db, member.id),
     isOwner ? listOpenInvites(db, household.id) : Promise.resolve([]),
     isOwner ? recentAudit(db, household.id, 15) : Promise.resolve([]),
+    listCustomCategories(db, household.id),
   ])
+  const editor = member.role !== 'viewer'
 
   return (
     <AppShell household={household.name} current="/settings">
@@ -60,6 +65,23 @@ export default async function SettingsPage() {
           <SignOutButton />
         </div>
         <RestartWelcome />
+      </Card>
+
+      <Card aria-labelledby="categories">
+        <Label id="categories">Categories</Label>
+        <p className="text-caption text-ink-muted">
+          Built in: {CATEGORIES.map((c) => c.label).join(', ')}.
+          {editor && ' Add your own below; automatic categorizing uses them too.'}
+        </p>
+        {editor ? (
+          <CategoryManager
+            custom={custom}
+            icons={CATEGORY_ICON_NAMES}
+            max={MAX_CUSTOM_CATEGORIES}
+          />
+        ) : (
+          custom.length > 0 && <p>Yours: {custom.map((c) => c.label).join(', ')}.</p>
+        )}
       </Card>
 
       <Card aria-labelledby="passkeys">

@@ -51,6 +51,8 @@ services:
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3300}
       # Master key for private fields (docs/encryption.md). Back it up offline.
       ENCRYPTION_KEY_FILE: /run/secrets/encryption_key
+      # The local categorization model. If it is down, entries wait for it.
+      DECIDE_URL: http://decide:8080
     secrets: [db_password, encryption_key]
     ports:
       # Loopback only by default. WEB_BIND=0.0.0.0 in .env opens it to the LAN for testing.
@@ -58,7 +60,44 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    networks: [data, app]
+    networks: [data, app, model]
+    logging: *logging
+
+  # One-shot: downloads the model files (about 1.7 GB) into the `models` volume the first
+  # time, then exits. It sends no household data; it only fetches published model files.
+  decide-fetch:
+    build:
+      context: .
+      target: decide
+    image: hearthside-decide
+    command: ['node', 'src/fetch-model.ts']
+    restart: 'no'
+    # The image's health check is for the service, not this one-shot download.
+    healthcheck:
+      disable: true
+    <<: *hardening
+    environment:
+      LAYA_VARIANT: ${LAYA_VARIANT:-}
+    volumes:
+      - models:/models
+    networks: [fetch]
+    logging: *logging
+
+  # The local model. Reachable only by the web app, with no database and no internet.
+  decide:
+    image: hearthside-decide
+    restart: unless-stopped
+    <<: *hardening
+    environment:
+      MODEL_THREADS: ${MODEL_THREADS:-2}
+    volumes:
+      - models:/models:ro
+    depends_on:
+      decide-fetch:
+        condition: service_completed_successfully
+    # The model takes about 2 GB loaded.
+    mem_limit: ${MODEL_MEMORY:-3g}
+    networks: [model]
     logging: *logging
 
   worker:
@@ -85,8 +124,14 @@ secrets:
 
 volumes:
   db-data:
+  models:
 
 networks:
   data:
     internal: true
   app:
+  # Web app <-> model only. Internal: no way out to the internet.
+  model:
+    internal: true
+  # Only for downloading the model files.
+  fetch:

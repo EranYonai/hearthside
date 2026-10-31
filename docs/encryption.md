@@ -6,17 +6,18 @@ still apply on top of this.
 
 ## What is encrypted
 
-| Table             | Encrypted                                                             | Keyed hash (lookups)           |
-| ----------------- | --------------------------------------------------------------------- | ------------------------------ |
-| `households`      | `name`                                                                |                                |
-| `members`         | `name`                                                                |                                |
-| `passkeys`        | `name`                                                                |                                |
-| `auth_challenges` | `payload`                                                             |                                |
-| `audit_log`       | `detail`, `ip`                                                        | `ip_hash` (rate limits)        |
-| `accounts`        | `name`, `provider`, `network`, `last4`                                |                                |
-| `import_batches`  | `file_name`                                                           | `file_hash` (same file twice)  |
-| `transactions`    | `description`, `amount_minor`, `original_minor`, `reference`, `notes` | `description_key`, `dedup_key` |
-| `category_rules`  |                                                                       | `match`                        |
+| Table                  | Encrypted                                                             | Keyed hash (lookups)           |
+| ---------------------- | --------------------------------------------------------------------- | ------------------------------ |
+| `households`           | `name`                                                                |                                |
+| `members`              | `name`                                                                |                                |
+| `passkeys`             | `name`                                                                |                                |
+| `auth_challenges`      | `payload`                                                             |                                |
+| `audit_log`            | `detail`, `ip`                                                        | `ip_hash` (rate limits)        |
+| `accounts`             | `name`, `provider`, `network`, `last4`                                |                                |
+| `import_batches`       | `file_name`                                                           | `file_hash` (same file twice)  |
+| `transactions`         | `description`, `amount_minor`, `original_minor`, `reference`, `notes` | `description_key`, `dedup_key` |
+| `category_rules`       |                                                                       | `match`                        |
+| `household_categories` | `label`, `keywords`                                                   | `label_key` (unique names)     |
 
 Left in the clear because queries need them and they say little alone: ids, roles, dates,
 currencies, account kind and visibility, categories, installment numbers and timestamps.

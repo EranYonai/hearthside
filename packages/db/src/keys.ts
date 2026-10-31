@@ -109,6 +109,7 @@ export const ENCRYPTED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   accounts: ['name', 'provider', 'network', 'last4'],
   import_batches: ['file_name'],
   transactions: ['description', 'amount_minor', 'original_minor', 'reference', 'notes'],
+  household_categories: ['label', 'keywords'],
 }
 
 /** Keyed-hash columns; their plaintext form was the value itself (or its SHA-256). */
@@ -117,6 +118,7 @@ export const BLIND_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   import_batches: ['file_hash'],
   transactions: ['description_key', 'dedup_key'],
   category_rules: ['match'],
+  household_categories: ['label_key'],
 }
 
 const CHUNK = 1000

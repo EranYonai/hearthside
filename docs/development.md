@@ -7,13 +7,14 @@
 
 ## Layout
 
-| Path            | What                                                                |
-| --------------- | ------------------------------------------------------------------- |
-| `apps/web`      | Next.js app: UI and API                                             |
-| `apps/worker`   | Background worker. Talks to the web API only, never to the database |
-| `packages/core` | Domain logic: money formatting, household roles, sync state         |
-| `packages/db`   | Database client                                                     |
-| `packages/ui`   | Design tokens and React components                                  |
+| Path            | What                                                                   |
+| --------------- | ---------------------------------------------------------------------- |
+| `apps/web`      | Next.js app: UI and API                                                |
+| `apps/worker`   | Background worker. Talks to the web API only, never to the database    |
+| `apps/decide`   | Local model service. Answers typed questions; no database, no internet |
+| `packages/core` | Domain logic: money, roles, import, categorizing, the `decide` client  |
+| `packages/db`   | Database client                                                        |
+| `packages/ui`   | Design tokens and React components                                     |
 
 ## Everyday commands
 
@@ -87,6 +88,41 @@ placed into columns by position, via pdf.js). It finds header rows by their labe
 preambles, several tables per sheet and totals rows are fine. Duplicates are matched per
 account by a hash of date, amount, description and installment (or the reference number when
 the file has one). Test fixtures are synthetic; never commit a real export.
+
+## Asking the model
+
+`@hearthside/core` exposes a general decision API, so features beyond categories (hints,
+insights) can ask the local model typed questions without knowing which model runs:
+
+```ts
+import { httpEngine } from '@hearthside/core'
+
+const engine = httpEngine({ url: process.env.DECIDE_URL! })
+const [answers] = await engine.decide([
+  {
+    state: { description: 'Example entry', amount: '12.00 ILS' },
+    questions: {
+      kind: { type: 'choice', instructions: 'Which?', options: { a: 'first', b: 'second' } },
+      size: { type: 'scale', instructions: 'How big?', levels: ['small', 'medium', 'large'] },
+      odd: { type: 'yesno', instructions: 'Is this unusual?' },
+    },
+  },
+])
+answers.kind.choice // 'a', with answers.kind.confidence and .probabilities
+```
+
+A missing or loading model throws `DecisionUnavailable`; callers should fall back, not fail.
+Categorizing is built on this: `categorize(entry, ctx)`, `categorizeMany(entries, ctx)` and
+`categorizeFast` (no model) in core, and `categorizePending`, `recategorize` and
+`scheduleCategorize` in `apps/web/src/server/categorize.ts`.
+
+Without `DECIDE_URL` (the default in development and CI) the model step is skipped. Tests
+use fake engines. To run the real-model test, point `LAYA_MODEL_DIR` at a downloaded bundle:
+
+```sh
+MODEL_DIR=./.models/laya node apps/decide/src/fetch-model.ts
+LAYA_MODEL_DIR=./.models/laya pnpm vitest run --project decide
+```
 
 ## QA checklist for a PR
 
