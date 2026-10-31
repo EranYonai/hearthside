@@ -18,6 +18,7 @@ import {
   listBatches,
   listMonths,
   listTransactions,
+  monthlySpending,
   monthRange,
   prepareImport,
   setCategory,
@@ -444,6 +445,17 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
       cardBills: -30000,
       count: 4,
     })
+    // Each account's share, largest first, without the bill.
+    const together = await totals(db, alex, { month: '2026-10' })
+    expect(together.byAccount.map((a) => [a.accountId, a.minor])).toEqual([
+      [bank.id, -100000],
+      [card.id, -30000],
+    ])
+    expect(together.byAccount[1]!.byCategory.reduce((n, c) => n + c.minor, 0)).toBe(-30000)
+    expect(await monthlySpending(db, alex, { kind: 'card' }, ['2026-09', '2026-10'])).toEqual([
+      { month: '2026-09', spent: 0 },
+      { month: '2026-10', spent: -30000 },
+    ])
     expect(await listTransactions(db, alex, { month: '2026-10', kind: 'bank' })).toHaveLength(3)
 
     const summary = await accountSummaries(db, alex, '2026-10')

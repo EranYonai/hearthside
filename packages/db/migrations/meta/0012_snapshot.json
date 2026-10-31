@@ -1,5 +1,5 @@
 {
-  "id": "090ec715-5d49-4ba2-bc64-4c91b8e709b4",
+  "id": "c3c3c1f7-b949-4137-8e6c-b5b827e3c12c",
   "prevId": "9da59827-aaff-4a90-a78d-88e0b1b906c5",
   "version": "7",
   "dialect": "postgresql",
@@ -305,106 +305,6 @@
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.brand_logos": {
-      "name": "brand_logos",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "household_id": {
-          "name": "household_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "brand_key": {
-          "name": "brand_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "image": {
-          "name": "image",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "brand_logos_brand_idx": {
-          "name": "brand_logos_brand_idx",
-          "columns": [
-            {
-              "expression": "household_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "brand_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "brand_logos_household_id_households_id_fk": {
-          "name": "brand_logos_household_id_households_id_fk",
-          "tableFrom": "brand_logos",
-          "tableTo": "households",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "brand_logos_created_by_members_id_fk": {
-          "name": "brand_logos_created_by_members_id_fk",
-          "tableFrom": "brand_logos",
-          "tableTo": "members",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2405,6 +2305,30 @@
           "primaryKey": false,
           "notNull": false
         },
+        "alert": {
+          "name": "alert",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alert_confidence": {
+          "name": "alert_confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alert_checked_at": {
+          "name": "alert_checked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alert_dismissed_at": {
+          "name": "alert_dismissed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "card_bill": {
           "name": "card_bill",
           "type": "text",
@@ -2512,6 +2436,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "transactions_alert_pending_idx": {
+          "name": "transactions_alert_pending_idx",
+          "columns": [
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"transactions\".\"alert_checked_at\" is null",
           "concurrently": false,
           "method": "btree",
           "with": {}

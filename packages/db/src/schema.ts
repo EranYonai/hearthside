@@ -290,6 +290,13 @@ export const transactions = pgTable(
     categoryConfidence: real('category_confidence'),
     /** When the categorizer (with the model) last looked at it. null means it is waiting. */
     categoryCheckedAt: timestamp('category_checked_at', { withTimezone: true }),
+    /** Worth a second look: fee, spike or model. See core's AlertReason. */
+    alert: text('alert', { enum: ['fee', 'spike', 'model'] }),
+    alertConfidence: real('alert_confidence'),
+    /** When alerts were last checked with the model. null means waiting. */
+    alertCheckedAt: timestamp('alert_checked_at', { withTimezone: true }),
+    /** Someone looked and said it's fine. */
+    alertDismissedAt: timestamp('alert_dismissed_at', { withTimezone: true }),
     /**
      * Bank rows only: this row pays a card bill. amount: it pays what a card bill adds up to;
      * name: its description names a card company. Kept up to date by linkCardBills.
@@ -310,6 +317,9 @@ export const transactions = pgTable(
     index('transactions_household_date_idx').on(t.householdId, t.occurredOn),
     index('transactions_batch_idx').on(t.batchId),
     index('transactions_description_idx').on(t.householdId, t.descriptionKey),
+    index('transactions_alert_pending_idx')
+      .on(t.householdId)
+      .where(sql`${t.alertCheckedAt} is null`),
     index('transactions_uncategorized_idx')
       .on(t.householdId)
       .where(sql`${t.category} is null and ${t.categoryCheckedAt} is null`),

@@ -4,7 +4,7 @@ import type { CategoryIconName, Minor } from '@hearthside/core'
 import { Button, CategoryIcon, Notice, TransactionRow, type Category } from '@hearthside/ui'
 import { useRef, useState } from 'react'
 import { useAction } from '@/lib/use-action'
-import { categorizeNowAction, setCategoryAction } from './actions'
+import { categorizeNowAction, dismissAlertAction, setCategoryAction } from './actions'
 
 export interface TxView {
   id: string
@@ -18,6 +18,8 @@ export interface TxView {
   icon: CategoryIconName
   /** Filed by the categorizer rather than a person or a rule. */
   auto?: boolean
+  /** Why it's worth a second look, if it is. */
+  alert?: string
   original?: { minor: Minor; currency: string }
   installment?: { n: number; total: number }
 }
@@ -26,7 +28,7 @@ function rowProps(tx: TxView) {
   return {
     category: tx.icon as Category,
     merchant: tx.description,
-    meta: `${tx.label}${tx.auto ? ' (auto)' : ''} · ${tx.meta}`,
+    meta: `${tx.alert ? `⚠ ${tx.alert} · ` : ''}${tx.label}${tx.auto ? ' (auto)' : ''} · ${tx.meta}`,
     ...(tx.accountColor ? { metaColor: tx.accountColor } : {}),
     minor: tx.minor,
     ...(tx.original ? { original: tx.original } : {}),
@@ -147,6 +149,24 @@ function EditableRow({ tx, options }: { tx: TxView; options: readonly CategoryCh
             Always use this for “<bdi>{tx.description}</bdi>”
           </span>
         </label>
+        {tx.alert && (
+          <Notice tone="warning">
+            Worth a second look: {tx.alert}.{' '}
+            <Button
+              variant="ghost"
+              disabled={pending}
+              onClick={() =>
+                run(async () => {
+                  const result = await dismissAlertAction(tx.id)
+                  if (result.ok) dialog.current?.close()
+                  return result
+                })
+              }
+            >
+              Looks fine
+            </Button>
+          </Notice>
+        )}
         {error && <Notice tone="negative">{error}</Notice>}
         <div className="mt-3 flex flex-wrap gap-2">
           {tx.category && (

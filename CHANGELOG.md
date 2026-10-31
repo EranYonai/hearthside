@@ -10,6 +10,8 @@ moves the Unreleased notes under the new version.
 
 ### Added
 
+- Spending by category as a donut chart on the transactions view, with a months view beside it,
+  and the home spending meter grouped and outlined per account.
 - Importing household records and a transactions view (#39).
 - Accounts tab grouped by type, separate views per account type, and accounts linked to the
   household member who holds them (#43, #46).
@@ -31,6 +33,8 @@ moves the Unreleased notes under the new version.
   facts (yearly fee, index, domicile, document links) kept by the household (#33).
 - A passive-investing check-up: target split (80/20 by default, set by the household), fees,
   home bias, emergency fund and steady deposits. Gentle notes only; it can be turned off (#34).
+- Alerts: entries worth a second look (fees, much bigger than usual, or unusual to the local
+  model) are flagged next to their category, with an "Alerts to check" filter.
 - Monthly payments that settle another account's statement are matched to that statement by
   amount and date (or by name), so combined totals count the spending once. The match keeps
   the statement's total, and rows show when the two disagree.
