@@ -547,6 +547,78 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await expect(owner.getByText('Interactive Brokers ·4321: added 1')).toBeVisible()
 })
 
+test('no page is wider than a phone screen', async ({ browser }) => {
+  // The owner's session on a phone: the bottom bar and every page must fit from 320px up.
+  const storageState = await owner.context().storageState()
+  const accounts = await owner
+    .goto('/accounts')
+    .then(() => owner.locator('a[href^="/accounts/"]').first().getAttribute('href'))
+  const invest = await owner
+    .goto('/invest')
+    .then(() =>
+      owner.getByTestId('investment-accounts').getByRole('link').first().getAttribute('href'),
+    )
+  await owner.goto(invest!)
+  const holding = await owner.locator('a[href^="/invest/holding/"]').first().getAttribute('href')
+  const paths = [
+    '/',
+    '/invest',
+    invest!,
+    holding!,
+    '/invest/checkup',
+    '/invest/trends',
+    '/transactions',
+    '/transactions?month=2026-10',
+    '/accounts',
+    accounts!,
+    '/import',
+    '/settings',
+  ]
+  for (const width of [320, 375, 390, 430]) {
+    const context = await browser.newContext({
+      viewport: { width, height: 740 },
+      isMobile: true,
+      hasTouch: true,
+      deviceScaleFactor: 2,
+      storageState,
+    })
+    const phone = await context.newPage()
+    for (const path of paths) {
+      await phone.goto(path)
+      await expect(phone.getByRole('navigation', { name: 'Main' })).toBeVisible()
+      const report = await phone.evaluate(overflowReport)
+      expect.soft(report, `${path} at ${width}px`).toEqual({ width, scrollWidth: width, wider: [] })
+    }
+    await context.close()
+  }
+})
+
+/** Runs in the page: the page width, and any element that reaches past the screen's edges. */
+function overflowReport() {
+  const width = window.innerWidth
+  const clipsX = (el: Element) => {
+    const o = getComputedStyle(el).overflowX
+    return o !== 'visible' && el !== document.body && el !== document.documentElement
+  }
+  const wider: string[] = []
+  for (const el of document.body.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect()
+    if (r.width === 0 || (r.right <= width + 0.5 && r.left >= -0.5)) continue
+    let parent = el.parentElement
+    let clipped = false
+    while (parent && !clipped) {
+      clipped = clipsX(parent)
+      parent = parent.parentElement
+    }
+    if (clipped) continue
+    const name = `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}.${String(el.className).slice(0, 60)}`
+    wider.push(
+      `${name} [${Math.round(r.left)}..${Math.round(r.right)}] ${el.textContent?.trim().slice(0, 30) ?? ''}`,
+    )
+  }
+  return { width, scrollWidth: document.documentElement.scrollWidth, wider: wider.slice(0, 8) }
+}
+
 test('settings show the app version and sign-in activity', async () => {
   await owner.goto('/settings')
   await expect(owner.getByTestId('app-version')).toHaveText(/^Hearthside v\d+\.\d+\.\d+/)

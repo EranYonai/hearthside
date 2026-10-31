@@ -45,6 +45,11 @@ moves the Unreleased notes under the new version.
 - Delete an account, with its imports and transactions, from its edit page (asks first).
 - Card network chips and a network picker; colors and badges for investment providers; a built-in logo and color theme for common providers, with sources listed beside the logos.
 
+### Fixed
+
+- The bottom tab bar fits phone screens from 320px wide: five tabs with short labels
+  (Transactions is now Activity), and Import moved to a button in the header.
+
 ### Security
 
 - People who join with an invite link wait for the owner's approval before they can see
