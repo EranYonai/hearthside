@@ -62,6 +62,11 @@ default 2, sets CPU threads).
 To run without the model: `docker compose up -d --scale decide=0`. Entries the rules and
 keywords can't place then stay uncategorized and get filed once the model is back.
 
+Alongside categories, entries can get an alert: a fee or charge (by wording), a payment at
+least three times the usual for that description, or one the model finds unusual (kept at 75%
+or more). Alerts show on the Transactions screen with an "Alerts to check" filter, and "Looks
+fine" dismisses one for good.
+
 ## Changing the database password
 
 Postgres only reads `secrets/db_password.txt` when it creates the database volume. Rewriting
