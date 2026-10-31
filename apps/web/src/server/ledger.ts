@@ -9,8 +9,8 @@ import {
   type ParsedTransaction,
 } from '@hearthside/core'
 import type { AccountRow, MemberRow } from '@hearthside/db'
-import { schema } from '@hearthside/db'
-import { and, desc, eq, gte, ilike, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm'
+import { blindIndex, schema } from '@hearthside/db'
+import { and, desc, eq, gte, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm'
 import { audit, AuthError, type Tx } from './repo'
 import { sha256 } from './tokens'
 
@@ -95,13 +95,18 @@ export interface PreparedRow extends ParsedTransaction {
   duplicate: boolean
 }
 
+/** Keyed hash of a description, as stored in description_key and category_rules.match. */
+export function descriptionIndex(description: string): string {
+  return blindIndex(normalizeDescription(description))
+}
+
 /** Hash the parser's duplicate keys and mark rows already stored for this account. */
 export async function prepareImport(
   db: Conn,
   account: AccountRow | null,
   parsed: readonly ParsedTransaction[],
 ): Promise<PreparedRow[]> {
-  const keys = duplicateKeys(parsed).map(sha256)
+  const keys = duplicateKeys(parsed).map((k) => blindIndex(sha256(k)))
   const existing = new Set<string>()
   for (let i = 0; account && i < keys.length; i += 1000) {
     const chunk = keys.slice(i, i + 1000)
@@ -203,7 +208,9 @@ export async function findBatchByHash(db: Conn, accountId: string, fileHash: str
   const [row] = await db
     .select()
     .from(importBatches)
-    .where(and(eq(importBatches.accountId, accountId), eq(importBatches.fileHash, fileHash)))
+    .where(
+      and(eq(importBatches.accountId, accountId), eq(importBatches.fileHash, blindIndex(fileHash))),
+    )
     .limit(1)
   return row
 }
@@ -232,7 +239,7 @@ export async function commitImport(
         accountId: account.id,
         memberId: member.id,
         fileName: input.fileName.slice(0, 200),
-        fileHash: input.fileHash,
+        fileHash: blindIndex(input.fileHash),
         added: 0,
         duplicates: 0,
         skipped: input.skipped,
@@ -242,7 +249,7 @@ export async function commitImport(
     let added = 0
     for (let i = 0; i < fresh.length; i += 500) {
       const values = fresh.slice(i, i + 500).map((r) => {
-        const key = normalizeDescription(r.description)
+        const key = descriptionIndex(r.description)
         const category = rules.get(key)
         return {
           householdId: member.householdId,
@@ -338,6 +345,7 @@ export interface TransactionFilter {
   search?: string
 }
 
+// Descriptions and amounts are encrypted, so search and totals run here after reading.
 function filterConditions(member: MemberRow, f: TransactionFilter): SQL {
   const [from, to] = monthRange(f.month)
   const conditions: SQL[] = [
@@ -349,13 +357,16 @@ function filterConditions(member: MemberRow, f: TransactionFilter): SQL {
   if (f.category === 'none') conditions.push(isNull(transactions.category))
   else if (f.category && isCategory(f.category))
     conditions.push(eq(transactions.category, f.category))
-  const q = f.search?.trim()
-  if (q) conditions.push(ilike(transactions.description, `%${q.replace(/[\\%_]/g, '\\$&')}%`))
   return and(...conditions)!
 }
 
+function matchesSearch(description: string, search: string | undefined): boolean {
+  const q = search?.trim().toLocaleLowerCase()
+  return !q || description.toLocaleLowerCase().includes(q)
+}
+
 export async function listTransactions(db: Conn, member: MemberRow, f: TransactionFilter) {
-  return db
+  const rows = await db
     .select({
       t: transactions,
       accountName: accounts.name,
@@ -365,7 +376,7 @@ export async function listTransactions(db: Conn, member: MemberRow, f: Transacti
     .innerJoin(accounts, eq(accounts.id, transactions.accountId))
     .where(filterConditions(member, f))
     .orderBy(desc(transactions.occurredOn), desc(transactions.createdAt), transactions.id)
-    .limit(1000)
+  return rows.filter((r) => matchesSearch(r.t.description, f.search)).slice(0, 1000)
 }
 
 /** Money out and in for the filter, leaving out transfers and savings. */
@@ -373,25 +384,26 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
   const rows = await db
     .select({
       category: transactions.category,
-      out: sql<string>`coalesce(sum(case when ${transactions.amountMinor} < 0 then ${transactions.amountMinor} else 0 end), 0)`,
-      in: sql<string>`coalesce(sum(case when ${transactions.amountMinor} > 0 then ${transactions.amountMinor} else 0 end), 0)`,
-      n: sql<string>`count(*)`,
+      description: transactions.description,
+      amount: transactions.amountMinor,
     })
     .from(transactions)
     .innerJoin(accounts, eq(accounts.id, transactions.accountId))
     .where(filterConditions(member, f))
-    .groupBy(transactions.category)
   let spent = 0
   let received = 0
   let count = 0
-  const byCategory: { category: string | null; minor: number }[] = []
+  const out = new Map<string | null, number>()
   for (const r of rows) {
-    count += Number(r.n)
+    if (!matchesSearch(r.description, f.search)) continue
+    count++
     if (!countsAsSpending(r.category)) continue
-    spent += Number(r.out)
-    received += Number(r.in)
-    if (Number(r.out) !== 0) byCategory.push({ category: r.category, minor: Number(r.out) })
+    if (r.amount < 0) {
+      spent += r.amount
+      out.set(r.category, (out.get(r.category) ?? 0) + r.amount)
+    } else received += r.amount
   }
+  const byCategory = [...out].map(([category, minor]) => ({ category, minor }))
   byCategory.sort((a, b) => a.minor - b.minor)
   return { spent, received, count, byCategory }
 }

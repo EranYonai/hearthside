@@ -1,5 +1,5 @@
 import type { Db, MemberRow, PasskeyRow } from '@hearthside/db'
-import { schema } from '@hearthside/db'
+import { blindIndex, schema } from '@hearthside/db'
 import { and, asc, count, desc, eq, gt, isNull } from 'drizzle-orm'
 import { CHALLENGE_TTL_MS, INVITE_TTL_MS, SESSION_REFRESH_MS, SESSION_TTL_MS } from './config'
 import {
@@ -455,12 +455,13 @@ export async function audit(
     action: entry.action,
     detail: entry.detail ?? {},
     ip: entry.ip ?? null,
+    ipHash: entry.ip ? blindIndex(entry.ip) : null,
   })
 }
 
 export async function countRecent(db: Conn, action: string, since: Date, ip?: string) {
   const conditions = [eq(auditLog.action, action), gt(auditLog.createdAt, since)]
-  if (ip) conditions.push(eq(auditLog.ip, ip))
+  if (ip) conditions.push(eq(auditLog.ipHash, blindIndex(ip)))
   const [{ value }] = (await db
     .select({ value: count() })
     .from(auditLog)

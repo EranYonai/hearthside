@@ -12,6 +12,12 @@ moves the Unreleased notes under the new version.
 
 - Importing household records and a transactions view (#39).
 
+### Security
+
+- Private fields are encrypted in the database, with key rotation (#44). Existing data is
+  encrypted on the first start after upgrading, which needs a new key file (see
+  [Self-hosting](docs/self-hosting.md)).
+
 ## [0.1.0] - 2026-10-30
 
 ### Added

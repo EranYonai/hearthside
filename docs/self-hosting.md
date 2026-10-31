@@ -6,6 +6,7 @@ Images build natively on the host, including ARM64 machines.
 ```sh
 mkdir -p secrets
 [ -f secrets/db_password.txt ] || openssl rand -base64 32 > secrets/db_password.txt
+[ -f secrets/encryption_key.txt ] || (umask 077 && openssl rand -base64 32 > secrets/encryption_key.txt)
 pnpm stack       # or: GIT_SHA=$(git rev-parse --short HEAD) docker compose up -d --build
 ```
 
@@ -16,6 +17,9 @@ pnpm stack       # or: GIT_SHA=$(git rev-parse --short HEAD) docker compose up -
   the host's LAN address on that port.
 - The database sits on an internal network. The worker cannot reach it.
 - The database password is a Compose secret, never an environment variable.
+- Private fields are encrypted in the database with a master key from
+  `secrets/encryption_key.txt`. **Back that file up offline, apart from the database
+  backups.** Without it the data can't be read. See [Encryption](encryption.md) for rotation.
 - `web` and `worker` run read-only, as a non-root user, with all capabilities dropped.
 - Logs are JSON with rotation (10 MB × 5 per container): `docker compose logs -f`.
 - Health: `curl -s localhost:3300/api/health`.
