@@ -372,6 +372,14 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await expect(owner.getByTestId('investment-accounts')).toContainText('2 holdings')
   await expect(owner.getByTestId('unconverted')).toContainText('₪500')
   await expect(owner.getByTestId('allocation')).toContainText('Global stocks 100%')
+
+  // The quick switch changes the display currency (the same setting as in Settings).
+  const switcher = owner.getByRole('radiogroup', { name: 'Show values in' })
+  await switcher.getByRole('radio', { name: 'ILS' }).click()
+  await expect(switcher.getByRole('radio', { name: 'ILS' })).toBeChecked()
+  await expect(owner.getByTestId('unconverted')).toContainText('$1,005')
+  await switcher.getByRole('radio', { name: 'USD' }).click()
+  await expect(owner.getByTestId('unconverted')).toContainText('₪500')
 })
 
 test('settings show the app version and sign-in activity', async () => {

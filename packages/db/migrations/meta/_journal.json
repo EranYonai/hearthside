@@ -64,6 +64,13 @@
       "when": 1793434098080,
       "tag": "0008_investments",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793434183278,
+      "tag": "0009_fx_rates",
+      "breakpoints": true
     }
   ]
 }

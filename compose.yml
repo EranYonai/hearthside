@@ -53,6 +53,8 @@ services:
       ENCRYPTION_KEY_FILE: /run/secrets/encryption_key
       # The local categorization model. If it is down, entries wait for it.
       DECIDE_URL: http://decide:8080
+      # Daily reference exchange rates (docs/self-hosting.md). "off" stops fetching.
+      FX_RATES_URL: ${FX_RATES_URL:-}
     secrets: [db_password, encryption_key]
     ports:
       # Loopback only by default. WEB_BIND=0.0.0.0 in .env opens it to the LAN for testing.

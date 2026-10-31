@@ -62,6 +62,14 @@ default 2, sets CPU threads).
 To run without the model: `docker compose up -d --scale decide=0`. Entries the rules and
 keywords can't place then stay uncategorized and get filed once the model is back.
 
+## Exchange rates
+
+To show values in each member's chosen currency, the app fetches daily reference exchange rates
+from a free public service (no key) at most once an hour, when someone opens the Invest tab.
+Only the list of rates is requested; nothing about the household is sent. Set
+`FX_RATES_URL=off` in `.env` to turn this off, or point it at another service that answers in
+the same shape.
+
 ## Changing the database password
 
 Postgres only reads `secrets/db_password.txt` when it creates the database volume. Rewriting

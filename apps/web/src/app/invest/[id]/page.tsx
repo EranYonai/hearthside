@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
+import { currentRates } from '@/server/fx'
 import {
   getVisibleInvestmentAccount,
   investmentHolder,
@@ -47,7 +48,8 @@ export default async function InvestmentAccountPage({
     listHoldings(db, member, [account.id]),
     listMembers(db, household.id),
   ])
-  const summary = summarizePortfolio(list, account.currency, new Map())
+  const { rates } = await currentRates(db)
+  const summary = summarizePortfolio(list, account.currency, rates)
   const unconverted = Object.entries(summary.unconverted)
   const manage = mayManage(member, account)
   const holder = people.find((p) => p.id === investmentHolder(account))
@@ -84,7 +86,7 @@ export default async function InvestmentAccountPage({
                 <Amount minor={minor} currency={c} whole className="text-caption" />
               </span>
             ))}{' '}
-            in other currencies.
+            in currencies without a rate yet.
           </p>
         )}
       </Card>

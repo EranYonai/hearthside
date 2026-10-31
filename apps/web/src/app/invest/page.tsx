@@ -4,28 +4,57 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
+import { DISPLAY_CURRENCIES } from '@/lib/onboarding'
+import { currentRates } from '@/server/fx'
 import { canEdit } from '@/server/ledger'
 import { investmentHolder, portfolio } from '@/server/invest'
 import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
-import { InvestmentAccountForm } from './client'
+import { CurrencySwitch, InvestmentAccountForm } from './client'
 
 export const metadata: Metadata = { title: 'Invest · Hearthside' }
 export const dynamic = 'force-dynamic'
+
+const SWITCH = DISPLAY_CURRENCIES.map((c) => ({ code: c.code, symbol: symbol(c.code) }))
+
+function symbol(code: string): string {
+  return (
+    new Intl.NumberFormat('en-IL', {
+      style: 'currency',
+      currency: code,
+      currencyDisplay: 'narrowSymbol',
+    })
+      .formatToParts(0)
+      .find((p) => p.type === 'currency')?.value ?? code
+  )
+}
+
+const dayFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+})
 
 const SLICE_COLORS = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5']
 
 export default async function InvestPage() {
   const { member, household } = await requireSession()
   const db = requireDb()
+  const fx = await currentRates(db)
   const [{ accounts, holdings, summary, allocation }, people] = await Promise.all([
-    portfolio(db, member),
+    portfolio(db, member, fx.rates),
     listMembers(db, household.id),
   ])
   const names = new Map(people.map((p) => [p.id, p.id === member.id ? 'You' : p.name]))
   const currency = summary.currency
   const unconverted = Object.entries(summary.unconverted)
   const editable = canEdit(member)
+  // One line per other currency held, e.g. "$1 = ₪3.6820".
+  const foreign = [...new Set(holdings.map((h) => h.currency))].filter((c) => c !== currency)
+  const rateLines = foreign.flatMap((c) => {
+    const rate = fx.rates.get(`${c}/${currency}`)
+    return rate ? [`${symbol(c)}1 = ${symbol(currency)}${rate.toFixed(4)}`] : []
+  })
 
   return (
     <AppShell household={household.name} current="/invest">
@@ -44,8 +73,16 @@ export default async function InvestPage() {
       ) : (
         <>
           <Card aria-labelledby="value-title">
-            <Label id="value-title">Portfolio value</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label id="value-title">Portfolio value</Label>
+              <CurrencySwitch value={currency} options={SWITCH} />
+            </div>
             <Amount minor={summary.totalMinor} currency={currency} whole hero />
+            {rateLines.length > 0 && fx.on && (
+              <p className="text-caption text-ink-muted" data-testid="fx-rate">
+                {rateLines.join(' · ')} · rate from {dayFormat.format(new Date(fx.on))}
+              </p>
+            )}
             {unconverted.length > 0 && (
               <p className="text-caption text-ink-muted" data-testid="unconverted">
                 Plus{' '}

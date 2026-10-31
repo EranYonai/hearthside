@@ -11,6 +11,7 @@ import {
   deleteInvestmentAccountAction,
   removeHoldingAction,
   saveHoldingAction,
+  setDisplayCurrencyAction,
   updateInvestmentAccountAction,
 } from './actions'
 
@@ -404,6 +405,49 @@ export function DeleteAccountButton(props: { id: string }) {
         <Trash2 aria-hidden />
         {armed ? 'Tap again to delete the account and its holdings' : 'Delete account'}
       </Button>
+      {error && <Notice tone="negative">{error}</Notice>}
+    </div>
+  )
+}
+
+/** Quick switch for the member's display currency. Same setting as in Settings. */
+export function CurrencySwitch(props: {
+  value: string
+  options: readonly { code: string; symbol: string }[]
+}) {
+  const router = useRouter()
+  const { pending, error, run } = useAction()
+  return (
+    <div className="grid justify-items-end gap-1">
+      <div
+        role="radiogroup"
+        aria-label="Show values in"
+        className="flex rounded-pill bg-surface-2 p-0.5"
+      >
+        {props.options.map((o) => {
+          const on = o.code === props.value
+          return (
+            <button
+              key={o.code}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              aria-label={o.code}
+              disabled={pending}
+              onClick={() =>
+                on ||
+                run(
+                  () => setDisplayCurrencyAction(o.code),
+                  () => router.refresh(),
+                )
+              }
+              className={`min-h-9 min-w-11 rounded-pill px-2 font-display text-body-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${on ? 'bg-surface-1 text-ink shadow-card' : 'text-ink-muted'}`}
+            >
+              {o.symbol}
+            </button>
+          )
+        })}
+      </div>
       {error && <Notice tone="negative">{error}</Notice>}
     </div>
   )

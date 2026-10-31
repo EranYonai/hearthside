@@ -11,6 +11,7 @@ import {
   type HoldingInput,
   type InvestmentAccountInput,
 } from '@/server/invest'
+import { setDisplayCurrency } from '@/server/profile'
 import { requireSession } from '@/server/session'
 
 const PATHS = ['/invest']
@@ -51,6 +52,14 @@ export async function removeHoldingAction(accountId: string, holdingId: string) 
   const { member } = await requireSession()
   return runAction([...PATHS, `/invest/${accountId}`], async () => {
     await removeHolding(requireDb(), member, holdingId)
+    return {}
+  })
+}
+
+export async function setDisplayCurrencyAction(currency: string) {
+  const { member } = await requireSession()
+  return runAction([...PATHS, '/settings'], async () => {
+    await setDisplayCurrency(requireDb(), member, currency)
     return {}
   })
 }
