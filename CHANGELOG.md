@@ -18,6 +18,23 @@ moves the Unreleased notes under the new version.
 - Welcome steps for each new member, and profile settings with a display currency (#40).
 - Automatic categories: rules, past choices and keywords at import, then a local model for the rest (#42).
 - Household categories: add, edit and remove your own in Settings, with an icon and keywords.
+- Invest tab: investment accounts per member, holdings added by hand, portfolio value and
+  allocation (#25, #28, #31).
+- Investments in each member's currency with daily exchange rates, delayed market prices, and
+  holdings import from Excel or CSV (#29, #30, #28).
+- Investment accounts also appear on the Accounts tab, with their value.
+- Investment trends: value against money put in, time-weighted returns, and deposits, fees
+  and income per year. Money in and out is recorded per account (#32).
+- Market-style value charts on the Invest tab, each investment account and Trends, filled in
+  from past prices before values were recorded.
+- Fields no longer zoom phones in, so pages keep their width after moving between them.
+- The Import page also imports investment holdings into a chosen account.
+- A page per holding: position, share of the portfolio, price history from 1M to 5Y, and fund
+  facts (yearly fee, index, domicile, document links) kept by the household (#33).
+- A passive-investing check-up: target split (80/20 by default, set by the household), fees,
+  home bias, emergency fund and steady deposits. Gentle notes only; it can be turned off (#34).
+- Alerts: entries worth a second look (fees, much bigger than usual, or unusual to the local
+  model) are flagged next to their category, with an "Alerts to check" filter.
 - Monthly payments that settle another account's statement are matched to that statement by
   amount and date (or by name), so combined totals count the spending once. The match keeps
   the statement's total, and rows show when the two disagree.

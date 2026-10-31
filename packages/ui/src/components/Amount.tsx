@@ -42,7 +42,7 @@ export function Amount({
         : 'text-ink'
   return (
     <span
-      aria-label={moneyLabel(minor)}
+      aria-label={moneyLabel(minor, currency)}
       className={cx(
         'font-display whitespace-nowrap tabular-nums [unicode-bidi:isolate]',
         hero ? 'text-amount-hero' : 'text-amount',

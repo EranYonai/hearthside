@@ -1,3 +1,4 @@
+import { ALERT_LABELS } from '@hearthside/core'
 import { accountLook, cardBillNote } from '@hearthside/core'
 import {
   Amount,
@@ -135,6 +136,7 @@ export default async function TransactionsPage({
     label: categories.label(t.category),
     icon: categories.icon(t.category),
     ...(t.categorySource === 'auto' ? { auto: true } : {}),
+    ...(t.alert && !t.alertDismissedAt ? { alert: ALERT_LABELS[t.alert] } : {}),
     ...(t.originalMinor != null && t.originalCurrency
       ? { original: { minor: t.originalMinor, currency: t.originalCurrency } }
       : {}),
@@ -257,6 +259,7 @@ export default async function TransactionsPage({
           <select name="category" defaultValue={filter.category ?? ''} className={selectClass}>
             <option value="">All categories</option>
             <option value="none">Uncategorized</option>
+            <option value="alerts">Alerts to check</option>
             {categories.all.map((c) => (
               <option key={c.slug} value={c.slug}>
                 {c.label}

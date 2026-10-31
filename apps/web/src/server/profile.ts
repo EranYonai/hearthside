@@ -44,6 +44,13 @@ export async function updateProfile(
   return row!
 }
 
+/** The quick currency switch on the Invest tab. */
+export async function setDisplayCurrency(db: Conn, member: MemberRow, currency: unknown) {
+  if (!isDisplayCurrency(currency))
+    throw new AuthError('not_allowed', 'Pick a currency from the list')
+  await db.update(members).set({ displayCurrency: currency }).where(eq(members.id, member.id))
+}
+
 /** Finishing (or skipping) the welcome steps; `false` shows them again. */
 export async function setOnboarded(db: Conn, member: MemberRow, done: boolean, now = new Date()) {
   await db

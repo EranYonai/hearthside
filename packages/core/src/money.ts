@@ -51,8 +51,10 @@ export function formatMoney(minor: Minor, options: FormatOptions = {}): string {
 }
 
 /** Screen-reader label that states direction, e.g. "spent 412 shekels 30". */
-export function moneyLabel(minor: Minor): string {
+export function moneyLabel(minor: Minor, currency = 'ILS'): string {
   const abs = Math.abs(minor)
+  if (currency !== 'ILS')
+    return `${minor < 0 ? 'spent' : 'received'} ${formatMoney(abs, { currency })}`
   const units = Math.floor(abs / 100)
   const cents = abs % 100
   const verb = minor < 0 ? 'spent' : 'received'

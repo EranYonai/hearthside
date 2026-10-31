@@ -339,6 +339,9 @@ test('dropping a card statement picks or creates its account and imports it', as
   await expect(owner.getByTestId('custom-categories')).toContainText('Decor')
   await owner.goto('/transactions?month=2026-10')
   await expect(owner.getByRole('button', { name: /^Home Store, Decor/ })).toBeVisible()
+  // Nothing here looks odd, so the alerts filter is empty.
+  await owner.goto('/transactions?month=2026-10&category=alerts')
+  await expect(owner.getByText('Nothing here for October 2026.')).toBeVisible()
 })
 
 test('a bank statement PDF imports by column position', async () => {
@@ -400,6 +403,141 @@ test('a bank statement PDF imports by column position', async () => {
   await expect(owner.getByRole('button', { name: 'Undo import ops.pdf' })).toHaveCount(0)
   await owner.goto('/transactions?month=2026-10')
   await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(3)
+})
+
+test('investment accounts and hand-entered holdings add up on the Invest tab', async () => {
+  await owner
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Invest' })
+    .click()
+  await expect(owner.getByRole('heading', { name: 'Investments' })).toBeVisible()
+
+  // Synthetic names and symbols only.
+  await owner.getByLabel('Account name').fill('Long-term savings')
+  await owner.getByLabel('Account currency').selectOption('USD')
+  await owner.getByRole('button', { name: 'Add account' }).click()
+  await expect(owner.getByRole('heading', { name: 'Long-term savings' })).toBeVisible()
+
+  const add = owner.getByRole('region', { name: 'Add a holding by hand' })
+  await add.getByLabel('Ticker or fund number').fill('tst1')
+  await add.getByLabel('Name', { exact: true }).fill('Test World Index')
+  await add.getByLabel('Units').fill('10')
+  await add.getByLabel('Price per unit in USD (optional)').fill('100.50')
+  await add.getByRole('button', { name: 'Add holding' }).click()
+  await expect(owner.getByTestId('holdings')).toContainText('Test World Index')
+  await expect(owner.getByTestId('holdings')).toContainText('$1,005')
+
+  // The form folds away once the account has a holding.
+  if (!(await add.getByLabel('Units').isVisible()))
+    await add.getByText('Add a holding by hand').click()
+  await add.getByLabel('Cash in the account').check()
+  await add.getByLabel('Currency', { exact: true }).selectOption('ILS')
+  await add.getByLabel('Amount').fill('500')
+  await add.getByRole('button', { name: 'Add holding' }).click()
+  await expect(owner.getByTestId('holdings').getByRole('listitem')).toHaveCount(2)
+
+  // The overview shows the display currency and sets apart what it can't convert yet.
+  await owner.getByRole('link', { name: 'Investments' }).click()
+  await expect(owner.getByTestId('investment-accounts')).toContainText('Long-term savings')
+  await expect(owner.getByTestId('investment-accounts')).toContainText('2 holdings')
+  await expect(owner.getByTestId('unconverted')).toContainText('₪500')
+  await expect(owner.getByTestId('allocation')).toContainText('Global stocks 100%')
+
+  // The quick switch changes the display currency (the same setting as in Settings).
+  const switcher = owner.getByRole('radiogroup', { name: 'Show values in' })
+  await switcher.getByRole('radio', { name: 'ILS' }).click()
+  await expect(switcher.getByRole('radio', { name: 'ILS' })).toBeChecked()
+  await expect(owner.getByTestId('unconverted')).toContainText('$1,005')
+  await switcher.getByRole('radio', { name: 'USD' }).click()
+  await expect(owner.getByTestId('unconverted')).toContainText('₪500')
+
+  // A holdings file (synthetic) adds to the account after a preview.
+  await owner.getByTestId('investment-accounts').getByRole('link').first().click()
+  const importer = owner.getByRole('region', { name: 'Import holdings from a file' })
+  await importer.getByText('Import holdings from a file').click()
+  await importer.getByLabel('Holdings file').setInputFiles({
+    name: 'holdings.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('Symbol,Name,Quantity,Price,Currency\nTSTZ,Test Bond Fund,4,25,USD\n'),
+  })
+  await importer.getByRole('button', { name: 'Read file' }).click()
+  await expect(importer.getByTestId('holdings-preview')).toContainText('1 holding found')
+  await importer.getByRole('button', { name: 'Import 1 holding' }).click()
+  await expect(importer.getByText('Added 1, updated 0, removed 0.')).toBeVisible()
+  await expect(owner.getByTestId('holdings').getByRole('listitem')).toHaveCount(3)
+  await expect(owner.getByTestId('holdings')).toContainText('Test Bond Fund')
+
+  // Investment accounts also show on the Accounts tab, next to cards and banks.
+  await owner
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Accounts' })
+    .click()
+  const tiles = owner.getByTestId('accounts-investment')
+  await expect(tiles).toContainText('Long-term savings')
+  await tiles.getByRole('link', { name: 'Edit Long-term savings' }).click()
+  await expect(owner.getByLabel('Account name')).toHaveValue('Long-term savings')
+
+  // Money put in is recorded per account and feeds the trends page.
+  const moves = owner.getByRole('region', { name: 'Money in and out' })
+  await moves.getByLabel('What was it').selectOption('deposit')
+  await moves.getByLabel('Amount in USD').fill('1,000')
+  await moves.getByRole('button', { name: 'Add' }).click()
+  await expect(owner.getByTestId('movements')).toContainText('Deposit')
+  await expect(owner.getByTestId('movements')).toContainText('+$1,000')
+
+  await owner.getByRole('link', { name: 'Investments' }).click()
+  await owner.getByRole('link', { name: 'Trends' }).click()
+  await expect(owner.getByRole('heading', { name: 'Trends' })).toBeVisible()
+  await expect(owner.getByTestId('trend-empty')).toContainText('recorded once a day')
+  await owner.getByRole('navigation', { name: 'Range' }).getByRole('link', { name: 'All' }).click()
+  await expect(owner.getByTestId('years')).toContainText('$1,000')
+
+  // The Import page takes holdings files too.
+  await owner
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Import' })
+    .click()
+  const holdingsImport = owner.getByRole('region', { name: 'Import investment holdings' })
+  await holdingsImport.getByLabel('Holdings file').setInputFiles({
+    name: 'holdings.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('Symbol,Name,Quantity,Price,Currency\nTSTZ,Test Bond Fund,6,25,USD\n'),
+  })
+  await holdingsImport.getByRole('button', { name: 'Read file' }).click()
+  await holdingsImport.getByRole('button', { name: 'Import 1 holding' }).click()
+  await expect(holdingsImport.getByText('Added 0, updated 1, removed')).toBeVisible()
+
+  // Each holding has a page with its position, price history and fund facts.
+  await owner
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Invest' })
+    .click()
+  await owner.getByTestId('investment-accounts').getByRole('link').first().click()
+  await owner.getByTestId('holdings').getByText('Test World Index').click()
+  await owner.getByRole('link', { name: 'Price history and fund facts' }).first().click()
+  await expect(owner.getByRole('heading', { name: 'Test World Index' })).toBeVisible()
+  await expect(owner.getByTestId('portfolio-share')).toContainText('%')
+  await owner.getByText('Edit fund facts').click()
+  await owner.getByLabel('Yearly fee (%)').fill('0.07')
+  await owner.getByLabel('Document 1 name').fill('Prospectus')
+  await owner.getByLabel('Document 1 link').fill('https://example.com/prospectus.pdf')
+  await owner.getByRole('button', { name: 'Save fund facts' }).click()
+  await expect(owner.getByTestId('fund-facts')).toContainText('0.07%')
+  await expect(
+    owner.getByTestId('fund-documents').getByRole('link', { name: 'Prospectus' }),
+  ).toHaveAttribute('href', 'https://example.com/prospectus.pdf')
+
+  // The check-up gives gentle observations and keeps the household's plan.
+  await owner.goto('/invest/checkup')
+  await expect(owner.getByRole('heading', { name: 'Check-up' })).toBeVisible()
+  await expect(owner.getByTestId('checkup')).toContainText('Fees look low')
+  await expect(owner.getByText('General education, not financial advice')).toBeVisible()
+  await owner.getByLabel('Target split').fill('60')
+  await expect(owner.getByTestId('split-label')).toHaveText('60% stocks / 40% bonds and cash')
+  await owner.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(owner.getByTestId('checkup')).toContainText('60/40 target')
+  await owner.goto('/invest')
+  await expect(owner.getByRole('link', { name: /Check-up/ })).toBeVisible()
 })
 
 test('settings show the app version and sign-in activity', async () => {

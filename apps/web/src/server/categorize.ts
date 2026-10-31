@@ -1,4 +1,5 @@
 import {
+  checkAlerts,
   categorySet,
   categorizeFast,
   categorizeMany,
@@ -9,7 +10,7 @@ import {
   type DecisionEngine,
 } from '@hearthside/core'
 import { schema } from '@hearthside/db'
-import { and, asc, eq, gt, isNull, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import { listCustomCategories } from './categories'
 import type { audit } from './repo'
 
@@ -145,6 +146,85 @@ export async function categorizePending(
   return run
 }
 
+export interface AlertRun {
+  looked: number
+  flagged: number
+  waiting: boolean
+}
+
+/** Past amounts per description key. Amounts are encrypted, so this reads them into memory. */
+export async function loadAmounts(db: Conn, householdId: string) {
+  const rows = await db
+    .select({ key: transactions.descriptionKey, minor: transactions.amountMinor })
+    .from(transactions)
+    .where(eq(transactions.householdId, householdId))
+  const out = new Map<string, number[]>()
+  for (const r of rows) {
+    const list = out.get(r.key)
+    if (list) list.push(r.minor)
+    else out.set(r.key, [r.minor])
+  }
+  return out
+}
+
+/**
+ * Check every waiting entry for alerts (fees, spikes, and what the model finds unusual).
+ * Entries are marked as checked once the model has seen them; dismissed alerts stay dismissed.
+ */
+export async function alertPending(
+  db: Conn,
+  householdId: string,
+  engine: DecisionEngine | null = decisionEngine(),
+): Promise<AlertRun> {
+  const amounts = await loadAmounts(db, householdId)
+  const run: AlertRun = { looked: 0, flagged: 0, waiting: false }
+  let after = '00000000-0000-0000-0000-000000000000'
+  for (;;) {
+    const rows = await db
+      .select({
+        id: transactions.id,
+        description: transactions.description,
+        descriptionKey: transactions.descriptionKey,
+        amountMinor: transactions.amountMinor,
+        currency: transactions.currency,
+        accountKind: accounts.kind,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(accounts.id, transactions.accountId))
+      .where(
+        and(
+          eq(transactions.householdId, householdId),
+          isNull(transactions.alertCheckedAt),
+          isNull(transactions.alertDismissedAt),
+          gt(transactions.id, after),
+        ),
+      )
+      .orderBy(asc(transactions.id))
+      .limit(PAGE)
+    if (rows.length === 0) break
+    after = rows.at(-1)!.id
+    const results = await checkAlerts(rows, { amounts, engine })
+    const now = new Date()
+    for (let i = 0; i < rows.length; i++) {
+      const r = results[i]!
+      if (r.retry) run.waiting = true
+      await db
+        .update(transactions)
+        .set({
+          alert: r.alert?.reason ?? null,
+          alertConfidence: r.alert?.confidence ?? null,
+          // Without the model, keep the cheap checks' answer but let the model look later.
+          alertCheckedAt: engine && !r.retry ? now : null,
+        })
+        .where(and(eq(transactions.id, rows[i]!.id), isNull(transactions.alertDismissedAt)))
+      if (r.alert) run.flagged++
+    }
+    run.looked += rows.length
+    if (run.waiting) break
+  }
+  return run
+}
+
 export type RecategorizeScope = 'uncategorized' | 'auto'
 
 /**
@@ -197,8 +277,17 @@ export function scheduleCategorize(
   const current = running.get(householdId)
   if (current) return current
   const job = categorizePending(db, householdId)
-    .then((run) => {
-      console.log(JSON.stringify({ level: 'info', msg: 'categorized', ...run }))
+    .then(async (run) => {
+      const alerts = await alertPending(db, householdId)
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          msg: 'categorized',
+          ...run,
+          alerts: alerts.flagged,
+          alertsWaiting: alerts.waiting,
+        }),
+      )
       return run
     })
     .catch((err: unknown) => {
@@ -222,10 +311,13 @@ export async function sweepPending(db: Conn) {
     .selectDistinct({ id: transactions.householdId })
     .from(transactions)
     .where(
-      and(
-        isNull(transactions.category),
-        isNull(transactions.categorySource),
-        isNull(transactions.categoryCheckedAt),
+      or(
+        and(
+          isNull(transactions.category),
+          isNull(transactions.categorySource),
+          isNull(transactions.categoryCheckedAt),
+        ),
+        and(isNull(transactions.alertCheckedAt), isNull(transactions.alertDismissedAt)),
       ),
     )
   for (const h of households) await scheduleCategorize(db, h.id)
