@@ -1,3 +1,4 @@
+import { accountLook } from '@hearthside/core'
 import { Card, Label, Notice, SummaryCard, buttonClasses } from '@hearthside/ui'
 import { FileUp, UserPlus } from 'lucide-react'
 import Link from 'next/link'
@@ -5,7 +6,7 @@ import { redirect } from 'next/navigation'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
 import { householdCategorySet } from '@/server/categories'
-import { canEdit, listMonths, totals } from '@/server/ledger'
+import { canEdit, listAccounts, listMonths, totals } from '@/server/ledger'
 import { getHousehold, isApproved, listMembers } from '@/server/repo'
 import { currentSession, requireSession } from '@/server/session'
 
@@ -25,10 +26,12 @@ export default async function Home() {
   const waiting = everyone.length - people.length
   const solo = people.length === 1
   const latest = months[0]
-  const [sum, categories] = await Promise.all([
+  const [sum, categories, accounts] = await Promise.all([
     latest ? totals(db, member, { month: latest }) : undefined,
     householdCategorySet(db, member.householdId),
+    listAccounts(db, member),
   ])
+  const accountById = new Map(accounts.map((a) => [a.id, a]))
   const spent = sum ? Math.abs(sum.spent) : 0
   const monthLabel = latest
     ? new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' }).format(
@@ -56,6 +59,22 @@ export default async function Home() {
               minor: Math.abs(c.minor),
               percent: spent ? (Math.abs(c.minor) / spent) * 100 : 0,
             }))}
+            groups={sum.byAccount.flatMap((g) => {
+              const a = accountById.get(g.accountId)
+              if (!a) return []
+              return [
+                {
+                  key: a.id,
+                  name: a.name,
+                  color: accountLook(a).color,
+                  minor: g.minor,
+                  parts: g.byCategory.map((c) => ({
+                    name: categories.label(c.category),
+                    minor: c.minor,
+                  })),
+                },
+              ]
+            })}
           />
           <Link
             href={`/transactions?month=${latest}`}

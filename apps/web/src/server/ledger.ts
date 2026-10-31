@@ -608,6 +608,7 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
   const [rows, cards] = await Promise.all([
     db
       .select({
+        accountId: transactions.accountId,
         category: transactions.category,
         description: transactions.description,
         amount: transactions.amountMinor,
@@ -624,6 +625,7 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
   let count = 0
   let cardBills = 0
   const byCategory = new Map<string | null, number>()
+  const byAccount = new Map<string, { minor: number; byCategory: Map<string | null, number> }>()
   for (const r of rows) {
     if (!matchesSearch(r.description, f.search)) continue
     count++
@@ -635,6 +637,10 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
     if (r.amount < 0) {
       spent += r.amount
       byCategory.set(r.category, (byCategory.get(r.category) ?? 0) + r.amount)
+      const acct = byAccount.get(r.accountId) ?? { minor: 0, byCategory: new Map() }
+      byAccount.set(r.accountId, acct)
+      acct.minor += r.amount
+      acct.byCategory.set(r.category, (acct.byCategory.get(r.category) ?? 0) + r.amount)
     } else received += r.amount
   }
   return {
@@ -646,7 +652,28 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
     byCategory: [...byCategory]
       .map(([category, minor]) => ({ category, minor }))
       .sort((a, b) => a.minor - b.minor),
+    /** Spending per account, largest first, each split by category. */
+    byAccount: [...byAccount]
+      .map(([accountId, a]) => ({
+        accountId,
+        minor: a.minor,
+        byCategory: [...a.byCategory]
+          .map(([category, minor]) => ({ category, minor }))
+          .sort((x, y) => x.minor - y.minor),
+      }))
+      .sort((a, b) => a.minor - b.minor),
   }
+}
+
+/** Spending for each of the given months, under the same filter. */
+export async function monthlySpending(
+  db: Conn,
+  member: MemberRow,
+  f: Omit<TransactionFilter, 'month'>,
+  months: string[],
+) {
+  const sums = await Promise.all(months.map((month) => totals(db, member, { ...f, month })))
+  return months.map((month, i) => ({ month, spent: sums[i]!.spent }))
 }
 
 /** This month's money out and in for each visible account. */

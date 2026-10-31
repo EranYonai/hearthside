@@ -1,6 +1,13 @@
 import { ALERT_LABELS } from '@hearthside/core'
 import { accountLook, cardBillNote } from '@hearthside/core'
-import { Amount, buttonClasses, Card, Label, SummaryCard, TransactionList } from '@hearthside/ui'
+import {
+  Amount,
+  buttonClasses,
+  Card,
+  Label,
+  SpendingBreakdown,
+  TransactionList,
+} from '@hearthside/ui'
 import { ChevronLeft, ChevronRight, FileUp } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -13,6 +20,7 @@ import {
   listAccounts,
   listMonths,
   listTransactions,
+  monthlySpending,
   totals,
   type TransactionFilter,
 } from '@/server/ledger'
@@ -24,8 +32,10 @@ import { CategorisedRow, CategorizeNow, type TxView } from './client'
 export const metadata: Metadata = { title: 'Transactions · Hearthside' }
 export const dynamic = 'force-dynamic'
 
+const shortMonth = new Intl.DateTimeFormat('en-GB', { month: 'short', timeZone: 'UTC' })
+const TREND_MONTHS = 6
 const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
-const selectClass = 'min-h-11 rounded-md border border-line bg-surface-2 px-3'
+const selectClass = 'min-h-11 w-full min-w-0 rounded-md border border-line bg-surface-2 px-3'
 
 type Search = Record<string, string | string[] | undefined>
 
@@ -61,10 +71,14 @@ export default async function TransactionsPage({
     ...(one('category') ? { category: one('category')! } : {}),
     ...(one('q') ? { search: one('q')!.slice(0, 100) } : {}),
   }
-  const [rows, sum, categories] = await Promise.all([
+  const trendMonths = Array.from({ length: TREND_MONTHS }, (_, i) =>
+    shiftMonth(month, i - TREND_MONTHS + 1),
+  )
+  const [rows, sum, categories, trend] = await Promise.all([
     listTransactions(db, member, filter),
     totals(db, member, filter),
     householdCategorySet(db, member.householdId),
+    monthlySpending(db, member, filter, trendMonths),
   ])
   const options = categories.all.map(({ slug, label, icon }) => ({ slug, label, icon }))
   const editable = canEdit(member)
@@ -81,11 +95,20 @@ export default async function TransactionsPage({
     ...(kinds.has('bank') ? [{ label: 'Bank accounts', value: 'bank' }] : []),
   ]
   const spent = Math.abs(sum.spent)
-  const segments = sum.byCategory.map((c) => ({
+  const slices = sum.byCategory.map((c) => ({
+    key: c.category ?? 'none',
     name: categories.label(c.category),
-    minor: Math.abs(c.minor),
-    percent: spent ? (Math.abs(c.minor) / spent) * 100 : 0,
+    minor: c.minor,
+    href: query({ category: c.category ?? 'none' }),
   }))
+  const bars = trend.map((m) => ({
+    month: m.month,
+    label: shortMonth.format(new Date(`${m.month}-01`)),
+    minor: m.spent,
+    href: query({ month: m.month }),
+    current: m.month === month,
+  }))
+  const account = accountId ? allAccounts.find((a) => a.id === accountId) : undefined
   const accountNames = new Map(allAccounts.map((a) => [a.id, a.name]))
   const views: TxView[] = rows.map(({ t, accountName, accountProvider, accountColor }) => ({
     id: t.id,
@@ -158,11 +181,31 @@ export default async function TransactionsPage({
         </nav>
       )}
 
-      <SummaryCard
-        label={type === 'bank' ? `Money out in ${label}` : `Spent in ${label}`}
-        minor={-spent}
-        segments={segments}
-      />
+      <Card
+        className="min-w-0"
+        aria-label={type === 'bank' ? `Money out in ${label}` : `Spent in ${label}`}
+      >
+        <Label>
+          {account
+            ? `${account.name} · ${label}`
+            : type === 'bank'
+              ? `Money out in ${label}`
+              : `Spent in ${label}`}
+        </Label>
+        <Amount minor={-spent} whole hero />
+        <SpendingBreakdown
+          slices={slices}
+          months={bars}
+          center={
+            <span className="grid leading-tight">
+              <span className="font-display text-heading">{sum.count}</span>
+              <span className="text-caption text-ink-muted">
+                {sum.count === 1 ? 'transaction' : 'transactions'}
+              </span>
+            </span>
+          }
+        />
+      </Card>
       {(sum.received > 0 || sum.cardBills < 0) && (
         <p className="-mt-3 grid gap-1 text-caption text-ink-muted">
           {sum.received > 0 && (

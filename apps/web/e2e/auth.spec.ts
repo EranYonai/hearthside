@@ -304,6 +304,15 @@ test('dropping a card statement picks or creates its account and imports it', as
   await expect(owner.getByRole('heading', { name: 'October 2026' })).toBeVisible()
   await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(3)
   await expect(owner.getByLabel('Spent in October 2026')).toContainText('₪161')
+  // Spending by category as a donut; the months view sets this month against the ones before.
+  const donut = owner.getByRole('figure', { name: 'Spending by category' })
+  await expect(donut).toContainText('3transactions')
+  await owner.getByRole('tab', { name: 'Months' }).click()
+  await expect(
+    owner.getByRole('figure', { name: 'Spending by month' }).getByRole('link', { name: /^Oct:/ }),
+  ).toHaveAttribute('aria-current', 'date')
+  await owner.getByRole('tab', { name: 'Categories' }).click()
+  await expect(donut).toBeVisible()
 
   // The keyword list filed the bakery during import; the store waits for the model.
   await expect(owner.getByRole('button', { name: /^Home Store, Uncategorized/ })).toBeVisible()
@@ -368,6 +377,12 @@ test('a bank statement PDF imports by column position', async () => {
     .getByRole('link', { name: 'Cards' })
     .click()
   await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(3)
+
+  // Home outlines each account's share of the month's spending.
+  await owner.goto('/')
+  const byAccount = owner.getByRole('list', { name: 'By account' })
+  await expect(byAccount).toContainText('Bank account ·8901')
+  await expect(byAccount).toContainText('Card ·4821')
 
   // Accounts are grouped by type and can be renamed.
   await owner

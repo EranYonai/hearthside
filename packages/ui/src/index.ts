@@ -9,7 +9,12 @@ export {
   type Category,
   type CategoryIconProps,
 } from './components/CategoryIcon'
-export { SummaryCard, type SummaryCardProps, type SummarySegment } from './components/SummaryCard'
+export {
+  SummaryCard,
+  type SummaryCardProps,
+  type SummaryGroup,
+  type SummarySegment,
+} from './components/SummaryCard'
 export { SyncStatus, type SyncStatusProps } from './components/SyncStatus'
 export {
   TransactionList,
@@ -17,3 +22,13 @@ export {
   type TransactionRowProps,
 } from './components/TransactionRow'
 export { Notice, TextField, type TextFieldProps } from './components/TextField'
+export {
+  CHART_BG,
+  DonutChart,
+  donutSlices,
+  type ChartColor,
+  type DonutSlice,
+  type ShownSlice,
+} from './components/DonutChart'
+export { MonthBars, type MonthBar } from './components/MonthBars'
+export { SpendingBreakdown } from './components/SpendingBreakdown'

@@ -60,7 +60,7 @@ export function TransactionRow({
               data-testid="meta-color"
             />
           )}
-          <span className="truncate">{pending ? `Pending · ${meta}` : meta}</span>
+          <span className="min-w-0 truncate">{pending ? `Pending · ${meta}` : meta}</span>
         </span>
       </div>
       <div className="text-end">
@@ -104,7 +104,7 @@ export function TransactionList({
   ...rest
 }: { children: ReactNode } & HTMLAttributes<HTMLUListElement>) {
   return (
-    <ul className={cx('grid divide-y divide-line', className)} {...rest}>
+    <ul className={cx('grid grid-cols-[minmax(0,1fr)] divide-y divide-line', className)} {...rest}>
       {children}
     </ul>
   )

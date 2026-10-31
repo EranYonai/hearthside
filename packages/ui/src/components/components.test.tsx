@@ -10,6 +10,10 @@ import {
   TextField,
   CATEGORY_ICONS,
   CategoryIcon,
+  DonutChart,
+  donutSlices,
+  MonthBars,
+  SpendingBreakdown,
   SummaryCard,
   SyncStatus,
   TransactionList,
@@ -209,5 +213,156 @@ describe('TextField and Notice', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Failed')
     rerender(<Notice>Saved</Notice>)
     expect(screen.getByRole('status')).toHaveTextContent('Saved')
+  })
+})
+
+describe('donutSlices', () => {
+  const s = (key: string, minor: number) => ({ key, name: key, minor })
+
+  it('sorts largest first, drops empty slices and assigns palette colors', () => {
+    const shown = donutSlices([s('a', -100), s('b', -300), s('z', 0)])
+    expect(shown.map((x) => [x.key, x.color, x.percent])).toEqual([
+      ['b', 'chart-1', 75],
+      ['a', 'chart-2', 25],
+    ])
+  })
+
+  it('folds the tail into one Other slice past the maximum', () => {
+    const shown = donutSlices(
+      [s('a', 50), s('b', 40), s('c', 30), s('d', 20), s('e', 10), s('f', 10)],
+      5,
+      'Other categories',
+    )
+    expect(shown).toHaveLength(5)
+    expect(shown.at(-1)).toMatchObject({ key: 'other', name: 'Other categories', minor: 20 })
+    expect(shown.at(-1)!.color).toBe('chart-other')
+    expect(shown.reduce((n, x) => n + x.percent, 0)).toBeCloseTo(100)
+  })
+
+  it('returns nothing when there is nothing to show', () => {
+    expect(donutSlices([s('a', 0)])).toEqual([])
+  })
+})
+
+describe('DonutChart', () => {
+  it('draws one ring slice per legend row and links rows', () => {
+    const { container } = render(
+      <DonutChart
+        label="Spending by category"
+        center={<span>3 transactions</span>}
+        slices={[
+          { key: 'groceries', name: 'Groceries', minor: -30000, href: '/t?category=groceries' },
+          { key: 'home', name: 'Home', minor: -10000 },
+        ]}
+      />,
+    )
+    const figure = screen.getByRole('figure', { name: 'Spending by category' })
+    expect(figure).toHaveTextContent('3 transactions')
+    expect(container.querySelectorAll('[data-slice]')).toHaveLength(2)
+    expect(screen.getByRole('link', { name: 'Groceries, ₪300, 75%' })).toHaveAttribute(
+      'href',
+      '/t?category=groceries',
+    )
+    expect(screen.getAllByRole('listitem')[1]).toHaveTextContent('Home₪10025%')
+  })
+})
+
+describe('MonthBars', () => {
+  it('scales bars to the largest month and marks the current one', () => {
+    const { container } = render(
+      <MonthBars
+        label="Spending by month"
+        months={[
+          { month: '2026-09', label: 'Sep', minor: -20000, href: '/t?month=2026-09' },
+          {
+            month: '2026-10',
+            label: 'Oct',
+            minor: -40000,
+            href: '/t?month=2026-10',
+            current: true,
+          },
+        ]}
+      />,
+    )
+    const bars = container.querySelectorAll<HTMLElement>('[data-bar]')
+    expect(bars[0]!.style.height).toBe('50%')
+    expect(bars[1]!.style.height).toBe('100%')
+    expect(screen.getByRole('link', { name: 'Oct: ₪400' })).toHaveAttribute('aria-current', 'date')
+  })
+})
+
+describe('SpendingBreakdown', () => {
+  it('switches between the category donut and the month bars', async () => {
+    render(
+      <SpendingBreakdown
+        slices={[{ key: 'home', name: 'Home', minor: -5000 }]}
+        months={[{ month: '2026-10', label: 'Oct', minor: -5000, current: true }]}
+      />,
+    )
+    expect(screen.getByRole('tab', { name: 'Categories' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('figure', { name: 'Spending by category' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: 'Months' }))
+    expect(screen.getByRole('figure', { name: 'Spending by month' })).toBeInTheDocument()
+    expect(screen.queryByRole('figure', { name: 'Spending by category' })).toBeNull()
+  })
+
+  it('says so when a month has no spending', () => {
+    render(<SpendingBreakdown slices={[]} months={[]} />)
+    expect(screen.getByText('No spending this month.')).toBeInTheDocument()
+  })
+})
+
+describe('SummaryCard groups', () => {
+  it('outlines each account and keeps category colors across groups', () => {
+    const { container } = render(
+      <SummaryCard
+        label="Spent in October"
+        minor={-60000}
+        segments={[
+          { name: 'Groceries', minor: 40000, percent: 66.7 },
+          { name: 'Home', minor: 20000, percent: 33.3 },
+        ]}
+        groups={[
+          {
+            key: 'b',
+            name: 'Card B',
+            color: null,
+            minor: -10000,
+            parts: [{ name: 'Home', minor: -10000 }],
+          },
+          {
+            key: 'a',
+            name: 'Card A',
+            color: '#3e6fb0',
+            minor: -50000,
+            parts: [
+              { name: 'Home', minor: -10000 },
+              { name: 'Groceries', minor: -40000 },
+            ],
+          },
+        ]}
+      />,
+    )
+    const groups = container.querySelectorAll<HTMLElement>('[data-group]')
+    expect([...groups].map((g) => g.dataset.group)).toEqual(['Card A', 'Card B'])
+    expect(groups[0]!.style.outlineColor).toContain('#3e6fb0')
+    const inside = groups[0]!.querySelectorAll('span')
+    expect(inside[0]!.className).toContain('bg-chart-1')
+    expect(inside[1]!.className).toContain('bg-chart-2')
+    expect(groups[1]!.querySelector('span')!.className).toContain('bg-chart-2')
+    expect(screen.getByRole('list', { name: 'By account' })).toHaveTextContent('Card A₪500')
+  })
+
+  it('keeps the plain meter for a single account', () => {
+    render(
+      <SummaryCard
+        label="Spent"
+        minor={-100}
+        segments={[{ name: 'Home', minor: 100, percent: 100 }]}
+        groups={[{ key: 'a', name: 'A', minor: -100, parts: [{ name: 'Home', minor: -100 }] }]}
+      />,
+    )
+    expect(screen.queryByTestId('meter-groups')).toBeNull()
+    expect(screen.queryByRole('list', { name: 'By account' })).toBeNull()
   })
 })
