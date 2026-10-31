@@ -59,7 +59,8 @@ CMD ["node", "src/main.ts"]
 # Runs the categorization model on CPU. The model files live in the `models` volume, filled
 # once by `node src/fetch-model.ts`; the service itself has no route to the internet.
 FROM ${NODE_IMAGE} AS decide
-ENV NODE_ENV=production MODEL_DIR=/models/laya PORT=8080
+# ORT_DISABLE_TELEMETRY: the runtime may try to report usage; the network blocks it anyway.
+ENV NODE_ENV=production MODEL_DIR=/models/laya PORT=8080 ORT_DISABLE_TELEMETRY=1
 WORKDIR /app
 COPY --from=build-decide --chown=node:node /out ./
 # A fresh named volume copies this folder's owner, so the node user can fill it.
