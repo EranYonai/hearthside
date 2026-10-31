@@ -140,6 +140,35 @@ export function brokerFromText(text: string | null | undefined): BrokerId | null
   return null
 }
 
+/** Free-text names for banks and cards, e.g. an investment account kept at a bank. */
+const PROVIDER_MATCH: Record<ProviderId, RegExp> = {
+  hapoalim: /hapoalim|poalim|הפועלים/i,
+  leumi: /leumi|(?<!בינ)לאומי/i,
+  mizrahi: /mizrahi|tefahot|מזרחי|טפחות/i,
+  discount: /discount|דיסקונט/i,
+  fibi: /\bfibi\b|first\s+international|הבינלאומי/i,
+  mercantile: /mercantile|מרכנתיל/i,
+  jerusalem: /bank\s+of\s+jerusalem|jerusalem\s+bank|בנק ירושלים/i,
+  yahav: /\byahav\b|בנק יהב/i,
+  massad: /\bmassad\b|בנק מסד/i,
+  onezero: /one\s*zero|וואן זירו/i,
+  max: /^max\b|מקס/i,
+  cal: /^cal\b|כאל/i,
+  isracard: /isracard|ישראכרט/i,
+  amex: /american\s+express|\bamex\b|אמריקן אקספרס/i,
+  diners: /diners|דיינרס/i,
+}
+
+/** Any known brand a free-text provider name refers to: brokers first, then banks and cards. */
+export function brandFromText(text: string | null | undefined): BrandId | null {
+  if (!text) return null
+  if (isBrandId(text)) return text
+  const broker = brokerFromText(text)
+  if (broker) return broker
+  for (const [id, re] of Object.entries(PROVIDER_MATCH)) if (re.test(text)) return id as ProviderId
+  return null
+}
+
 export function brandOf(id: BrandId): Brand & { label: string; kind: BrandKind; approx?: true } {
   if (isBrokerId(id)) return { ...BROKERS[id].brand, label: BROKERS[id].label, kind: 'broker' }
   return { ...BRANDS[id], label: PROVIDERS[id].label, kind: PROVIDERS[id].kind }
@@ -270,7 +299,7 @@ export function accountLook(account: {
   provider?: string | null
   color?: string | null
 }): AccountLook {
-  const id = isBrandId(account.provider) ? account.provider : brokerFromText(account.provider)
+  const id = brandFromText(account.provider)
   const brand = id ? brandOf(id) : null
   const own = normalizeHexColor(account.color)
   const color = own ?? brand?.color ?? null
