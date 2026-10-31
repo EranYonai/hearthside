@@ -43,6 +43,13 @@
       "when": 1793431450650,
       "tag": "0005_encryption",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793432016457,
+      "tag": "0006_investments",
+      "breakpoints": true
     }
   ]
 }

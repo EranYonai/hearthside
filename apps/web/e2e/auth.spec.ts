@@ -322,6 +322,45 @@ test('a bank statement PDF imports by column position', async () => {
   await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(3)
 })
 
+test('investment accounts and hand-entered holdings add up on the Invest tab', async () => {
+  await owner
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Invest' })
+    .click()
+  await expect(owner.getByRole('heading', { name: 'Investments' })).toBeVisible()
+
+  // Synthetic names and symbols only.
+  await owner.getByLabel('Account name').fill('Long-term savings')
+  await owner.getByLabel('Account currency').selectOption('USD')
+  await owner.getByRole('button', { name: 'Add account' }).click()
+  await expect(owner.getByRole('heading', { name: 'Long-term savings' })).toBeVisible()
+
+  const add = owner.getByRole('region', { name: 'Add a holding by hand' })
+  await add.getByLabel('Ticker or fund number').fill('tst1')
+  await add.getByLabel('Name', { exact: true }).fill('Test World Index')
+  await add.getByLabel('Units').fill('10')
+  await add.getByLabel('Price per unit in USD (optional)').fill('100.50')
+  await add.getByRole('button', { name: 'Add holding' }).click()
+  await expect(owner.getByTestId('holdings')).toContainText('Test World Index')
+  await expect(owner.getByTestId('holdings')).toContainText('$1,005')
+
+  // The form folds away once the account has a holding.
+  if (!(await add.getByLabel('Units').isVisible()))
+    await add.getByText('Add a holding by hand').click()
+  await add.getByLabel('Cash in the account').check()
+  await add.getByLabel('Currency', { exact: true }).selectOption('ILS')
+  await add.getByLabel('Amount').fill('500')
+  await add.getByRole('button', { name: 'Add holding' }).click()
+  await expect(owner.getByTestId('holdings').getByRole('listitem')).toHaveCount(2)
+
+  // The overview shows the display currency and sets apart what it can't convert yet.
+  await owner.getByRole('link', { name: 'Investments' }).click()
+  await expect(owner.getByTestId('investment-accounts')).toContainText('Long-term savings')
+  await expect(owner.getByTestId('investment-accounts')).toContainText('2 holdings')
+  await expect(owner.getByTestId('unconverted')).toContainText('₪500')
+  await expect(owner.getByTestId('allocation')).toContainText('Global stocks 100%')
+})
+
 test('settings show the app version and sign-in activity', async () => {
   await owner.goto('/settings')
   await expect(owner.getByTestId('app-version')).toHaveText(/^Hearthside v\d+\.\d+\.\d+/)

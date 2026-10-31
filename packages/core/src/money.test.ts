@@ -42,5 +42,6 @@ describe('direction and labels', () => {
     expect(moneyLabel(-41230)).toBe('spent 412 shekels 30')
     expect(moneyLabel(100)).toBe('received 1 shekel')
     expect(moneyLabel(1620000)).toBe('received 16200 shekels')
+    expect(moneyLabel(-4800, 'USD')).toBe('spent $48.00')
   })
 })
