@@ -1,6 +1,6 @@
 'use server'
 
-import { CARD_NETWORKS, isProviderId, normalizeHexColor } from '@hearthside/core'
+import { CARD_NETWORKS, isProviderId, normalizeHexColor, parseAmount } from '@hearthside/core'
 import { requireDb } from '@/lib/db'
 import { runAction } from '@/server/action'
 import { cleanName } from '@/server/http'
@@ -41,6 +41,19 @@ export async function updateAccountAction(
       color,
       ...(input.network !== undefined ? { network: input.network || null } : {}),
     })
+    return {}
+  })
+}
+
+/** Today's balance of a bank account, typed in. An empty value forgets it. */
+export async function setBalanceAction(id: string, amount: string) {
+  const { member } = await requireSession()
+  return runAction(['/accounts', '/'], async () => {
+    const text = amount.trim()
+    const minor = text ? parseAmount(text) : null
+    if (minor === undefined || (minor !== null && !Number.isSafeInteger(minor)))
+      throw new AuthError('not_allowed', 'Enter an amount, like 12,500 or -300')
+    await updateAccount(requireDb(), member, id, { balanceMinor: minor })
     return {}
   })
 }

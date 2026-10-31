@@ -34,3 +34,14 @@
     font-size: max(16px, 1em);
   }
 }
+
+/* The Home wealth card: a warm glow from the top corner, like light from the hearth. */
+@layer components {
+  .wealth-glow {
+    background-image: radial-gradient(
+      120% 80% at 100% 0%,
+      var(--hs-brand-soft) 0%,
+      transparent 60%
+    );
+  }
+}

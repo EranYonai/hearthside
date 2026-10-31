@@ -396,6 +396,19 @@ test('a bank statement PDF imports by column position', async () => {
   await expect(owner.getByText('Saved.')).toBeVisible()
   await expect(owner.getByRole('heading', { name: 'Household bank' })).toBeVisible()
 
+  // The statement's running balance is the account's balance, and it can be typed in instead.
+  const balance = owner.getByRole('region', { name: 'Balance' })
+  await expect(balance).toContainText('₪14,500')
+  await expect(balance).toContainText('From the statement')
+  await balance.getByLabel('Balance today').fill('15,000')
+  await balance.getByRole('button', { name: 'Update balance' }).click()
+  await expect(balance).toContainText('₪15,000')
+  await expect(balance).toContainText('Typed in on')
+
+  // Home adds it to what the home owns; with no exchange rate to USD it says so.
+  await owner.goto('/')
+  await expect(owner.getByTestId('wealth')).toContainText('Amounts in ILS are left out')
+
   // Undo removes what that import added.
   await owner.goto('/import')
   await owner.getByRole('button', { name: 'Undo import ops.pdf' }).click()

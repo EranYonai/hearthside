@@ -159,7 +159,9 @@ describe('columns', () => {
       description: 1,
       debit: 2,
       credit: 3,
+      balance: 4,
     })
+    expect(mapColumns(['תאריך', 'תיאור', 'סכום', 'יתרה בש"ח'])).toMatchObject({ balance: 3 })
     expect(normalizeHeader(' סכום חיוב (₪) ')).toBe('סכום חיוב')
     expect(mapColumns(['סכום חיוב ₪', 'תאריך'])).toEqual({ amount: 0, date: 1 })
   })
