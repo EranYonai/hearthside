@@ -462,6 +462,52 @@ test('the year view shows money in and out and each category', async () => {
   await expect(owner.getByText(/^Nothing repeats yet/)).toBeVisible()
 })
 
+test('budgets set a monthly limit per category and show progress', async () => {
+  await owner.goto('/')
+  await owner.getByTestId('home-budgets').getByRole('link', { name: 'Set budgets' }).click()
+  await expect(owner.getByRole('heading', { name: 'Budgets' })).toBeVisible()
+  await owner.goto('/budgets?month=2026-10')
+  await expect(owner.getByRole('heading', { name: 'October 2026' })).toBeVisible()
+  await expect(owner.getByText('No budgets yet')).toBeVisible()
+
+  const add = owner.getByRole('region', { name: 'Add a budget' })
+  await add.getByLabel('Category').selectOption('groceries')
+  await add.getByLabel('A month').fill('1000')
+  await add.getByRole('button', { name: 'Add budget' }).click()
+  const line = owner.locator('[data-testid="budget-line"][data-category="groceries"]')
+  await expect(line).toContainText(/of\s*₪1,000/)
+  await expect(line.getByTestId('budget-left')).toContainText('left')
+  await expect(owner.getByTestId('budget-total')).toContainText('Left to spend')
+  await expect(line.getByRole('meter', { name: 'Groceries budget used' })).toHaveAttribute(
+    'data-status',
+    'ok',
+  )
+
+  // A small limit goes over, in red.
+  await line.getByRole('button', { name: 'Change the Groceries budget' }).click()
+  await line.getByLabel('Groceries, a month').fill('10')
+  await line.getByRole('button', { name: 'Save' }).click()
+  await expect(line.getByTestId('budget-left')).toContainText('over')
+  await expect(line.getByRole('meter')).toHaveAttribute('data-status', 'over')
+  await expect(owner.getByTestId('budget-total')).toContainText('Over budget')
+
+  // Home and the category's month in Activity show it too.
+  await owner.goto('/')
+  await expect(owner.getByTestId('home-budgets')).toContainText('Groceries')
+  await owner.goto('/transactions?month=2026-10&category=groceries')
+  await expect(owner.getByTestId('category-budget')).toContainText(/of\s*₪10\b/)
+
+  // Removing it brings back the empty state; a fresh one stays for the phone-width check.
+  await owner.goto('/budgets?month=2026-10')
+  await line.getByRole('button', { name: 'Change the Groceries budget' }).click()
+  await line.getByRole('button', { name: 'Remove' }).click()
+  await expect(owner.getByText('No budgets yet')).toBeVisible()
+  await add.getByLabel('Category').selectOption('groceries')
+  await add.getByLabel('A month').fill('500')
+  await add.getByRole('button', { name: 'Add budget' }).click()
+  await expect(line).toContainText(/of\s*₪500/)
+})
+
 test('investment accounts and hand-entered holdings add up on the Invest tab', async () => {
   await owner
     .getByRole('navigation', { name: 'Main' })
@@ -705,6 +751,7 @@ test('no page is wider than a phone screen', async ({ browser }) => {
     '/invest/trends',
     '/transactions',
     '/transactions?month=2026-10',
+    '/budgets?month=2026-10',
     '/accounts',
     accounts!,
     '/import',

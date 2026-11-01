@@ -14,7 +14,7 @@ import { and, asc, eq } from 'drizzle-orm'
 import { audit, AuthError } from './repo'
 import { randomToken } from './tokens'
 
-const { householdCategories, transactions, categoryRules } = schema
+const { budgets, householdCategories, transactions, categoryRules } = schema
 
 type Conn = Parameters<typeof audit>[0]
 
@@ -191,6 +191,9 @@ export async function deleteCategory(db: Conn, member: MemberRow, slug: string) 
       .where(
         and(eq(categoryRules.householdId, member.householdId), eq(categoryRules.category, slug)),
       )
+    await tx
+      .delete(budgets)
+      .where(and(eq(budgets.householdId, member.householdId), eq(budgets.category, slug)))
     await tx
       .delete(householdCategories)
       .where(

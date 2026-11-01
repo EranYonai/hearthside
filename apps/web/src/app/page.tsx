@@ -13,10 +13,12 @@ import { ArrowDownLeft, ArrowUpRight, ChevronRight, FileUp, UserPlus, Users } fr
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { AppShell } from '@/components/AppShell'
+import { BudgetLineView } from '@/components/BudgetLine'
 import { PrivateAmount } from '@/components/PrivateAmount'
 import { RecurringList } from '@/components/RecurringList'
 import { WealthCard } from '@/components/WealthCard'
 import { requireDb } from '@/lib/db'
+import { budgetOverview } from '@/server/budgets'
 import { householdCategorySet } from '@/server/categories'
 import { currentRates } from '@/server/fx'
 import {
@@ -78,7 +80,7 @@ export default async function Home({
   const solo = people.length === 1
   const latest = months[0]
   const trail = latest ? lastMonths(latest) : []
-  const [sum, categories, accounts, owned, history, fresh, recurring] = await Promise.all([
+  const [sum, categories, accounts, owned, history, fresh, recurring, budget] = await Promise.all([
     latest ? totals(db, member, { month: latest }) : undefined,
     householdCategorySet(db, member.householdId),
     listAccounts(db, member),
@@ -86,6 +88,7 @@ export default async function Home({
     latest ? monthlyFlows(db, member, {}, trail) : [],
     accountFreshness(db, member),
     listRecurring(db, member),
+    latest ? budgetOverview(db, member, latest) : undefined,
   ])
   const moves = history.length > 1 ? biggestMoves(history.at(-1)!, history.at(-2)!) : []
   const before = trail.length > 1 ? await totals(db, member, { month: trail.at(-2)! }) : undefined
@@ -220,6 +223,64 @@ export default async function Home({
         )
       )}
 
+      {budget && (budget.month.lines.length > 0 || editable) && (
+        <Card aria-labelledby="budgets-title" data-testid="home-budgets">
+          <div className="flex items-baseline justify-between gap-2">
+            <Link
+              href={`/budgets?month=${latest}`}
+              className="flex items-center gap-0.5 rounded-sm focus-visible:outline-2 focus-visible:outline-focus"
+            >
+              <Label id="budgets-title">Budgets in {monthLabel}</Label>
+              <ChevronRight size={16} className="text-ink-muted" aria-hidden />
+            </Link>
+            {budget.month.lines.length > 0 && (
+              <span className="flex items-baseline gap-1 text-caption text-ink-muted">
+                <PrivateAmount
+                  minor={Math.abs(budget.month.leftMinor)}
+                  whole
+                  problem={budget.month.leftMinor < 0}
+                  className="text-body-strong"
+                />
+                {budget.month.leftMinor < 0 ? 'over' : 'left'}
+              </span>
+            )}
+          </div>
+          {budget.month.lines.length > 0 ? (
+            <ul className="grid gap-3">
+              {budget.month.lines.slice(0, 3).map((line) => (
+                <li key={line.category}>
+                  <Link
+                    href={`/transactions?month=${latest}&category=${line.category}`}
+                    className="block rounded-md focus-visible:outline-2 focus-visible:outline-focus"
+                  >
+                    <BudgetLineView
+                      line={line}
+                      categories={categories}
+                      elapsed={budget.month.elapsed}
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-ink-muted">Set a monthly limit for the categories you watch.</p>
+          )}
+          {budget.month.lines.length > 3 ? (
+            <Link
+              href={`/budgets?month=${latest}`}
+              className={`${buttonClasses('secondary')} justify-self-start`}
+            >
+              {budget.month.lines.length - 3} more
+            </Link>
+          ) : (
+            budget.month.lines.length === 0 && (
+              <Link href="/budgets" className={`${buttonClasses('secondary')} justify-self-start`}>
+                Set budgets
+              </Link>
+            )
+          )}
+        </Card>
+      )}
       {recurring.length > 0 && (
         <Card aria-labelledby="fixed-title">
           <div className="flex items-baseline justify-between gap-2">
