@@ -1,6 +1,8 @@
 import {
   closingBalance,
   countsAsSpending,
+  emptyFlow,
+  type MonthFlow,
   matchCardBills,
   duplicateKeys,
   suggestAccountName,
@@ -508,8 +510,11 @@ export interface TransactionFilter {
 }
 
 // Descriptions and amounts are encrypted, so search and totals run here after reading.
-function filterConditions(member: MemberRow, f: TransactionFilter): SQL {
-  const [from, to] = monthRange(f.month)
+function filterConditions(
+  member: MemberRow,
+  f: Omit<TransactionFilter, 'month'>,
+  [from, to]: [string, string],
+): SQL {
   const conditions: SQL[] = [
     visibleTo(member),
     gte(transactions.occurredOn, from),
@@ -542,7 +547,7 @@ export async function listTransactions(db: Conn, member: MemberRow, f: Transacti
     })
     .from(transactions)
     .innerJoin(accounts, eq(accounts.id, transactions.accountId))
-    .where(filterConditions(member, f))
+    .where(filterConditions(member, f, monthRange(f.month)))
     .orderBy(desc(transactions.occurredOn), desc(transactions.createdAt), transactions.id)
   return rows.filter((r) => matchesSearch(r.t.description, f.search)).slice(0, 1000)
 }
@@ -644,7 +649,7 @@ async function visibleCardIds(db: Conn, member: MemberRow): Promise<Set<string>>
 }
 
 /** True when a filter mixes cards and bank accounts, so card bills would count twice. */
-function mixesKinds(f: TransactionFilter) {
+function mixesKinds(f: Omit<TransactionFilter, 'month'>) {
   return !f.kind && !f.accountId
 }
 
@@ -663,7 +668,7 @@ export async function totals(db: Conn, member: MemberRow, f: TransactionFilter) 
       })
       .from(transactions)
       .innerJoin(accounts, eq(accounts.id, transactions.accountId))
-      .where(filterConditions(member, f)),
+      .where(filterConditions(member, f, monthRange(f.month))),
     mixed ? visibleCardIds(db, member) : new Set<string>(),
   ])
   let spent = 0
@@ -718,8 +723,52 @@ export async function monthlySpending(
   f: Omit<TransactionFilter, 'month'>,
   months: string[],
 ) {
-  const sums = await Promise.all(months.map((month) => totals(db, member, { ...f, month })))
-  return months.map((month, i) => ({ month, spent: sums[i]!.spent }))
+  const flows = await monthlyFlows(db, member, f, months)
+  return flows.map(({ month, spent }) => ({ month, spent }))
+}
+
+/**
+ * Money in and out, and spending per category, for each of the given months (YYYY-MM,
+ * any order), under the same filter and rules as `totals`. One query over the whole span.
+ */
+export async function monthlyFlows(
+  db: Conn,
+  member: MemberRow,
+  f: Omit<TransactionFilter, 'month'>,
+  months: string[],
+): Promise<MonthFlow[]> {
+  const flows = new Map(months.map((m) => [m, emptyFlow(m)]))
+  if (!months.length) return []
+  const sorted = [...months].sort()
+  const range: [string, string] = [monthRange(sorted[0]!)[0], monthRange(sorted.at(-1)!)[1]]
+  const mixed = mixesKinds(f)
+  const [rows, cards] = await Promise.all([
+    db
+      .select({
+        on: transactions.occurredOn,
+        category: transactions.category,
+        description: transactions.description,
+        amount: transactions.amountMinor,
+        cardBill: transactions.cardBill,
+        cardBillAccountId: transactions.cardBillAccountId,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(accounts.id, transactions.accountId))
+      .where(filterConditions(member, f, range)),
+    mixed ? visibleCardIds(db, member) : new Set<string>(),
+  ])
+  for (const r of rows) {
+    const flow = flows.get(String(r.on).slice(0, 7))
+    if (!flow || !matchesSearch(r.description, f.search)) continue
+    if (mixed && r.amount < 0 && billCovered(r, cards)) continue
+    if (!countsAsSpending(r.category)) continue
+    if (r.amount < 0) {
+      flow.spent += r.amount
+      const key = r.category ?? ''
+      flow.byCategory[key] = (flow.byCategory[key] ?? 0) + r.amount
+    } else flow.received += r.amount
+  }
+  return months.map((m) => flows.get(m)!)
 }
 
 /** This month's money out and in for each visible account. */

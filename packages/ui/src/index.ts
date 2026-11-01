@@ -31,4 +31,5 @@ export {
   type ShownSlice,
 } from './components/DonutChart'
 export { MonthBars, type MonthBar } from './components/MonthBars'
+export { FlowBars, type FlowMonth } from './components/FlowBars'
 export { SpendingBreakdown } from './components/SpendingBreakdown'

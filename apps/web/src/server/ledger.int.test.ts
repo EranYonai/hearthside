@@ -19,6 +19,7 @@ import {
   listMonths,
   listTransactions,
   monthlySpending,
+  monthlyFlows,
   monthRange,
   prepareImport,
   setCategory,
@@ -456,6 +457,14 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
       { month: '2026-09', spent: 0 },
       { month: '2026-10', spent: -30000 },
     ])
+    // Months in any order, money in and out, the card bill left out when mixing kinds.
+    const flows = await monthlyFlows(db, alex, {}, ['2026-10', '2026-09'])
+    expect(flows.map((f) => [f.month, f.spent, f.received])).toEqual([
+      ['2026-10', -130000, 500000],
+      ['2026-09', 0, 0],
+    ])
+    expect(Object.values(flows[0]!.byCategory).reduce((n, m) => n + m, 0)).toBe(-130000)
+    expect(await monthlyFlows(db, alex, {}, [])).toEqual([])
     expect(await listTransactions(db, alex, { month: '2026-10', kind: 'bank' })).toHaveLength(3)
 
     const summary = await accountSummaries(db, alex, '2026-10')

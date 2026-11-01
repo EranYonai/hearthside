@@ -418,6 +418,29 @@ test('a bank statement PDF imports by column position', async () => {
   await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(3)
 })
 
+test('the year view shows money in and out and each category', async () => {
+  await owner.goto('/transactions?month=2026-10')
+  await owner
+    .getByRole('navigation', { name: 'Period' })
+    .getByRole('link', { name: 'Year' })
+    .click()
+  await expect(owner.getByRole('heading', { name: '2026' })).toBeVisible()
+  // Only the card statement is left after the undo above.
+  await expect(owner.getByTestId('year-totals')).toContainText('Spent−₪161')
+  await expect(owner.getByLabel(/^Oct: in ₪0, out ₪161, left −₪161$/)).toBeVisible()
+  const cats = owner.getByTestId('category-trends')
+  await expect(cats.getByRole('listitem').first()).toBeVisible()
+  // A category opens its month, filtered, with its recent months as bars.
+  await cats.getByRole('link').first().click()
+  await expect(owner).toHaveURL(/month=2026-10&category=/)
+  await owner
+    .getByRole('navigation', { name: 'Period' })
+    .getByRole('link', { name: 'Year' })
+    .click()
+  await owner.getByRole('link', { name: 'Previous year' }).click()
+  await expect(owner.getByText('No spending in 2025 yet.')).toBeVisible()
+})
+
 test('investment accounts and hand-entered holdings add up on the Invest tab', async () => {
   await owner
     .getByRole('navigation', { name: 'Main' })
