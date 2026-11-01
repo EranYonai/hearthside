@@ -1,7 +1,6 @@
-import { Amount, buttonClasses, Card, cx } from '@hearthside/ui'
-import { ChevronLeft, CircleCheck, Info, Lightbulb } from 'lucide-react'
+import { Amount, Card, cx } from '@hearthside/ui'
+import { CircleCheck, Info, Lightbulb } from 'lucide-react'
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
 import { runCheckup } from '@/server/checkup'
@@ -27,11 +26,11 @@ export default async function CheckupPage() {
   const nudges = items.filter((i) => i.status === 'nudge').length
 
   return (
-    <AppShell household={household.name} current="/invest">
-      <Link href="/invest" className={`${buttonClasses('ghost')} justify-self-start`}>
-        <ChevronLeft aria-hidden />
-        Investments
-      </Link>
+    <AppShell
+      household={household.name}
+      current="/invest"
+      back={{ href: '/invest', label: 'Investments' }}
+    >
       <div className="grid gap-1">
         <h1 className="font-display text-title">Check-up</h1>
         <p className="text-caption text-ink-muted">

@@ -443,6 +443,10 @@ test('the year view shows money in and out and each category', async () => {
   // Home says how fresh each account's data is.
   await owner.goto('/')
   await expect(owner.getByTestId('freshness')).toContainText('Card ·4821')
+  // Import opens from the header on any tab and goes back to where it was opened.
+  await owner.getByRole('banner').getByRole('link', { name: 'Import' }).click()
+  await owner.getByRole('link', { name: 'Back to Home' }).click()
+  await expect(owner.getByTestId('freshness')).toBeVisible()
   // One statement can't show a repeating payment yet.
   await owner.goto('/recurring')
   await expect(owner.getByRole('heading', { name: 'Fixed costs' })).toBeVisible()
@@ -528,12 +532,23 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await expect(owner.getByTestId('movements')).toContainText('Deposit')
   await expect(owner.getByTestId('movements')).toContainText('+$1,000')
 
-  await owner.getByRole('link', { name: 'Investments' }).click()
+  // Opened from Accounts, so back goes to Accounts.
+  await owner.getByRole('link', { name: 'Back to Accounts' }).click()
+  await expect(owner.getByTestId('accounts-investment')).toBeVisible()
+  await owner
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Invest' })
+    .click()
+  // A tab starts fresh: no back button on it.
+  await expect(owner.getByTestId('back')).toHaveCount(0)
   await owner.getByRole('link', { name: 'Trends' }).click()
   await expect(owner.getByRole('heading', { name: 'Trends' })).toBeVisible()
   await expect(owner.getByTestId('trend-empty')).toContainText('recorded once a day')
   await owner.getByRole('navigation', { name: 'Range' }).getByRole('link', { name: 'All' }).click()
   await expect(owner.getByTestId('years')).toContainText('$1,000')
+  // Changing the range doesn't trap back on the same page.
+  await owner.getByRole('link', { name: 'Back to Investments' }).click()
+  await expect(owner.getByRole('heading', { name: 'Investments' })).toBeVisible()
 
   // The same file again updates the same account.
   await drop(
@@ -575,7 +590,7 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await owner.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(owner.getByTestId('checkup')).toContainText('60/40 target')
   await owner.goto('/invest')
-  await expect(owner.getByRole('link', { name: /Check-up/ })).toBeVisible()
+  await expect(owner.getByRole('main').getByRole('link', { name: /Check-up/ })).toBeVisible()
 
   // A file from a broker we know, with an account number, adds its own account.
   const broker = await drop(

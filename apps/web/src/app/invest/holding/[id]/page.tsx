@@ -5,8 +5,8 @@ import {
   isHistoryRange,
   summarizePortfolio,
 } from '@hearthside/core'
-import { Amount, buttonClasses, Card, cx, Label } from '@hearthside/ui'
-import { ChevronLeft, ExternalLink } from 'lucide-react'
+import { Amount, Card, cx, Label } from '@hearthside/ui'
+import { ExternalLink } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -93,14 +93,11 @@ export default async function HoldingPage({
   const move = first && last ? Number(last.price) / Number(first.price) - 1 : null
 
   return (
-    <AppShell household={household.name} current="/invest">
-      <Link
-        href={`/invest/${account.id}`}
-        className={`${buttonClasses('ghost')} justify-self-start`}
-      >
-        <ChevronLeft aria-hidden />
-        {account.name}
-      </Link>
+    <AppShell
+      household={household.name}
+      current="/invest"
+      back={{ href: `/invest/${account.id}`, label: account.name }}
+    >
       <div className="grid gap-1">
         <h1 className="font-display text-title">{h.name}</h1>
         <p className="text-caption text-ink-muted">

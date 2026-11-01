@@ -1,7 +1,5 @@
-import { Amount, buttonClasses, Card, Label, Notice } from '@hearthside/ui'
-import { ChevronLeft } from 'lucide-react'
+import { Amount, Card, Label, Notice } from '@hearthside/ui'
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { AccountCard } from '@/components/AccountCard'
 import { AppShell } from '@/components/AppShell'
@@ -36,11 +34,11 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
   const mayEdit = canEdit(member) && (account.ownerId === member.id || member.role === 'owner')
 
   return (
-    <AppShell household={household.name} current="/accounts">
-      <Link href="/accounts" className={`${buttonClasses('ghost')} justify-self-start`}>
-        <ChevronLeft aria-hidden />
-        Accounts
-      </Link>
+    <AppShell
+      household={household.name}
+      current="/accounts"
+      back={{ href: '/accounts', label: 'Accounts' }}
+    >
       <h1 className="font-display text-title">{account.name}</h1>
       <Card>
         {mayEdit ? (
