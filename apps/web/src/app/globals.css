@@ -47,21 +47,17 @@
 }
 
 /*
- * "Hide numbers" (per device). The real text is removed from layout and replaced with a fixed
- * mask, so neither the digits nor their width can be read. Charts that would reveal the scale
- * are hidden outright.
+ * "Hide numbers" (per device). The real text is removed and replaced with stars (two fewer than
+ * the digits), so the exact value can't be read. Charts and changes that would reveal it are
+ * hidden outright. Unlayered and !important so display utilities on these elements can't win.
  */
-@layer components {
-  [data-hide-amounts] [data-private] > * {
-    display: none;
-  }
-  [data-hide-amounts] [data-private]::after {
-    content: '***';
-    font-family: var(--font-display, inherit);
-    filter: blur(0.08em);
-    user-select: none;
-  }
-  [data-hide-amounts] [data-private-hide] {
-    display: none;
-  }
+[data-hide-amounts] [data-private] > * {
+  display: none !important;
+}
+[data-hide-amounts] [data-private]::after {
+  content: attr(data-mask);
+  user-select: none;
+}
+[data-hide-amounts] [data-private-hide] {
+  display: none !important;
 }

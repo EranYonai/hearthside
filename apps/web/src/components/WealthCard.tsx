@@ -1,7 +1,8 @@
 import { formatMoney } from '@hearthside/core'
-import { Amount, buttonClasses, Card, Label } from '@hearthside/ui'
+import { buttonClasses, Card, Label } from '@hearthside/ui'
 import { ChevronRight, FileUp, Landmark, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
+import { PrivateAmount } from './PrivateAmount'
 import { HideAmountsToggle } from '@/lib/HideAmountsToggle'
 import type { Wealth } from '@/server/wealth'
 import { AccountMark } from './AccountCard'
@@ -70,8 +71,8 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
           </span>
         )}
       </div>
-      <div data-private data-testid="wealth-total">
-        <Amount minor={totalMinor} currency={currency} whole hero />
+      <div data-testid="wealth-total">
+        <PrivateAmount minor={totalMinor} currency={currency} whole hero />
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -146,14 +147,12 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
                       {p.kind === 'cash' ? 'Bank' : 'Investments'} · {pct(p.minor, shown)}%
                     </span>
                   </span>
-                  <span data-private>
-                    <Amount
-                      minor={p.minor}
-                      currency={currency}
-                      whole
-                      className="text-body-strong"
-                    />
-                  </span>
+                  <PrivateAmount
+                    minor={p.minor}
+                    currency={currency}
+                    whole
+                    className="text-body-strong"
+                  />
                   <ChevronRight size={18} aria-hidden className="text-ink-muted" />
                 </Link>
               </li>
@@ -200,14 +199,13 @@ function Split(props: {
         {props.label}
         <span className="ms-auto tabular-nums text-ink-faint">{props.share}%</span>
       </span>
-      <span data-private className="font-display text-heading">
-        <Amount
-          minor={props.minor}
-          currency={props.currency}
-          whole
-          className="font-display text-heading"
-        />
-      </span>
+      <PrivateAmount
+        wrapClassName="font-display text-heading"
+        minor={props.minor}
+        currency={props.currency}
+        whole
+        className="font-display text-heading"
+      />
     </>
   )
   const cls = 'grid gap-1 rounded-md bg-surface-2 p-3'
