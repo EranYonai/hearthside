@@ -162,6 +162,7 @@ describe.skipIf(!url)('wealth (Postgres)', () => {
       on: '2026-10-31',
       totalMinor: 1_400_000,
       investedMinor: 400_000,
+      owedMinor: 0,
     })
     // Before the salary landed the account held nothing; the rent came after it.
     const early = w.series.find((p) => p.on < '2026-10-01')!

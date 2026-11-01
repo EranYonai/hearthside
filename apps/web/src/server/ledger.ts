@@ -28,6 +28,7 @@ import {
 } from 'drizzle-orm'
 import { householdCategorySet } from './categories'
 import { loadContext, quickCategory } from './categorize'
+import { linkLoansAndRent } from './loans'
 import { audit, AuthError, type Tx } from './repo'
 import { sha256 } from './tokens'
 
@@ -411,6 +412,7 @@ export async function commitImport(
       detail: { batchId: batch!.id, accountId: account.id, added, duplicates },
     })
     await linkCardBills(tx, member.householdId)
+    await linkLoansAndRent(tx, member.householdId)
     return done!
   }
   return db.transaction(run)
@@ -439,6 +441,7 @@ export async function undoBatch(db: Conn, member: MemberRow, batchId: string) {
     throw new AuthError('not_allowed', 'Only the account’s owner can undo this import')
   await db.delete(importBatches).where(eq(importBatches.id, batchId))
   await linkCardBills(db, member.householdId)
+  await linkLoansAndRent(db, member.householdId)
   await audit(db, {
     householdId: member.householdId,
     memberId: member.id,
@@ -470,6 +473,7 @@ export async function deleteAccount(db: Conn, member: MemberRow, id: string) {
   await db.delete(accounts).where(eq(accounts.id, id))
   // Bills that account's statements accounted for may now pay something else, or nothing.
   await linkCardBills(db, member.householdId)
+  await linkLoansAndRent(db, member.householdId)
   await audit(db, {
     householdId: member.householdId,
     memberId: member.id,

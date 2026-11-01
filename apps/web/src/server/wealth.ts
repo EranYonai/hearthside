@@ -12,6 +12,7 @@ import { type MemberRow, schema } from '@hearthside/db'
 import { and, gt, inArray } from 'drizzle-orm'
 import { portfolio } from './invest'
 import { listAccounts } from './ledger'
+import { debtsAndProperty, loanBalanceOnDay, propertyValueOn } from './loans'
 import type { Tx } from './repo'
 import { dayOf, trends } from './trends'
 
@@ -23,7 +24,7 @@ export interface WealthPart {
   key: string
   name: string
   provider: string | null
-  kind: 'cash' | 'invest'
+  kind: 'cash' | 'invest' | 'property' | 'loan'
   /** The account's color (#RRGGBB), or null for a neutral one. */
   color: string | null
   /** In the wealth currency. */
@@ -33,17 +34,28 @@ export interface WealthPart {
 
 export interface WealthPoint {
   on: string
+  /** What we own minus what we owe. */
   totalMinor: Minor
   investedMinor: Minor
+  owedMinor: Minor
 }
 
 export interface Wealth {
   currency: string
+  /** Net worth: everything owned minus loans still owed. */
   totalMinor: Minor
   cashMinor: Minor
   investedMinor: Minor
-  /** Each account's share, largest first. */
+  /** Real estate at its typed value. */
+  propertyMinor: Minor
+  /** Cash, investments and property together. */
+  ownMinor: Minor
+  /** Loans still owed, positive. */
+  owedMinor: Minor
+  /** Each account's or property's share, largest first. */
   parts: WealthPart[]
+  /** Each loan's balance (positive), largest first. */
+  owed: WealthPart[]
   /** Bank accounts with no known balance, left out of the total. */
   missing: { id: string; name: string }[]
   /** Currencies with no rate to `currency`; those amounts are left out. */
@@ -57,8 +69,8 @@ export interface Wealth {
 }
 
 /**
- * What the household owns, as the member sees it: bank balances plus investments, in the member's
- * display currency. Past weeks work bank balances back through the transactions since, and take
+ * What the household owns, as the member sees it: bank balances, investments and property, less
+ * loans still owed, in the member's display currency. Past weeks work bank balances back through the transactions since, and take
  * investments from their recorded values.
  */
 export async function wealth(
@@ -72,6 +84,7 @@ export async function wealth(
     portfolio(db, member, rates),
   ])
   const currency = invest.summary.currency
+  const estate = await debtsAndProperty(db, member, currency, rates, now)
   const unconverted = new Set(Object.keys(invest.summary.unconverted))
   const parts: WealthPart[] = []
   const missing: Wealth['missing'] = []
@@ -110,10 +123,51 @@ export async function wealth(
       href: `/invest/${a.id}`,
     })
   }
+  for (const p of estate.properties) {
+    if (p.minor === null) {
+      unconverted.add(p.row.currency)
+      continue
+    }
+    parts.push({
+      key: p.row.id,
+      name: p.row.name,
+      provider: null,
+      kind: 'property',
+      color: null,
+      minor: p.minor,
+      href: `/invest/property/${p.row.id}`,
+    })
+  }
+  const owed: WealthPart[] = []
+  for (const l of estate.loans) {
+    if (l.minor === null) {
+      unconverted.add(l.loan.currency)
+      continue
+    }
+    if (l.minor <= 0) continue
+    owed.push({
+      key: l.loan.id,
+      name: l.loan.name,
+      provider: l.loan.lender,
+      kind: 'loan',
+      color: null,
+      minor: l.minor,
+      href: `/invest/loan/${l.loan.id}`,
+    })
+  }
   parts.sort((a, b) => b.minor - a.minor)
+  owed.sort((a, b) => b.minor - a.minor)
   const cashMinor = parts.filter((p) => p.kind === 'cash').reduce((n, p) => n + p.minor, 0)
+  const propertyMinor = parts.filter((p) => p.kind === 'property').reduce((n, p) => n + p.minor, 0)
+  const owedMinor = owed.reduce((n, p) => n + p.minor, 0)
   const investedMinor = invest.summary.totalMinor
-  const any = known.length > 0 || unconverted.size > 0 || invest.accounts.length > 0
+  const ownMinor = cashMinor + investedMinor + propertyMinor
+  const any =
+    known.length > 0 ||
+    unconverted.size > 0 ||
+    invest.accounts.length > 0 ||
+    estate.properties.length > 0 ||
+    estate.loans.length > 0
 
   const days = weeklyDays(dayOf(now))
   let series: WealthPoint[] = []
@@ -131,25 +185,42 @@ export async function wealth(
           )
         : days.map(() => 0),
     ])
-    series = days.map((on, i) => ({
-      on,
-      investedMinor: invested[i]!,
-      totalMinor: invested[i]! + cash[i]!,
-    }))
+    const convert = (minor: Minor, from: string) => convertMinor(minor, from, currency, rates) ?? 0
+    series = days.map((on, i) => {
+      const estateMinor = estate.properties.reduce(
+        (n, p) => n + convert(propertyValueOn(p.row, on), p.row.currency),
+        0,
+      )
+      const owedOn = estate.loans.reduce(
+        (n, l) => n + convert(loanBalanceOnDay(l.loan, on), l.loan.currency),
+        0,
+      )
+      return {
+        on,
+        investedMinor: invested[i]!,
+        owedMinor: owedOn,
+        totalMinor: invested[i]! + cash[i]! + estateMinor - owedOn,
+      }
+    })
     // Today's point is today's numbers, whatever the history says.
     series[series.length - 1] = {
       on: days.at(-1)!,
       investedMinor,
-      totalMinor: investedMinor + cashMinor,
+      owedMinor,
+      totalMinor: ownMinor - owedMinor,
     }
   }
 
   return {
     currency,
-    totalMinor: cashMinor + investedMinor,
+    totalMinor: ownMinor - owedMinor,
     cashMinor,
     investedMinor,
+    propertyMinor,
+    ownMinor,
+    owedMinor,
     parts,
+    owed,
     missing,
     unconverted: [...unconverted],
     series,

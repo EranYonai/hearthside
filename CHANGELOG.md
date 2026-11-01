@@ -10,6 +10,9 @@ moves the Unreleased notes under the new version.
 
 ### Added
 
+- Property and loans on the Invest tab: what a property is worth, what a loan still owes on its
+  schedule, and recurring records tied to them. The home total is now what the home owns less
+  what it owes. Payments keep counting as spending, under a new Loans category.
 - One import box for every supported file: it tells records from holdings exports, finds the
   matching account or adds it on its own (investment accounts too), and lists what it supports.
 - Spending by category as a donut chart on the transactions view, with a months view beside it,
