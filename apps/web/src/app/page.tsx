@@ -205,7 +205,9 @@ function Flow(props: {
         {props.icon}
         {props.label}
       </span>
-      <Amount minor={props.minor} whole className="font-display text-heading" />
+      <span data-private className="font-display text-heading">
+        <Amount minor={props.minor} whole className="font-display text-heading" />
+      </span>
       {delta !== null && Math.round(delta) !== 0 && (
         <span className={`text-caption ${good ? 'text-positive' : 'text-ink-muted'}`}>
           {delta > 0 ? '▲' : '▼'} {Math.abs(Math.round(delta))}% vs last month
