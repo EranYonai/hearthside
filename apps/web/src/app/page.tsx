@@ -1,9 +1,10 @@
 import { accountLook } from '@hearthside/core'
-import { Amount, Card, Label, MonthBars, Notice, SummaryCard, buttonClasses } from '@hearthside/ui'
+import { Card, Label, MonthBars, Notice, SummaryCard, buttonClasses } from '@hearthside/ui'
 import { ArrowDownLeft, ArrowUpRight, FileUp, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { AppShell } from '@/components/AppShell'
+import { PrivateAmount } from '@/components/PrivateAmount'
 import { WealthCard } from '@/components/WealthCard'
 import { requireDb } from '@/lib/db'
 import { householdCategorySet } from '@/server/categories'
@@ -205,7 +206,12 @@ function Flow(props: {
         {props.icon}
         {props.label}
       </span>
-      <Amount minor={props.minor} whole className="font-display text-heading" />
+      <PrivateAmount
+        wrapClassName="font-display text-heading"
+        minor={props.minor}
+        whole
+        className="font-display text-heading"
+      />
       {delta !== null && Math.round(delta) !== 0 && (
         <span className={`text-caption ${good ? 'text-positive' : 'text-ink-muted'}`}>
           {delta > 0 ? '▲' : '▼'} {Math.abs(Math.round(delta))}% vs last month
