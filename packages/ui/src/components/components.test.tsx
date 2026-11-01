@@ -12,6 +12,7 @@ import {
   CategoryIcon,
   DonutChart,
   donutSlices,
+  FlowBars,
   MonthBars,
   SpendingBreakdown,
   SummaryCard,
@@ -364,5 +365,26 @@ describe('SummaryCard groups', () => {
     )
     expect(screen.queryByTestId('meter-groups')).toBeNull()
     expect(screen.queryByRole('list', { name: 'By account' })).toBeNull()
+  })
+})
+
+describe('FlowBars', () => {
+  it('puts money in and out on one scale and describes each month', () => {
+    const { container, getByLabelText } = render(
+      <FlowBars
+        label="Money in and out"
+        months={[
+          { month: '2026-01', label: 'Jan', received: 100000, spent: -50000, href: '/t?m=1' },
+          { month: '2026-02', label: 'Feb', received: 0, spent: -25000 },
+        ]}
+      />,
+    )
+    expect(container.querySelector<HTMLElement>('[data-in="2026-01"]')!.style.height).toBe('100%')
+    expect(container.querySelector<HTMLElement>('[data-out="2026-01"]')!.style.height).toBe('50%')
+    expect(container.querySelector<HTMLElement>('[data-in="2026-02"]')!.style.height).toBe('0%')
+    expect(getByLabelText(/^Jan: in .*1,000, out .*500, left .*500$/).getAttribute('href')).toBe(
+      '/t?m=1',
+    )
+    expect(getByLabelText(/^Feb:/).getAttribute('role')).toBe('img')
   })
 })

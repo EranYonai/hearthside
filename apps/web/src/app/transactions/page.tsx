@@ -28,6 +28,7 @@ import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
 import { householdCategorySet } from '@/server/categories'
 import { CategorisedRow, CategorizeNow, type TxView } from './client'
+import { ViewSwitch, YearView } from './year'
 
 export const metadata: Metadata = { title: 'Transactions · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -71,6 +72,26 @@ export default async function TransactionsPage({
     ...(one('category') ? { category: one('category')! } : {}),
     ...(one('q') ? { search: one('q')!.slice(0, 100) } : {}),
   }
+  const query = (change: Record<string, string | undefined>) => {
+    const p = new URLSearchParams()
+    for (const [k, v] of Object.entries({ ...(params as Record<string, string>), ...change }))
+      if (typeof v === 'string' && v) p.set(k, v)
+    return `/transactions?${p}`
+  }
+  const view = one('view') === 'year' ? 'year' : 'month'
+  const yearParam = Number(one('year'))
+  const year =
+    Number.isInteger(yearParam) && yearParam >= 2000 && yearParam <= 2100
+      ? yearParam
+      : Number(month.slice(0, 4))
+  const switchHref = (v: 'month' | 'year') =>
+    v === 'year'
+      ? query({ view: 'year', year: month.slice(0, 4), category: '' })
+      : query({
+          view: '',
+          year: '',
+          month: String(year) === month.slice(0, 4) ? month : `${year}-12`,
+        })
   const trendMonths = Array.from({ length: TREND_MONTHS }, (_, i) =>
     shiftMonth(month, i - TREND_MONTHS + 1),
   )
@@ -82,18 +103,29 @@ export default async function TransactionsPage({
   ])
   const options = categories.all.map(({ slug, label, icon }) => ({ slug, label, icon }))
   const editable = canEdit(member)
-  const query = (change: Record<string, string | undefined>) => {
-    const p = new URLSearchParams()
-    for (const [k, v] of Object.entries({ ...(params as Record<string, string>), ...change }))
-      if (typeof v === 'string' && v) p.set(k, v)
-    return `/transactions?${p}`
-  }
   const kinds = new Set(allAccounts.map((a) => a.kind))
   const tabs = [
     { label: 'All', value: undefined },
     ...(kinds.has('card') ? [{ label: 'Cards', value: 'card' }] : []),
     ...(kinds.has('bank') ? [{ label: 'Bank accounts', value: 'bank' }] : []),
   ]
+  if (view === 'year') {
+    const yearFilter = { ...filter, month: undefined, category: undefined }
+    return (
+      <AppShell household={household.name} current="/transactions">
+        <ViewSwitch view="year" href={switchHref} />
+        {tabs.length > 2 && <KindTabs tabs={tabs} type={type} query={query} />}
+        <YearView
+          db={db}
+          member={member}
+          year={year}
+          filter={yearFilter}
+          categories={categories}
+          query={query}
+        />
+      </AppShell>
+    )
+  }
   const spent = Math.abs(sum.spent)
   const slices = sum.byCategory.map((c) => ({
     key: c.category ?? 'none',
@@ -166,20 +198,8 @@ export default async function TransactionsPage({
         </Link>
       </div>
 
-      {tabs.length > 2 && (
-        <nav aria-label="Account type" className="flex gap-1 rounded-md bg-surface-2 p-1">
-          {tabs.map((t) => (
-            <Link
-              key={t.label}
-              href={query({ type: t.value ?? '', account: '' })}
-              aria-current={type === t.value ? 'page' : undefined}
-              className="flex min-h-11 flex-1 items-center justify-center rounded-sm px-2 text-center text-body-strong text-ink-muted aria-[current=page]:bg-surface-1 aria-[current=page]:text-ink aria-[current=page]:shadow-card"
-            >
-              {t.label}
-            </Link>
-          ))}
-        </nav>
-      )}
+      <ViewSwitch view="month" href={switchHref} />
+      {tabs.length > 2 && <KindTabs tabs={tabs} type={type} query={query} />}
 
       <Card
         className="min-w-0"
@@ -211,6 +231,8 @@ export default async function TransactionsPage({
           {sum.received > 0 && (
             <span>
               Money in: <Amount minor={sum.received} signed whole className="text-caption" />
+              {' · '}Left:{' '}
+              <Amount minor={sum.received + sum.spent} signed whole className="text-caption" />
             </span>
           )}
           {sum.cardBills < 0 && (
@@ -308,5 +330,30 @@ export default async function TransactionsPage({
         )}
       </Card>
     </AppShell>
+  )
+}
+
+function KindTabs({
+  tabs,
+  type,
+  query,
+}: {
+  tabs: { label: string; value: string | undefined }[]
+  type: string | undefined
+  query: (change: Record<string, string | undefined>) => string
+}) {
+  return (
+    <nav aria-label="Account type" className="flex gap-1 rounded-md bg-surface-2 p-1">
+      {tabs.map((t) => (
+        <Link
+          key={t.label}
+          href={query({ type: t.value ?? '', account: '' })}
+          aria-current={type === t.value ? 'page' : undefined}
+          className="flex min-h-11 flex-1 items-center justify-center rounded-sm px-2 text-center text-body-strong text-ink-muted aria-[current=page]:bg-surface-1 aria-[current=page]:text-ink aria-[current=page]:shadow-card"
+        >
+          {t.label}
+        </Link>
+      ))}
+    </nav>
   )
 }
