@@ -4,6 +4,7 @@ import {
   Briefcase,
   Dumbbell,
   Gift,
+  HandCoins,
   GraduationCap,
   HandHeart,
   Banknote,
@@ -43,6 +44,7 @@ export const CATEGORY_ICONS = {
   savings: PiggyBank,
   transfer: ArrowLeftRight,
   pension: Landmark,
+  loans: HandCoins,
   other: Tag,
   // Extra icons for categories a household adds.
   pets: PawPrint,

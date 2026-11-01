@@ -59,6 +59,7 @@ export const KEYWORDS: Readonly<Record<CategorySlug, readonly string[]>> = {
   savings: ['savings', 'deposit to savings', 'חיסכון', 'פיקדון', 'פקדון', 'קופת גמל'],
   transfer: ['transfer', 'bit', 'paybox', 'העברה', 'העברת', 'ביט', 'פייבוקס'],
   pension: ['pension', 'provident', 'פנסיה', 'קרן השתלמות', 'גמל'],
+  loans: ['mortgage', 'loan', 'loan repayment', 'משכנתא', 'משכנתה', 'הלוואה', 'החזר הלוואה'],
   other: [],
 }
 

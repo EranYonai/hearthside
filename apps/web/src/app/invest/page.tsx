@@ -1,5 +1,6 @@
 import { Amount, buttonClasses, Card, Label } from '@hearthside/ui'
-import { ChartLine, ChevronRight, Lightbulb, Lock } from 'lucide-react'
+import { formatMoney, HOLDING_CURRENCIES, loanKindLabel } from '@hearthside/core'
+import { Building2, ChartLine, ChevronRight, HandCoins, Lightbulb, Lock } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AppShell } from '@/components/AppShell'
@@ -16,6 +17,8 @@ import { ValueChart } from '@/components/ValueChart'
 import { runCheckup } from '@/server/checkup'
 import { CurrencySwitch, InvestmentAccountForm } from './client'
 import { AccountMark } from '@/components/AccountCard'
+import { debtsAndProperty, today } from '@/server/loans'
+import { LoanForm, PropertyForm } from './estate'
 
 export const metadata: Metadata = { title: 'Invest · Hearthside' }
 export const dynamic = 'force-dynamic'
@@ -57,8 +60,16 @@ export default async function InvestPage() {
   const names = new Map(people.map((p) => [p.id, p.id === member.id ? 'You' : p.name]))
   const currency = summary.currency
   const trend = await trends(db, member, '6m', fx.rates, undefined, { currency })
+  const estate = await debtsAndProperty(db, member, currency, fx.rates)
+  const now = today(new Date())
+  const owners = people
+    .filter((p) => p.role !== 'viewer' || p.id === member.id)
+    .map((p) => ({ id: p.id, name: p.id === member.id ? `${p.name} (you)` : p.name }))
   const unconverted = Object.entries(summary.unconverted)
   const editable = canEdit(member)
+  const defaultCurrency = HOLDING_CURRENCIES.includes(member.displayCurrency as never)
+    ? member.displayCurrency
+    : 'ILS'
   // One line per other currency held, e.g. "$1 = ₪3.6820".
   const foreign = [...new Set(holdings.map((h) => h.currency))].filter((c) => c !== currency)
   const rateLines = foreign.flatMap((c) => {
@@ -227,6 +238,133 @@ export default async function InvestPage() {
         </>
       )}
 
+      <Card aria-labelledby="estate-title" className="gap-0" data-testid="estate">
+        <h2 id="estate-title" className="pb-1 font-display text-heading">
+          Property and loans
+        </h2>
+        {estate.properties.length === 0 && estate.loans.length === 0 ? (
+          <p className="pb-2 text-ink-muted">
+            Add a home you own and the loans on it. Property counts toward what you own, loans are
+            taken off, and rent and payments in your bank are tied to them.
+          </p>
+        ) : (
+          <ul data-testid="estate-list">
+            {estate.properties.map(({ row, rentMonthlyMinor }) => {
+              const secured = estate.loans
+                .filter((l) => l.loan.propertyId === row.id && l.loan.currency === row.currency)
+                .reduce((n, l) => n + l.balanceMinor, 0)
+              return (
+                <li key={row.id} className="border-t border-line first:border-t-0">
+                  <Link
+                    href={`/invest/property/${row.id}`}
+                    className="flex min-h-14 items-center gap-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  >
+                    <span className="grid size-10 flex-none place-items-center rounded-pill bg-surface-2 text-ink-muted">
+                      <Building2 size={20} aria-hidden />
+                    </span>
+                    <span className="grid flex-1">
+                      <span className="flex items-center gap-1.5 text-body-strong">
+                        {row.name}
+                        {row.visibility === 'private' && (
+                          <Lock size={14} aria-label="Private" className="text-ink-muted" />
+                        )}
+                      </span>
+                      <span className="text-caption text-ink-muted">
+                        {[
+                          'Property',
+                          secured > 0
+                            ? `yours after loans ${fmt(row.valueMinor - secured, row.currency)}`
+                            : null,
+                          rentMonthlyMinor > 0
+                            ? `rent ${fmt(rentMonthlyMinor, row.currency)}/mo`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    </span>
+                    <Amount
+                      minor={row.valueMinor}
+                      currency={row.currency}
+                      whole
+                      className="text-body-strong"
+                    />
+                    <ChevronRight size={20} aria-hidden className="text-ink-muted" />
+                  </Link>
+                </li>
+              )
+            })}
+            {estate.loans.map((l) => (
+              <li key={l.loan.id} className="border-t border-line first:border-t-0">
+                <Link
+                  href={`/invest/loan/${l.loan.id}`}
+                  className="flex min-h-14 items-center gap-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                >
+                  <span className="grid size-10 flex-none place-items-center rounded-pill bg-surface-2 text-ink-muted">
+                    <HandCoins size={20} aria-hidden />
+                  </span>
+                  <span className="grid flex-1">
+                    <span className="flex items-center gap-1.5 text-body-strong">
+                      {l.loan.name}
+                      {l.loan.visibility === 'private' && (
+                        <Lock size={14} aria-label="Private" className="text-ink-muted" />
+                      )}
+                    </span>
+                    <span className="text-caption text-ink-muted">
+                      {[
+                        loanKindLabel(l.loan.kind),
+                        l.loan.lender,
+                        `${fmt(l.paymentMinor, l.loan.currency)}/mo`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </span>
+                  <Amount
+                    minor={-l.balanceMinor}
+                    currency={l.loan.currency}
+                    whole
+                    className="text-body-strong"
+                  />
+                  <ChevronRight size={20} aria-hidden className="text-ink-muted" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        {editable && (
+          <div className="grid gap-2 border-t border-line pt-3">
+            <details>
+              <summary className="cursor-pointer text-body-strong text-brand-ink">
+                Add a property
+              </summary>
+              <div className="pt-3">
+                <PropertyForm
+                  people={owners}
+                  selfId={member.id}
+                  defaultCurrency={defaultCurrency}
+                  today={now}
+                />
+              </div>
+            </details>
+            <details>
+              <summary className="cursor-pointer text-body-strong text-brand-ink">
+                Add a loan
+              </summary>
+              <div className="pt-3">
+                <LoanForm
+                  properties={estate.properties.map((p) => ({ id: p.row.id, name: p.row.name }))}
+                  people={owners}
+                  selfId={member.id}
+                  defaultCurrency={defaultCurrency}
+                  today={now}
+                />
+              </div>
+            </details>
+          </div>
+        )}
+      </Card>
+
       {editable && (
         <Card aria-labelledby="add-title">
           <details open={accounts.length === 0}>
@@ -235,12 +373,7 @@ export default async function InvestPage() {
             </summary>
             <div className="pt-3">
               <InvestmentAccountForm
-                people={people
-                  .filter((p) => p.role !== 'viewer' || p.id === member.id)
-                  .map((p) => ({
-                    id: p.id,
-                    name: p.id === member.id ? `${p.name} (you)` : p.name,
-                  }))}
+                people={owners}
                 selfId={member.id}
                 defaultCurrency={member.displayCurrency}
               />
@@ -251,3 +384,5 @@ export default async function InvestPage() {
     </AppShell>
   )
 }
+
+const fmt = (minor: number, currency: string) => formatMoney(minor, { currency, whole: true })

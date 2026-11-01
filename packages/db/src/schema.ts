@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import {
+  type AnyPgColumn,
   bigserial,
   boolean,
   check,
@@ -219,6 +220,11 @@ export const accounts = pgTable(
     last4: encText('accounts', 'last4'),
     /** The person's own card color (#RRGGBB); null uses the provider's color. */
     color: encText('accounts', 'color'),
+    /** Bank accounts: the latest known balance, from a statement or typed in. */
+    balanceMinor: encInt('accounts', 'balance_minor'),
+    /** The day that balance is from. */
+    balanceOn: date('balance_on', { mode: 'string' }),
+    balanceSource: text('balance_source', { enum: ['statement', 'manual'] }),
     /** household: everyone sees it; private: only the owner. */
     visibility: text('visibility', { enum: ['household', 'private'] })
       .notNull()
@@ -308,6 +314,12 @@ export const transactions = pgTable(
     }),
     /** What the card statements say the bill is (negative), to compare with what was paid. */
     cardBillExpectedMinor: encInt('transactions', 'card_bill_expected_minor'),
+    /** Bank rows only: a payment towards this loan. Kept up to date by linkLoansAndRent. */
+    loanId: uuid('loan_id').references((): AnyPgColumn => loans.id, { onDelete: 'set null' }),
+    /** Bank rows only: rent received for this property. Kept up to date by linkLoansAndRent. */
+    rentPropertyId: uuid('rent_property_id').references((): AnyPgColumn => properties.id, {
+      onDelete: 'set null',
+    }),
     /** blindIndex(SHA-256 of the duplicate key from the parser). */
     dedupKey: text('dedup_key').notNull(),
     createdAt: createdAt(),
@@ -324,6 +336,8 @@ export const transactions = pgTable(
       .on(t.householdId)
       .where(sql`${t.category} is null and ${t.categoryCheckedAt} is null`),
     check('transactions_card_bill_check', sql`${t.cardBill} in ('amount', 'name')`),
+    index('transactions_loan_idx').on(t.loanId),
+    index('transactions_rent_idx').on(t.rentPropertyId),
   ],
 )
 
@@ -556,6 +570,90 @@ export const portfolioSnapshots = pgTable(
  * Daily reference exchange rates: one unit of `base` is worth `rate` of `quote`. Public market
  * data, so stored in the clear. The newest day per pair is the current rate.
  */
+/**
+ * A home or other real estate the household owns. Its value is typed in from time to time;
+ * rent arrives in a bank account and is tied to it by an example row (rent_key).
+ */
+export const properties = pgTable(
+  'properties',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => members.id, { onDelete: 'cascade' }),
+    /** The member whose property it is; null means the owner. */
+    holderId: uuid('holder_id').references(() => members.id, { onDelete: 'set null' }),
+    name: encText('properties', 'name').notNull(),
+    currency: text('currency').notNull().default('ILS'),
+    /** What it's worth now, as the member last typed it. */
+    valueMinor: encInt('properties', 'value_minor').notNull(),
+    valueOn: date('value_on', { mode: 'string' }).notNull(),
+    purchaseMinor: encInt('properties', 'purchase_minor'),
+    purchasedOn: date('purchased_on', { mode: 'string' }),
+    /** The rent's description key (a blind index, like transactions.description_key). */
+    rentKey: text('rent_key'),
+    /** The usual monthly rent, positive. */
+    rentMinor: encInt('properties', 'rent_minor'),
+    visibility: text('visibility', { enum: ['household', 'private'] })
+      .notNull()
+      .default('household'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('properties_household_idx').on(t.householdId),
+    check('properties_visibility_check', sql`${t.visibility} in ('household', 'private')`),
+  ],
+)
+
+/**
+ * Money the household owes and pays back monthly. The balance follows the schedule from the
+ * terms (core loans.ts), or from a balance the lender reported. Bank payments are tied to it by
+ * an example row (payment_key).
+ */
+export const loans = pgTable(
+  'loans',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => members.id, { onDelete: 'cascade' }),
+    holderId: uuid('holder_id').references(() => members.id, { onDelete: 'set null' }),
+    name: encText('loans', 'name').notNull(),
+    kind: text('kind', { enum: ['mortgage', 'car', 'personal', 'other'] }).notNull(),
+    lender: encText('loans', 'lender'),
+    currency: text('currency').notNull().default('ILS'),
+    principalMinor: encInt('loans', 'principal_minor').notNull(),
+    /** Yearly rate in percent, as typed (e.g. "4.25"). */
+    rate: encText('loans', 'rate').notNull(),
+    termMonths: integer('term_months').notNull(),
+    startOn: date('start_on', { mode: 'string' }).notNull(),
+    /** The monthly payment; null works it out from the terms. */
+    paymentMinor: encInt('loans', 'payment_minor'),
+    /** A balance the lender reported, and its day. */
+    balanceMinor: encInt('loans', 'balance_minor'),
+    balanceOn: date('balance_on', { mode: 'string' }),
+    /** The property it's secured on, for a mortgage. */
+    propertyId: uuid('property_id').references(() => properties.id, { onDelete: 'set null' }),
+    /** The bank payment's description key (a blind index). */
+    paymentKey: text('payment_key'),
+    visibility: text('visibility', { enum: ['household', 'private'] })
+      .notNull()
+      .default('household'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('loans_household_idx').on(t.householdId),
+    check('loans_kind_check', sql`${t.kind} in ('mortgage', 'car', 'personal', 'other')`),
+    check('loans_visibility_check', sql`${t.visibility} in ('household', 'private')`),
+  ],
+)
+
 export const fxRates = pgTable(
   'fx_rates',
   {
@@ -602,3 +700,5 @@ export type InstrumentRow = typeof instruments.$inferSelect
 export type HoldingRow = typeof holdings.$inferSelect
 export type InvestmentTransactionRow = typeof investmentTransactions.$inferSelect
 export type PortfolioSnapshotRow = typeof portfolioSnapshots.$inferSelect
+export type PropertyRow = typeof properties.$inferSelect
+export type LoanRow = typeof loans.$inferSelect

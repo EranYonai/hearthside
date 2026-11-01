@@ -1,4 +1,4 @@
-import { buttonClasses, Card, Notice } from '@hearthside/ui'
+import { Amount, buttonClasses, Card, Label, Notice } from '@hearthside/ui'
 import { ChevronLeft } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -9,10 +9,17 @@ import { requireDb } from '@/lib/db'
 import { canEdit, countAccountTransactions, getVisibleAccount, holderOf } from '@/server/ledger'
 import { AuthError, listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
-import { DeleteAccount, EditAccountForm } from './client'
+import { BalanceForm, DeleteAccount, EditAccountForm } from './client'
 
 export const metadata: Metadata = { title: 'Account · Hearthside' }
 export const dynamic = 'force-dynamic'
+
+const dayFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
 
 export default async function AccountPage({ params }: { params: Promise<{ id: string }> }) {
   const { member, household } = await requireSession()
@@ -67,6 +74,27 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
           </>
         )}
       </Card>
+      {account.kind === 'bank' && (
+        <Card aria-labelledby="balance-title">
+          <Label id="balance-title">Balance</Label>
+          {account.balanceMinor !== null && account.balanceOn ? (
+            <>
+              <Amount minor={account.balanceMinor} whole hero />
+              <p className="text-caption text-ink-muted">
+                {account.balanceSource === 'statement' ? 'From the statement, ' : 'Typed in on '}
+                {dayFormat.format(new Date(`${account.balanceOn}T00:00:00Z`))}. It counts toward
+                what you own on Home.
+              </p>
+            </>
+          ) : (
+            <p className="text-ink-muted">
+              No balance yet. Import a statement that lists one, or type it in, and it counts toward
+              what you own on Home.
+            </p>
+          )}
+          {mayEdit && <BalanceForm id={account.id} minor={account.balanceMinor} />}
+        </Card>
+      )}
       {mayEdit && (
         <Card aria-label="Delete account">
           <DeleteAccount id={account.id} name={account.name} transactions={count} />
