@@ -1,5 +1,5 @@
 import { accountLook } from '@hearthside/core'
-import { Amount, Card, Label, MonthBars, Notice, SummaryCard, buttonClasses } from '@hearthside/ui'
+import { Card, Label, MonthBars, Notice, SummaryCard, buttonClasses } from '@hearthside/ui'
 import { ArrowDownLeft, ArrowUpRight, FileUp, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
