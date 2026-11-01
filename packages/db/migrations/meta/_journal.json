@@ -127,6 +127,13 @@
       "when": 1793564052145,
       "tag": "0017_recurring_dismissals",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793565411923,
+      "tag": "0018_budgets",
+      "breakpoints": true
     }
   ]
 }

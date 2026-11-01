@@ -374,6 +374,24 @@ export const recurringDismissals = pgTable(
   (t) => [uniqueIndex('recurring_dismissals_payee_idx').on(t.householdId, t.payeeKey)],
 )
 
+/** A monthly spending limit for one category, shared by the household. */
+export const budgets = pgTable(
+  'budgets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    /** Category slug: built-in, or a household category's "c-" slug. */
+    category: text('category').notNull(),
+    limitMinor: encInt('budgets', 'limit_minor').notNull(),
+    updatedBy: uuid('updated_by').references(() => members.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('budgets_category_idx').on(t.householdId, t.category)],
+)
+
 /** Categories a household added on top of the built-in ones. */
 export const householdCategories = pgTable(
   'household_categories',
