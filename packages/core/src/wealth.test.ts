@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { balancesOn, changeOver, closingBalance, valuesOn, weeklyDays } from './wealth'
+import {
+  balancesOn,
+  changeOver,
+  chartDays,
+  closingBalance,
+  isWealthRange,
+  valuesOn,
+  weeklyDays,
+} from './wealth'
 
 describe('closingBalance', () => {
   it('is null without a balance column', () => {
@@ -82,5 +90,32 @@ describe('changeOver', () => {
   it('has no share from zero or a single value', () => {
     expect(changeOver([0, 10])).toEqual({ minor: 10, percent: null })
     expect(changeOver([10])).toEqual({ minor: 0, percent: null })
+  })
+})
+
+describe('chartDays', () => {
+  it('goes weekly for a year or less', () => {
+    const days = chartDays('2026-11-01', '2026-05-01')
+    expect(days.at(-1)).toBe('2026-11-01')
+    expect(days[0]! <= '2026-05-01').toBe(true)
+    expect(days).toHaveLength(28)
+  })
+
+  it('goes monthly past a year, ending today', () => {
+    const days = chartDays('2026-11-01', '2024-03-17')
+    expect(days[0]).toBe('2024-03-01')
+    expect(days[1]).toBe('2024-04-01')
+    expect(days.at(-1)).toBe('2026-11-01')
+    expect(new Set(days).size).toBe(days.length)
+  })
+
+  it('copes with a start after today', () => {
+    expect(chartDays('2026-11-01', '2027-01-01')).toEqual(['2026-10-25', '2026-11-01'])
+  })
+
+  it('knows its ranges', () => {
+    expect(isWealthRange('1y')).toBe(true)
+    expect(isWealthRange('5y')).toBe(true)
+    expect(isWealthRange('all')).toBe(false)
   })
 })

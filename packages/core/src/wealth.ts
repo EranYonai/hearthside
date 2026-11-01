@@ -76,3 +76,37 @@ export function changeOver(values: readonly Minor[]): { minor: Minor; percent: n
   const minor = values.at(-1)! - start
   return { minor, percent: start > 0 ? (minor / start) * 100 : null }
 }
+
+/** How far back the wealth chart reaches. */
+export const WEALTH_RANGES = [
+  { key: '6m', label: '6M', years: 0.5 },
+  { key: '1y', label: '1Y', years: 1 },
+  { key: '3y', label: '3Y', years: 3 },
+  { key: '5y', label: '5Y', years: 5 },
+] as const
+
+export type WealthRange = (typeof WEALTH_RANGES)[number]['key']
+
+export function isWealthRange(value: unknown): value is WealthRange {
+  return WEALTH_RANGES.some((r) => r.key === value)
+}
+
+/**
+ * Days for a long chart from `start` to `today`: weekly while it spans about a year or less,
+ * then the first of each month, always ending today. Oldest first.
+ */
+export function chartDays(today: string, start: string): string[] {
+  const end = Date.parse(`${today}T00:00:00Z`)
+  const from = Math.min(Date.parse(`${start}T00:00:00Z`), end)
+  const weeks = Math.ceil((end - from) / (7 * 86_400_000))
+  if (weeks <= 53) return weeklyDays(today, Math.max(weeks, 1))
+  const days: string[] = []
+  const d = new Date(from)
+  d.setUTCDate(1)
+  while (d.getTime() < end) {
+    days.push(d.toISOString().slice(0, 10))
+    d.setUTCMonth(d.getUTCMonth() + 1)
+  }
+  if (days.at(-1) !== today) days.push(today)
+  return days
+}

@@ -1,4 +1,4 @@
-import { accountLook, biggestMoves, daysSince } from '@hearthside/core'
+import { accountLook, biggestMoves, daysSince, isWealthRange } from '@hearthside/core'
 import {
   Card,
   CategoryIcon,
@@ -9,11 +9,12 @@ import {
   buttonClasses,
   type Category,
 } from '@hearthside/ui'
-import { ArrowDownLeft, ArrowUpRight, FileUp, UserPlus, Users } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ChevronRight, FileUp, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { AppShell } from '@/components/AppShell'
 import { PrivateAmount } from '@/components/PrivateAmount'
+import { RecurringList } from '@/components/RecurringList'
 import { WealthCard } from '@/components/WealthCard'
 import { requireDb } from '@/lib/db'
 import { householdCategorySet } from '@/server/categories'
@@ -27,6 +28,7 @@ import {
   totals,
 } from '@/server/ledger'
 import { keepQuotesFresh } from '@/server/prices'
+import { listRecurring } from '@/server/recurring'
 import { getHousehold, isApproved, listMembers } from '@/server/repo'
 import { currentSession, requireSession } from '@/server/session'
 import { wealth } from '@/server/wealth'
@@ -53,7 +55,13 @@ const todayFormat = new Intl.DateTimeFormat('en-GB', {
   month: 'long',
 })
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const asked = (await searchParams).range
+  const range = isWealthRange(asked) ? asked : '6m'
   if (!(await currentSession()) && !(await getHousehold(requireDb()))) redirect('/setup')
   const { member, household } = await requireSession()
   if (!member.onboardedAt) redirect('/welcome')
@@ -70,13 +78,14 @@ export default async function Home() {
   const solo = people.length === 1
   const latest = months[0]
   const trail = latest ? lastMonths(latest) : []
-  const [sum, categories, accounts, owned, history, fresh] = await Promise.all([
+  const [sum, categories, accounts, owned, history, fresh, recurring] = await Promise.all([
     latest ? totals(db, member, { month: latest }) : undefined,
     householdCategorySet(db, member.householdId),
     listAccounts(db, member),
-    wealth(db, member, fx.rates),
+    wealth(db, member, fx.rates, new Date(), range),
     latest ? monthlyFlows(db, member, {}, trail) : [],
     accountFreshness(db, member),
+    listRecurring(db, member),
   ])
   const moves = history.length > 1 ? biggestMoves(history.at(-1)!, history.at(-2)!) : []
   const before = trail.length > 1 ? await totals(db, member, { month: trail.at(-2)! }) : undefined
@@ -209,6 +218,37 @@ export default async function Home() {
         )
       )}
 
+      {recurring.length > 0 && (
+        <Card aria-labelledby="fixed-title">
+          <div className="flex items-baseline justify-between gap-2">
+            <Link
+              href="/recurring"
+              className="flex items-center gap-0.5 rounded-sm focus-visible:outline-2 focus-visible:outline-focus"
+            >
+              <Label id="fixed-title">Fixed costs</Label>
+              <ChevronRight size={16} className="text-ink-muted" aria-hidden />
+            </Link>
+            <span className="flex items-baseline gap-1 text-caption text-ink-muted">
+              <PrivateAmount
+                minor={recurring.reduce((n, r) => n + r.monthlyMinor, 0)}
+                whole
+                className="text-body-strong"
+              />
+              a month
+            </span>
+          </div>
+          <RecurringList
+            items={recurring.slice(0, 3)}
+            categories={categories}
+            editable={editable}
+          />
+          {recurring.length > 3 && (
+            <Link href="/recurring" className={`${buttonClasses('secondary')} justify-self-start`}>
+              {recurring.length - 3} more
+            </Link>
+          )}
+        </Card>
+      )}
       {fresh.some((a) => a.newest) && (
         <Card aria-labelledby="fresh-title">
           <Label id="fresh-title">Up to date to</Label>

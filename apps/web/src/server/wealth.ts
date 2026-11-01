@@ -5,11 +5,13 @@ import {
   convertMinor,
   type Minor,
   type Rates,
+  chartDays,
   valuesOn,
+  type WealthRange,
   weeklyDays,
 } from '@hearthside/core'
 import { type MemberRow, schema } from '@hearthside/db'
-import { and, gt, inArray } from 'drizzle-orm'
+import { and, gt, inArray, min } from 'drizzle-orm'
 import { portfolio } from './invest'
 import { listAccounts } from './ledger'
 import { debtsAndProperty, loanBalanceOnDay, propertyValueOn } from './loans'
@@ -60,7 +62,9 @@ export interface Wealth {
   missing: { id: string; name: string }[]
   /** Currencies with no rate to `currency`; those amounts are left out. */
   unconverted: string[]
-  /** One point a week for six months, oldest first. Empty when there's nothing to draw. */
+  /** Points over `range`, oldest first: weekly up to a year, then monthly. Empty when there's nothing to draw. */
+  range: WealthRange
+  /** The chart's points, oldest first. */
   series: WealthPoint[]
   /** Change since the first point of the series. */
   change: { minor: Minor; percent: number | null }
@@ -78,6 +82,7 @@ export async function wealth(
   member: MemberRow,
   rates: Rates,
   now = new Date(),
+  range: WealthRange = '6m',
 ): Promise<Wealth> {
   const [banks, invest] = await Promise.all([
     listAccounts(db, member).then((list) => list.filter((a) => a.kind === 'bank')),
@@ -169,21 +174,37 @@ export async function wealth(
     estate.properties.length > 0 ||
     estate.loans.length > 0
 
-  const days = weeklyDays(dayOf(now))
   let series: WealthPoint[] = []
   if (any) {
+    const today = dayOf(now)
+    const history =
+      invest.accounts.length > 0
+        ? trends(db, member, range === '6m' || range === '1y' ? range : 'all', rates, now, {
+            currency,
+          })
+        : Promise.resolve(null)
+    let days: string[]
+    if (range === '6m') days = weeklyDays(today)
+    else if (range === '1y') days = weeklyDays(today, 52)
+    else {
+      // Years back, but no earlier than the household's first data, so the line isn't flat.
+      const back = new Date(now)
+      back.setUTCFullYear(back.getUTCFullYear() - (range === '3y' ? 3 : 5))
+      const first = await firstDay(db, member, today, (await history)?.series[0]?.on)
+      days = chartDays(today, [back.toISOString().slice(0, 10), first].sort().at(-1)!)
+    }
     const [cash, invested] = await Promise.all([
       cashHistory(db, known, days, (m) => convertMinor(m, 'ILS', currency, rates) ?? 0),
-      invest.accounts.length > 0
-        ? trends(db, member, '6m', rates, now, { currency }).then((t) =>
-            // Accounts were held before their first recorded value; carry it back.
+      history.then((t) =>
+        t
+          ? // Accounts were held before their first recorded value; carry it back.
             valuesOn(
               t.series.map((p) => ({ on: p.on, valueMinor: p.valueMinor })),
               days,
               { backfill: true },
-            ),
-          )
-        : days.map(() => 0),
+            )
+          : days.map(() => 0),
+      ),
     ])
     const convert = (minor: Minor, from: string) => convertMinor(minor, from, currency, rates) ?? 0
     series = days.map((on, i) => {
@@ -223,6 +244,7 @@ export async function wealth(
     owed,
     missing,
     unconverted: [...unconverted],
+    range,
     series,
     change: changeOver(series.map((p) => p.totalMinor)),
     any,
@@ -259,4 +281,17 @@ async function cashHistory(
     balancesOn(k, moves, days).forEach((m, i) => (totals[i] = totals[i]! + m))
   }
   return totals.map(convert)
+}
+
+/** The earliest day the household has data for: its first transaction or recorded value. */
+async function firstDay(db: Conn, member: MemberRow, today: string, investedFrom?: string) {
+  const visible = (await listAccounts(db, member)).map((a) => a.id)
+  const [row] = visible.length
+    ? await db
+        .select({ on: min(transactions.occurredOn) })
+        .from(transactions)
+        .where(inArray(transactions.accountId, visible))
+    : [{ on: null }]
+  const first = [row?.on, investedFrom].filter((d): d is string => !!d).sort()[0]
+  return first ?? today
 }

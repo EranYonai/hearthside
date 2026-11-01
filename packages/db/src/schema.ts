@@ -358,6 +358,22 @@ export const categoryRules = pgTable(
   (t) => [uniqueIndex('category_rules_match_idx').on(t.householdId, t.match)],
 )
 
+/** "This isn't a fixed cost": payees a household took off the fixed costs list. */
+export const recurringDismissals = pgTable(
+  'recurring_dismissals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    /** Same keyed hash as transactions.description_key. */
+    payeeKey: text('payee_key').notNull(),
+    createdBy: uuid('created_by').references(() => members.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('recurring_dismissals_payee_idx').on(t.householdId, t.payeeKey)],
+)
+
 /** Categories a household added on top of the built-in ones. */
 export const householdCategories = pgTable(
   'household_categories',

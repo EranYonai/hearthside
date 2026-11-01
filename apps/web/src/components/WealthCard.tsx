@@ -1,4 +1,4 @@
-import { formatMoney } from '@hearthside/core'
+import { formatMoney, WEALTH_RANGES } from '@hearthside/core'
 import { buttonClasses, Card, Label } from '@hearthside/ui'
 import { Building2, ChevronRight, FileUp, HandCoins, Landmark, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
@@ -22,11 +22,12 @@ const FALLBACK = ['var(--hs-chart-1)', 'var(--hs-chart-2)', 'var(--hs-chart-3)']
 
 /**
  * The household's net worth: bank balances, investments and property less loans, how it's split,
- * and how it moved over six months.
+ * and how it moved over the chosen range.
  */
 export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boolean }) {
   const { currency, totalMinor, cashMinor, investedMinor, propertyMinor, owedMinor, change } =
     wealth
+  const span = WEALTH_RANGES.find((r) => r.key === wealth.range) ?? WEALTH_RANGES[0]
   const base = Math.max(cashMinor, 0) + Math.max(investedMinor, 0) + Math.max(propertyMinor, 0)
   if (!wealth.any)
     return (
@@ -69,14 +70,14 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
         </span>
         {wealth.series.length > 1 && change.minor !== 0 && (
           <span
-            className={`inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 text-caption font-semibold ${up ? 'bg-positive-soft text-positive' : 'bg-negative-soft text-negative'}`}
+            className={`inline-flex items-center gap-1 whitespace-nowrap rounded-pill px-2.5 py-0.5 text-caption font-semibold tabular-nums ${up ? 'bg-positive-soft text-positive' : 'bg-negative-soft text-negative'}`}
             data-testid="wealth-change"
             data-private-hide
           >
             {formatMoney(change.minor, { currency, whole: true, signed: true })}
             {change.percent !== null &&
-              ` (${up ? '+' : '−'}${Math.abs(change.percent).toFixed(1)}%)`}{' '}
-            in 6 months
+              ` (${up ? '+' : '−'}${Math.abs(change.percent).toFixed(1)}%)`}
+            <span className="font-normal opacity-80">· {span.label}</span>
           </span>
         )}
       </div>
@@ -135,9 +136,25 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
       </div>
 
       {wealth.series.length > 1 && (
-        <div data-private-hide>
+        <div data-private-hide className="grid gap-2">
+          <nav
+            aria-label="Chart range"
+            className="grid grid-cols-4 gap-1 rounded-md bg-surface-2 p-1"
+          >
+            {WEALTH_RANGES.map((r) => (
+              <Link
+                key={r.key}
+                href={r.key === '6m' ? '/' : `/?range=${r.key}`}
+                scroll={false}
+                aria-current={r.key === wealth.range ? 'page' : undefined}
+                className="flex min-h-9 items-center justify-center rounded-sm text-caption font-semibold text-ink-muted aria-[current=page]:bg-surface-1 aria-[current=page]:text-ink aria-[current=page]:shadow-card"
+              >
+                {r.label}
+              </Link>
+            ))}
+          </nav>
           <LineChart
-            label="What we own over six months"
+            label={`What we own over ${span.label}`}
             kind="money"
             currency={currency}
             area
