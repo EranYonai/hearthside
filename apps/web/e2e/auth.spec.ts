@@ -609,6 +609,17 @@ test('property and loans count toward what the home owns', async () => {
   await expect(owner.getByTestId('wealth-net')).toContainText('$199,000 in loans')
   await expect(owner.getByTestId('wealth-owed')).toContainText('Test mortgage')
   await expect(owner.getByTestId('wealth-accounts')).toContainText('Test flat')
+
+  // Hide numbers masks the new amounts too, then shows them again.
+  await owner.getByRole('button', { name: 'Hide numbers' }).click()
+  await expect(owner.getByTestId('wealth-owed')).not.toContainText('$199,000', {
+    useInnerText: true,
+  })
+  await expect(owner.getByTestId('wealth-net')).not.toContainText('$199,000', {
+    useInnerText: true,
+  })
+  await owner.getByRole('button', { name: 'Show numbers' }).click()
+  await expect(owner.getByTestId('wealth-owed')).toContainText('$199,000')
 })
 
 test('no page is wider than a phone screen', async ({ browser }) => {

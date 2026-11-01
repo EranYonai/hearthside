@@ -46,11 +46,19 @@
   }
 }
 
-/* "Hide numbers" (per device): headline amounts are blurred until shown again. */
-@layer components {
-  [data-hide-amounts] [data-private] {
-    filter: blur(0.4em);
-    user-select: none;
-    transition: filter 150ms;
-  }
+/*
+ * "Hide numbers" (per device). The real text is removed and replaced with stars (two fewer than
+ * the digits), so the exact value can't be read. Charts and changes that would reveal it are
+ * hidden outright. Unlayered and !important so display utilities on these elements can't win.
+ */
+[data-hide-amounts] [data-private] > * {
+  display: none !important;
+}
+[data-hide-amounts] [data-private]::after {
+  content: attr(data-mask);
+  filter: blur(0.08em);
+  user-select: none;
+}
+[data-hide-amounts] [data-private-hide] {
+  display: none !important;
 }
