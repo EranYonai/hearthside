@@ -1,5 +1,5 @@
 import { ALERT_LABELS } from '@hearthside/core'
-import { accountLook, cardBillNote } from '@hearthside/core'
+import { accountLook, budgetMonth, cardBillNote, emptyFlow } from '@hearthside/core'
 import {
   Amount,
   buttonClasses,
@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight, FileUp } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AppShell } from '@/components/AppShell'
+import { BudgetLineView } from '@/components/BudgetLine'
 import { requireDb } from '@/lib/db'
 import { isMonth, monthName, shiftMonth } from '@/lib/month'
 import {
@@ -27,6 +28,7 @@ import {
 import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
 import { householdCategorySet } from '@/server/categories'
+import { listBudgets } from '@/server/budgets'
 import { CategorisedRow, CategorizeNow, type TxView } from './client'
 import { ViewSwitch, YearView } from './year'
 
@@ -95,12 +97,26 @@ export default async function TransactionsPage({
   const trendMonths = Array.from({ length: TREND_MONTHS }, (_, i) =>
     shiftMonth(month, i - TREND_MONTHS + 1),
   )
-  const [rows, sum, categories, trend] = await Promise.all([
+  // A budget line shows when one category is open across every account the member sees.
+  const budgetCategory =
+    filter.category && !type && !holderId && !accountId && !filter.search
+      ? filter.category
+      : undefined
+  const [rows, sum, categories, trend, limits] = await Promise.all([
     listTransactions(db, member, filter),
     totals(db, member, filter),
     householdCategorySet(db, member.householdId),
     monthlySpending(db, member, filter, trendMonths),
+    budgetCategory ? listBudgets(db, member) : [],
   ])
+  const limit = limits.find((l) => l.category === budgetCategory)
+  const budget = limit
+    ? budgetMonth(
+        [limit],
+        { ...emptyFlow(month), byCategory: { [limit.category]: sum.spent } },
+        new Date().toISOString().slice(0, 10),
+      )
+    : undefined
   const options = categories.all.map(({ slug, label, icon }) => ({ slug, label, icon }))
   const editable = canEdit(member)
   const kinds = new Set(allAccounts.map((a) => a.kind))
@@ -226,6 +242,20 @@ export default async function TransactionsPage({
           }
         />
       </Card>
+      {budget?.lines[0] && (
+        <Card aria-label="Budget" data-testid="category-budget">
+          <Link
+            href={`/budgets?month=${month}`}
+            className="block rounded-md focus-visible:outline-2 focus-visible:outline-focus"
+          >
+            <BudgetLineView
+              line={budget.lines[0]}
+              categories={categories}
+              elapsed={budget.elapsed}
+            />
+          </Link>
+        </Card>
+      )}
       {(sum.received > 0 || sum.cardBills < 0) && (
         <p className="-mt-3 grid gap-1 text-caption text-ink-muted">
           {sum.received > 0 && (
