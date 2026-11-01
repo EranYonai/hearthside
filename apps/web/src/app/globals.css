@@ -45,3 +45,12 @@
     );
   }
 }
+
+/* "Hide numbers" (per device): headline amounts are blurred until shown again. */
+@layer components {
+  [data-hide-amounts] [data-private] {
+    filter: blur(0.4em);
+    user-select: none;
+    transition: filter 150ms;
+  }
+}

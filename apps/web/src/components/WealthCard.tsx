@@ -2,6 +2,7 @@ import { formatMoney } from '@hearthside/core'
 import { Amount, buttonClasses, Card, Label } from '@hearthside/ui'
 import { ChevronRight, FileUp, Landmark, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
+import { HideAmountsToggle } from '@/lib/HideAmountsToggle'
 import type { Wealth } from '@/server/wealth'
 import { AccountMark } from './AccountCard'
 import { LineChart } from './LineChart'
@@ -53,10 +54,12 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
     <Card aria-labelledby="wealth-title" className="wealth-glow gap-4" data-testid="wealth">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Label id="wealth-title">What we own</Label>
+        <span className="ms-auto" />
         {wealth.series.length > 1 && change.minor !== 0 && (
           <span
             className={`inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 text-caption font-semibold ${up ? 'bg-positive-soft text-positive' : 'bg-negative-soft text-negative'}`}
             data-testid="wealth-change"
+            data-private
           >
             {formatMoney(change.minor, { currency, whole: true, signed: true })}
             {change.percent !== null &&
@@ -64,8 +67,11 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
             in 6 months
           </span>
         )}
+        <HideAmountsToggle />
       </div>
-      <Amount minor={totalMinor} currency={currency} whole hero />
+      <div data-private data-testid="wealth-total">
+        <Amount minor={totalMinor} currency={currency} whole hero />
+      </div>
 
       <div className="grid grid-cols-2 gap-2">
         <Split

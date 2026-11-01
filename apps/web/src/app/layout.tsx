@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
+import { PRIVACY_BOOT_SCRIPT } from '@/lib/privacy'
 import { THEME_BOOT_SCRIPT } from '@/lib/theme'
 import './globals.css'
 
@@ -32,7 +33,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT + PRIVACY_BOOT_SCRIPT }} />
       </head>
       <body>{children}</body>
     </html>
