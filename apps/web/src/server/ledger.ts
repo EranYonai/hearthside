@@ -34,7 +34,7 @@ import { linkLoansAndRent } from './loans'
 import { audit, AuthError, type Tx } from './repo'
 import { sha256 } from './tokens'
 
-const { accounts, importBatches, transactions, categoryRules, members } = schema
+const { accounts, importBatches, importExclusions, transactions, categoryRules, members } = schema
 
 type Conn = Parameters<typeof audit>[0]
 
@@ -206,6 +206,8 @@ export function holderOf(account: Pick<AccountRow, 'holderId' | 'ownerId'>): str
 export interface PreparedRow extends ParsedTransaction {
   dedupKey: string
   duplicate: boolean
+  /** Taken out of an earlier import of this account; stays out unless put back. */
+  excluded?: boolean
 }
 
 /** Keyed hash of a description, as stored in description_key and category_rules.match. */
@@ -213,7 +215,10 @@ export function descriptionIndex(description: string): string {
   return blindIndex(normalizeDescription(description))
 }
 
-/** Hash the parser's duplicate keys and mark rows already stored for this account. */
+/**
+ * Hash the parser's duplicate keys and mark rows already stored for this account, and rows
+ * someone took out of an earlier import.
+ */
 export async function prepareImport(
   db: Conn,
   account: AccountRow | null,
@@ -221,15 +226,33 @@ export async function prepareImport(
 ): Promise<PreparedRow[]> {
   const keys = duplicateKeys(parsed).map((k) => blindIndex(sha256(k)))
   const existing = new Set<string>()
+  const excluded = new Set<string>()
   for (let i = 0; account && i < keys.length; i += 1000) {
     const chunk = keys.slice(i, i + 1000)
-    const rows = await db
-      .select({ key: transactions.dedupKey })
-      .from(transactions)
-      .where(and(eq(transactions.accountId, account.id), inArray(transactions.dedupKey, chunk)))
-    for (const r of rows) existing.add(r.key)
+    const [stored, out] = await Promise.all([
+      db
+        .select({ key: transactions.dedupKey })
+        .from(transactions)
+        .where(and(eq(transactions.accountId, account.id), inArray(transactions.dedupKey, chunk))),
+      db
+        .select({ key: importExclusions.dedupKey })
+        .from(importExclusions)
+        .where(
+          and(
+            eq(importExclusions.accountId, account.id),
+            inArray(importExclusions.dedupKey, chunk),
+          ),
+        ),
+    ])
+    for (const r of stored) existing.add(r.key)
+    for (const r of out) excluded.add(r.key)
   }
-  return parsed.map((t, i) => ({ ...t, dedupKey: keys[i]!, duplicate: existing.has(keys[i]!) }))
+  return parsed.map((t, i) => ({
+    ...t,
+    dedupKey: keys[i]!,
+    duplicate: existing.has(keys[i]!),
+    excluded: excluded.has(keys[i]!),
+  }))
 }
 
 export interface ProposedAccount {
@@ -296,14 +319,23 @@ export async function planImport(
   return result
 }
 
-/** Create any proposed accounts and import every group. */
+/**
+ * Create any proposed accounts and import every group. `exclude` holds the rows (by dedup
+ * key) the member took out in the preview; without it, rows taken out before stay out.
+ */
 export async function commitPlan(
   db: Conn,
   member: MemberRow,
   groups: readonly ImportGroup[],
-  input: { fileName: string; fileHash: string; skipped: number; holderId?: string | null },
+  input: {
+    fileName: string
+    fileHash: string
+    skipped: number
+    holderId?: string | null
+    exclude?: ReadonlySet<string>
+  },
 ) {
-  const { holderId, ...batchInput } = input
+  const { holderId, exclude, ...batchInput } = input
   const batches = []
   for (const [i, g] of groups.entries()) {
     const account =
@@ -311,7 +343,7 @@ export async function commitPlan(
       (await createAccount(db, member, { ...g.proposed, visibility: 'household', holderId }))
     const batch = await commitImport(db, member, account, {
       ...batchInput,
-      rows: g.rows,
+      rows: exclude ? g.rows.map((r) => ({ ...r, excluded: exclude.has(r.dedupKey) })) : g.rows,
       skipped: i === 0 ? input.skipped : 0,
     })
     batches.push({ batch, account })
@@ -352,7 +384,32 @@ export async function commitImport(
         skipped: input.skipped,
       })
       .returning()
-    const fresh = input.rows.filter((r) => !r.duplicate)
+    // Rows taken out are remembered so the next import of this file leaves them out too;
+    // rows put back are forgotten.
+    const removed = input.rows.filter((r) => !r.duplicate && r.excluded).map((r) => r.dedupKey)
+    const fresh = input.rows.filter((r) => !r.duplicate && !r.excluded)
+    for (let i = 0; i < removed.length; i += 500)
+      await tx
+        .insert(importExclusions)
+        .values(
+          removed.slice(i, i + 500).map((dedupKey) => ({
+            householdId: member.householdId,
+            accountId: account.id,
+            dedupKey,
+            createdBy: member.id,
+          })),
+        )
+        .onConflictDoNothing({ target: [importExclusions.accountId, importExclusions.dedupKey] })
+    for (let i = 0; i < fresh.length; i += 1000)
+      await tx.delete(importExclusions).where(
+        and(
+          eq(importExclusions.accountId, account.id),
+          inArray(
+            importExclusions.dedupKey,
+            fresh.slice(i, i + 1000).map((r) => r.dedupKey),
+          ),
+        ),
+      )
     let added = 0
     for (let i = 0; i < fresh.length; i += 500) {
       const values = fresh.slice(i, i + 500).map((r) => {
@@ -388,7 +445,7 @@ export async function commitImport(
         .returning({ id: transactions.id })
       added += inserted.length
     }
-    const duplicates = input.rows.length - added
+    const duplicates = input.rows.length - added - removed.length
     // A bank file's running balance keeps the account's balance current, unless a newer one
     // is already known.
     const closing = account.kind === 'bank' ? closingBalance(input.rows) : null
@@ -411,11 +468,17 @@ export async function commitImport(
       householdId: member.householdId,
       memberId: member.id,
       action: 'import.added',
-      detail: { batchId: batch!.id, accountId: account.id, added, duplicates },
+      detail: {
+        batchId: batch!.id,
+        accountId: account.id,
+        added,
+        duplicates,
+        removed: removed.length,
+      },
     })
     await linkCardBills(tx, member.householdId)
     await linkLoansAndRent(tx, member.householdId)
-    return done!
+    return { ...done!, removed: removed.length }
   }
   return db.transaction(run)
 }
