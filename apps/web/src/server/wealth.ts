@@ -179,14 +179,20 @@ export async function wealth(
     const today = dayOf(now)
     const history =
       invest.accounts.length > 0
-        ? trends(db, member, range, rates, now, { currency })
+        ? trends(db, member, range === '6m' || range === '1y' ? range : 'all', rates, now, {
+            currency,
+          })
         : Promise.resolve(null)
-    const days =
-      range === '6m'
-        ? weeklyDays(today)
-        : range === '1y'
-          ? weeklyDays(today, 52)
-          : chartDays(today, await firstDay(db, member, today, (await history)?.series[0]?.on))
+    let days: string[]
+    if (range === '6m') days = weeklyDays(today)
+    else if (range === '1y') days = weeklyDays(today, 52)
+    else {
+      // Years back, but no earlier than the household's first data, so the line isn't flat.
+      const back = new Date(now)
+      back.setUTCFullYear(back.getUTCFullYear() - (range === '3y' ? 3 : 5))
+      const first = await firstDay(db, member, today, (await history)?.series[0]?.on)
+      days = chartDays(today, [back.toISOString().slice(0, 10), first].sort().at(-1)!)
+    }
     const [cash, invested] = await Promise.all([
       cashHistory(db, known, days, (m) => convertMinor(m, 'ILS', currency, rates) ?? 0),
       history.then((t) =>

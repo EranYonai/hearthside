@@ -341,6 +341,28 @@ export const transactions = pgTable(
   ],
 )
 
+/**
+ * Rows a member took out of an import. Later imports of the same rows leave them out too,
+ * until someone puts them back.
+ */
+export const importExclusions = pgTable(
+  'import_exclusions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Same keyed hash as transactions.dedup_key. */
+    dedupKey: text('dedup_key').notNull(),
+    createdBy: uuid('created_by').references(() => members.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('import_exclusions_dedup_idx').on(t.accountId, t.dedupKey)],
+)
+
 /** "Always file this description under that category." */
 export const categoryRules = pgTable(
   'category_rules',
@@ -356,6 +378,22 @@ export const categoryRules = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('category_rules_match_idx').on(t.householdId, t.match)],
+)
+
+/** "This isn't a fixed cost": payees a household took off the fixed costs list. */
+export const recurringDismissals = pgTable(
+  'recurring_dismissals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    /** Same keyed hash as transactions.description_key. */
+    payeeKey: text('payee_key').notNull(),
+    createdBy: uuid('created_by').references(() => members.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('recurring_dismissals_payee_idx').on(t.householdId, t.payeeKey)],
 )
 
 /** Categories a household added on top of the built-in ones. */

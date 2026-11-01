@@ -79,9 +79,10 @@ export function changeOver(values: readonly Minor[]): { minor: Minor; percent: n
 
 /** How far back the wealth chart reaches. */
 export const WEALTH_RANGES = [
-  { key: '6m', label: '6M', words: 'in 6 months' },
-  { key: '1y', label: '1Y', words: 'in a year' },
-  { key: 'all', label: 'All', words: 'since the start' },
+  { key: '6m', label: '6M', years: 0.5 },
+  { key: '1y', label: '1Y', years: 1 },
+  { key: '3y', label: '3Y', years: 3 },
+  { key: '5y', label: '5Y', years: 5 },
 ] as const
 
 export type WealthRange = (typeof WEALTH_RANGES)[number]['key']

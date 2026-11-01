@@ -28,6 +28,25 @@ import { sha256 } from '@/server/tokens'
 
 const MAX_BYTES = 10 * 1024 * 1024
 const PREVIEW_ROWS = 50
+/** Statement rows all go to the preview so any of them can be taken out. */
+const STATEMENT_ROWS = 2000
+const MAX_EXCLUDE = 5000
+
+/** The dedup keys of the rows taken out in the preview, or undefined when none were sent. */
+function readExclude(form: FormData | undefined): Set<string> | undefined {
+  const value = form?.get('exclude')
+  if (typeof value !== 'string') return undefined
+  let list: unknown
+  try {
+    list = JSON.parse(value)
+  } catch {
+    return undefined
+  }
+  if (!Array.isArray(list)) return undefined
+  return new Set(
+    list.filter((k): k is string => typeof k === 'string' && k.length < 200).slice(0, MAX_EXCLUDE),
+  )
+}
 
 function describe(g: ImportGroup) {
   const fresh = g.rows.filter((r) => !r.duplicate).length
@@ -43,13 +62,15 @@ function describe(g: ImportGroup) {
     total: g.rows.length,
     fresh,
     duplicates: g.rows.length - fresh,
-    sample: g.rows.slice(0, PREVIEW_ROWS).map((r) => ({
+    sample: g.rows.slice(0, STATEMENT_ROWS).map((r) => ({
+      key: r.dedupKey,
       occurredOn: r.occurredOn,
       description: r.description,
       amountMinor: r.amountMinor,
       original: r.original ?? null,
       installment: r.installment ?? null,
       duplicate: r.duplicate,
+      removed: !r.duplicate && !!r.excluded,
     })),
   }
 }
@@ -111,6 +132,7 @@ export const POST = authRoute(async ({ request, db }) => {
       fileHash,
       skipped: parsed.skipped.length,
       holderId,
+      exclude: readExclude(form),
     })
     // The model is slow; answer now and let it file the rest.
     after(() => scheduleCategorize(db, member.householdId))
@@ -119,6 +141,7 @@ export const POST = authRoute(async ({ request, db }) => {
       type: 'statement',
       added: results.reduce((n, r) => n + r.batch.added, 0),
       duplicates: results.reduce((n, r) => n + r.batch.duplicates, 0),
+      removed: results.reduce((n, r) => n + r.batch.removed, 0),
       accounts: results.map((r) => r.account.name),
       month: latest.slice(0, 7) || null,
     })

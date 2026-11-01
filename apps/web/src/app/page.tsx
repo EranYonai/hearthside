@@ -9,7 +9,7 @@ import {
   buttonClasses,
   type Category,
 } from '@hearthside/ui'
-import { ArrowDownLeft, ArrowUpRight, FileUp, UserPlus, Users } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ChevronRight, FileUp, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { AppShell } from '@/components/AppShell'
@@ -223,7 +223,13 @@ export default async function Home({
       {recurring.length > 0 && (
         <Card aria-labelledby="fixed-title">
           <div className="flex items-baseline justify-between gap-2">
-            <Label id="fixed-title">Fixed costs</Label>
+            <Link
+              href="/recurring"
+              className="flex items-center gap-0.5 rounded-sm focus-visible:outline-2 focus-visible:outline-focus"
+            >
+              <Label id="fixed-title">Fixed costs</Label>
+              <ChevronRight size={16} className="text-ink-muted" aria-hidden />
+            </Link>
             <span className="flex items-baseline gap-1 text-caption text-ink-muted">
               <PrivateAmount
                 minor={recurring.reduce((n, r) => n + r.monthlyMinor, 0)}
@@ -233,10 +239,16 @@ export default async function Home({
               a month
             </span>
           </div>
-          <RecurringList items={recurring.slice(0, 3)} categories={categories} />
-          <Link href="/recurring" className={`${buttonClasses('secondary')} justify-self-start`}>
-            See all {recurring.length}
-          </Link>
+          <RecurringList
+            items={recurring.slice(0, 3)}
+            categories={categories}
+            editable={editable}
+          />
+          {recurring.length > 3 && (
+            <Link href="/recurring" className={`${buttonClasses('secondary')} justify-self-start`}>
+              {recurring.length - 3} more
+            </Link>
+          )}
         </Card>
       )}
       {fresh.some((a) => a.newest) && (

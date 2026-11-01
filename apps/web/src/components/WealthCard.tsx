@@ -70,14 +70,14 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
         </span>
         {wealth.series.length > 1 && change.minor !== 0 && (
           <span
-            className={`inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 text-caption font-semibold ${up ? 'bg-positive-soft text-positive' : 'bg-negative-soft text-negative'}`}
+            className={`inline-flex items-center gap-1 whitespace-nowrap rounded-pill px-2.5 py-0.5 text-caption font-semibold tabular-nums ${up ? 'bg-positive-soft text-positive' : 'bg-negative-soft text-negative'}`}
             data-testid="wealth-change"
             data-private-hide
           >
             {formatMoney(change.minor, { currency, whole: true, signed: true })}
             {change.percent !== null &&
-              ` (${up ? '+' : '−'}${Math.abs(change.percent).toFixed(1)}%)`}{' '}
-            {span.words}
+              ` (${up ? '+' : '−'}${Math.abs(change.percent).toFixed(1)}%)`}
+            <span className="font-normal opacity-80">· {span.label}</span>
           </span>
         )}
       </div>
@@ -137,21 +137,24 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
 
       {wealth.series.length > 1 && (
         <div data-private-hide className="grid gap-2">
-          <nav aria-label="Chart range" className="flex gap-1 justify-self-end">
+          <nav
+            aria-label="Chart range"
+            className="inline-flex gap-0.5 justify-self-end rounded-pill bg-surface-2 p-0.5"
+          >
             {WEALTH_RANGES.map((r) => (
               <Link
                 key={r.key}
                 href={r.key === '6m' ? '/' : `/?range=${r.key}`}
                 scroll={false}
                 aria-current={r.key === wealth.range ? 'page' : undefined}
-                className="min-h-9 rounded-sm px-2.5 py-1 text-caption text-ink-muted aria-[current=page]:bg-surface-2 aria-[current=page]:text-ink"
+                className="rounded-pill px-2.5 py-0.5 text-[0.75rem] leading-5 font-semibold text-ink-muted aria-[current=page]:bg-surface-1 aria-[current=page]:text-ink aria-[current=page]:shadow-card"
               >
                 {r.label}
               </Link>
             ))}
           </nav>
           <LineChart
-            label={`What we own, ${span.words}`}
+            label={`What we own over ${span.label}`}
             kind="money"
             currency={currency}
             area

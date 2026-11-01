@@ -5,7 +5,8 @@ import { PrivateAmount } from '@/components/PrivateAmount'
 import { RecurringList } from '@/components/RecurringList'
 import { requireDb } from '@/lib/db'
 import { householdCategorySet } from '@/server/categories'
-import { listRecurring } from '@/server/recurring'
+import { canEdit } from '@/server/ledger'
+import { recurringAndDismissed } from '@/server/recurring'
 import { requireSession } from '@/server/session'
 
 export const metadata: Metadata = { title: 'Fixed costs · Hearthside' }
@@ -14,8 +15,9 @@ export const dynamic = 'force-dynamic'
 export default async function RecurringPage() {
   const { member, household } = await requireSession()
   const db = requireDb()
-  const [items, categories] = await Promise.all([
-    listRecurring(db, member),
+  const editable = canEdit(member)
+  const [{ recurring: items, dismissed }, categories] = await Promise.all([
+    recurringAndDismissed(db, member),
     householdCategorySet(db, member.householdId),
   ])
   const monthly = items.reduce((n, r) => n + r.monthlyMinor, 0)
@@ -38,7 +40,18 @@ export default async function RecurringPage() {
       {items.length > 0 && (
         <Card aria-labelledby="recurring-title">
           <Label id="recurring-title">Repeating payments</Label>
-          <RecurringList items={items} categories={categories} />
+          <RecurringList items={items} categories={categories} editable={editable} />
+          {editable && (
+            <p className="text-caption text-ink-muted">
+              Not a fixed cost? Swipe it left, or use the × on a computer.
+            </p>
+          )}
+        </Card>
+      )}
+      {dismissed.length > 0 && (
+        <Card aria-labelledby="dismissed-title">
+          <Label id="dismissed-title">Not fixed costs</Label>
+          <RecurringList items={dismissed} categories={categories} editable={editable} restore />
         </Card>
       )}
     </AppShell>

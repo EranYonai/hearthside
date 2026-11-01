@@ -5,7 +5,7 @@ import { sql as raw } from 'drizzle-orm'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { commitImport, createAccount, prepareImport } from './ledger'
-import { listRecurring } from './recurring'
+import { listRecurring, recurringAndDismissed, setDismissed } from './recurring'
 import { createHousehold, type NewPasskey } from './repo'
 
 const url = process.env.TEST_DATABASE_URL
@@ -83,6 +83,19 @@ describe.skipIf(!url)('recurring (Postgres)', () => {
       changedPercent: 18,
       count: 4,
     })
+    // Someone says it isn't a fixed cost; it moves to the dismissed list and can come back.
+    const at = new Date('2026-11-01T12:00:00Z')
+    await setDismissed(db, alex, found[0]!.key)
+    await setDismissed(db, alex, found[0]!.key)
+    let both = await recurringAndDismissed(db, alex, at)
+    expect(both.recurring).toEqual([])
+    expect(both.dismissed.map((r) => r.description)).toEqual(['Streamly Plus'])
+    await setDismissed(db, alex, found[0]!.key, true)
+    both = await recurringAndDismissed(db, alex, at)
+    expect(both.recurring).toHaveLength(1)
+    expect(both.dismissed).toEqual([])
+    await expect(setDismissed(db, alex, '')).rejects.toThrow('Unknown payment')
+
     // Long after it stopped, it's no longer a fixed cost.
     expect(await listRecurring(db, alex, new Date('2027-06-01T12:00:00Z'))).toEqual([])
   })

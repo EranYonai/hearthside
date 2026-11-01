@@ -115,6 +115,7 @@ describe('chartDays', () => {
 
   it('knows its ranges', () => {
     expect(isWealthRange('1y')).toBe(true)
-    expect(isWealthRange('5y')).toBe(false)
+    expect(isWealthRange('5y')).toBe(true)
+    expect(isWealthRange('all')).toBe(false)
   })
 })

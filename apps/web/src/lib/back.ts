@@ -58,6 +58,7 @@ const NAMES: Record<string, string> = {
   '/settings': 'Settings',
   '/import': 'Import',
   '/recurring': 'Fixed costs',
+  '/budgets': 'Budgets',
 }
 
 /** A short name for a page, for "Back to …". */

@@ -138,6 +138,8 @@ export const BLIND_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   investment_transactions: ['dedup_key'],
   properties: ['rent_key'],
   loans: ['payment_key'],
+  recurring_dismissals: ['payee_key'],
+  import_exclusions: ['dedup_key'],
 }
 
 const CHUNK = 1000

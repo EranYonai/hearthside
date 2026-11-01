@@ -170,11 +170,11 @@ describe.skipIf(!url)('wealth (Postgres)', () => {
     const mid = w.series.find((p) => p.on >= '2026-10-01' && p.on < '2026-10-20')!
     expect(mid.totalMinor - mid.investedMinor).toBe(1_500_000)
 
-    // Longer ranges: a year is weekly; all time starts at the first data and ends today.
+    // Longer ranges: a year is weekly; years back start no earlier than the first data.
     const year = await wealth(db, alex, rates, today, '1y')
     expect(year).toMatchObject({ range: '1y' })
     expect(year.series).toHaveLength(53)
-    const all = await wealth(db, alex, rates, today, 'all')
+    const all = await wealth(db, alex, rates, today, '5y')
     expect(all.series.at(-1)!.totalMinor).toBe(1_400_000)
     expect(all.series[0]!.on <= '2026-10-01').toBe(true)
     expect(all.series.length).toBeLessThan(10)

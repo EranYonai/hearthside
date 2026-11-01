@@ -1,9 +1,10 @@
 import { findRecurring, type Recurring } from '@hearthside/core'
 import { type MemberRow, schema } from '@hearthside/db'
 import { and, eq, gte, inArray, isNull } from 'drizzle-orm'
-import { listAccounts } from './ledger'
+import { canEdit, listAccounts } from './ledger'
+import { AuthError } from './repo'
 
-const { transactions } = schema
+const { recurringDismissals, transactions } = schema
 
 type Conn = Parameters<typeof listAccounts>[0]
 
@@ -19,6 +20,26 @@ export async function listRecurring(
   member: MemberRow,
   now = new Date(),
 ): Promise<Recurring[]> {
+  return (await recurringAndDismissed(db, member, now)).recurring
+}
+
+/** Fixed costs, and the ones someone in the household said aren't. */
+export async function recurringAndDismissed(db: Conn, member: MemberRow, now = new Date()) {
+  const [found, dismissed] = await Promise.all([
+    detect(db, member, now),
+    db
+      .select({ key: recurringDismissals.payeeKey })
+      .from(recurringDismissals)
+      .where(eq(recurringDismissals.householdId, member.householdId)),
+  ])
+  const off = new Set(dismissed.map((d) => d.key))
+  return {
+    recurring: found.filter((r) => !off.has(r.key)),
+    dismissed: found.filter((r) => off.has(r.key)),
+  }
+}
+
+async function detect(db: Conn, member: MemberRow, now: Date): Promise<Recurring[]> {
   const visible = (await listAccounts(db, member)).map((a) => a.id)
   if (!visible.length) return []
   const today = now.toISOString().slice(0, 10)
@@ -41,4 +62,26 @@ export async function listRecurring(
       ),
     )
   return findRecurring(rows, today)
+}
+
+/** "Not a fixed cost" (or, with `restore`, "it is after all") for a payee, for the whole household. */
+export async function setDismissed(db: Conn, member: MemberRow, payeeKey: string, restore = false) {
+  if (!canEdit(member)) throw new AuthError('not_allowed', 'Viewers can’t change data')
+  if (typeof payeeKey !== 'string' || !payeeKey || payeeKey.length > 200)
+    throw new AuthError('not_found', 'Unknown payment')
+  if (restore) {
+    await db
+      .delete(recurringDismissals)
+      .where(
+        and(
+          eq(recurringDismissals.householdId, member.householdId),
+          eq(recurringDismissals.payeeKey, payeeKey),
+        ),
+      )
+    return
+  }
+  await db
+    .insert(recurringDismissals)
+    .values({ householdId: member.householdId, payeeKey, createdBy: member.id })
+    .onConflictDoNothing()
 }
