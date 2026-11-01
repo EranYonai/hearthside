@@ -53,13 +53,15 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
   return (
     <Card aria-labelledby="wealth-title" className="wealth-glow gap-4" data-testid="wealth">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label id="wealth-title">What we own</Label>
-        <span className="ms-auto" />
+        <span className="flex items-center gap-1">
+          <HideAmountsToggle />
+          <Label id="wealth-title">What we own</Label>
+        </span>
         {wealth.series.length > 1 && change.minor !== 0 && (
           <span
             className={`inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 text-caption font-semibold ${up ? 'bg-positive-soft text-positive' : 'bg-negative-soft text-negative'}`}
             data-testid="wealth-change"
-            data-private
+            data-private-hide
           >
             {formatMoney(change.minor, { currency, whole: true, signed: true })}
             {change.percent !== null &&
@@ -67,7 +69,6 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
             in 6 months
           </span>
         )}
-        <HideAmountsToggle />
       </div>
       <div data-private data-testid="wealth-total">
         <Amount minor={totalMinor} currency={currency} whole hero />
@@ -95,21 +96,23 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
       </div>
 
       {wealth.series.length > 1 && (
-        <LineChart
-          label="What we own over six months"
-          kind="money"
-          currency={currency}
-          area
-          compact
-          points={wealth.series.map((p) => ({
-            on: p.on,
-            values: [p.totalMinor, p.investedMinor],
-          }))}
-          series={[
-            { label: 'Everything', color: 'chart-1' },
-            { label: 'Invested', color: 'chart-2', dashed: true },
-          ]}
-        />
+        <div data-private-hide>
+          <LineChart
+            label="What we own over six months"
+            kind="money"
+            currency={currency}
+            area
+            compact
+            points={wealth.series.map((p) => ({
+              on: p.on,
+              values: [p.totalMinor, p.investedMinor],
+            }))}
+            series={[
+              { label: 'Everything', color: 'chart-1' },
+              { label: 'Invested', color: 'chart-2', dashed: true },
+            ]}
+          />
+        </div>
       )}
 
       {colored.length > 0 && (
@@ -143,7 +146,14 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
                       {p.kind === 'cash' ? 'Bank' : 'Investments'} · {pct(p.minor, shown)}%
                     </span>
                   </span>
-                  <Amount minor={p.minor} currency={currency} whole className="text-body-strong" />
+                  <span data-private>
+                    <Amount
+                      minor={p.minor}
+                      currency={currency}
+                      whole
+                      className="text-body-strong"
+                    />
+                  </span>
                   <ChevronRight size={18} aria-hidden className="text-ink-muted" />
                 </Link>
               </li>
@@ -190,12 +200,14 @@ function Split(props: {
         {props.label}
         <span className="ms-auto tabular-nums text-ink-faint">{props.share}%</span>
       </span>
-      <Amount
-        minor={props.minor}
-        currency={props.currency}
-        whole
-        className="font-display text-heading"
-      />
+      <span data-private className="font-display text-heading">
+        <Amount
+          minor={props.minor}
+          currency={props.currency}
+          whole
+          className="font-display text-heading"
+        />
+      </span>
     </>
   )
   const cls = 'grid gap-1 rounded-md bg-surface-2 p-3'

@@ -46,11 +46,22 @@
   }
 }
 
-/* "Hide numbers" (per device): headline amounts are blurred until shown again. */
+/*
+ * "Hide numbers" (per device). The real text is removed from layout and replaced with a fixed
+ * mask, so neither the digits nor their width can be read. Charts that would reveal the scale
+ * are hidden outright.
+ */
 @layer components {
-  [data-hide-amounts] [data-private] {
-    filter: blur(0.4em);
+  [data-hide-amounts] [data-private] > * {
+    display: none;
+  }
+  [data-hide-amounts] [data-private]::after {
+    content: '***';
+    font-family: var(--font-display, inherit);
+    filter: blur(0.08em);
     user-select: none;
-    transition: filter 150ms;
+  }
+  [data-hide-amounts] [data-private-hide] {
+    display: none;
   }
 }
