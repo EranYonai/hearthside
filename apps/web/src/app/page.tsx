@@ -14,6 +14,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { AppShell } from '@/components/AppShell'
 import { PrivateAmount } from '@/components/PrivateAmount'
+import { RecurringList } from '@/components/RecurringList'
 import { WealthCard } from '@/components/WealthCard'
 import { requireDb } from '@/lib/db'
 import { householdCategorySet } from '@/server/categories'
@@ -27,6 +28,7 @@ import {
   totals,
 } from '@/server/ledger'
 import { keepQuotesFresh } from '@/server/prices'
+import { listRecurring } from '@/server/recurring'
 import { getHousehold, isApproved, listMembers } from '@/server/repo'
 import { currentSession, requireSession } from '@/server/session'
 import { wealth } from '@/server/wealth'
@@ -76,13 +78,14 @@ export default async function Home({
   const solo = people.length === 1
   const latest = months[0]
   const trail = latest ? lastMonths(latest) : []
-  const [sum, categories, accounts, owned, history, fresh] = await Promise.all([
+  const [sum, categories, accounts, owned, history, fresh, recurring] = await Promise.all([
     latest ? totals(db, member, { month: latest }) : undefined,
     householdCategorySet(db, member.householdId),
     listAccounts(db, member),
     wealth(db, member, fx.rates, new Date(), range),
     latest ? monthlyFlows(db, member, {}, trail) : [],
     accountFreshness(db, member),
+    listRecurring(db, member),
   ])
   const moves = history.length > 1 ? biggestMoves(history.at(-1)!, history.at(-2)!) : []
   const before = trail.length > 1 ? await totals(db, member, { month: trail.at(-2)! }) : undefined
@@ -215,6 +218,25 @@ export default async function Home({
         )
       )}
 
+      {recurring.length > 0 && (
+        <Card aria-labelledby="fixed-title">
+          <div className="flex items-baseline justify-between gap-2">
+            <Label id="fixed-title">Fixed costs</Label>
+            <span className="flex items-baseline gap-1 text-caption text-ink-muted">
+              <PrivateAmount
+                minor={recurring.reduce((n, r) => n + r.monthlyMinor, 0)}
+                whole
+                className="text-body-strong"
+              />
+              a month
+            </span>
+          </div>
+          <RecurringList items={recurring.slice(0, 3)} categories={categories} />
+          <Link href="/recurring" className={`${buttonClasses('secondary')} justify-self-start`}>
+            See all {recurring.length}
+          </Link>
+        </Card>
+      )}
       {fresh.some((a) => a.newest) && (
         <Card aria-labelledby="fresh-title">
           <Label id="fresh-title">Up to date to</Label>

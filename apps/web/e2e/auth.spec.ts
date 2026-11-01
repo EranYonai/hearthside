@@ -443,6 +443,10 @@ test('the year view shows money in and out and each category', async () => {
   // Home says how fresh each account's data is.
   await owner.goto('/')
   await expect(owner.getByTestId('freshness')).toContainText('Card ·4821')
+  // One statement can't show a repeating payment yet.
+  await owner.goto('/recurring')
+  await expect(owner.getByRole('heading', { name: 'Fixed costs' })).toBeVisible()
+  await expect(owner.getByText(/^Nothing repeats yet/)).toBeVisible()
 })
 
 test('investment accounts and hand-entered holdings add up on the Invest tab', async () => {
