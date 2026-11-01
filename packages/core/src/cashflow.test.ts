@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { categoryChanges, emptyFlow, sumFlows, yearMonths, type MonthFlow } from './cashflow'
+import {
+  biggestMoves,
+  categoryChanges,
+  daysSince,
+  emptyFlow,
+  sumFlows,
+  yearMonths,
+  type MonthFlow,
+} from './cashflow'
 
 const flow = (month: string, spent: number, received: number, byCategory = {}): MonthFlow => ({
   month,
@@ -45,5 +53,27 @@ describe('cashflow', () => {
       [flow('2025-01', -100, 0, { '': -100 })],
     )
     expect(row).toMatchObject({ category: '', percent: 50 })
+  })
+})
+
+describe('biggestMoves', () => {
+  it('ranks categories by how much their spending moved', () => {
+    const now = flow('2026-10', -900, 0, { groceries: -500, fun: -100, travel: -300 })
+    const before = flow('2026-09', -700, 0, { groceries: -450, fun: -400, kids: -50 })
+    expect(biggestMoves(now, before)).toEqual([
+      { category: 'fun', minor: -100, previous: -400, change: -300 },
+      { category: 'travel', minor: -300, previous: 0, change: 300 },
+      { category: 'groceries', minor: -500, previous: -450, change: 50 },
+    ])
+    expect(biggestMoves(now, now)).toEqual([])
+  })
+})
+
+describe('daysSince', () => {
+  it('counts whole days and never goes negative', () => {
+    const today = new Date('2026-11-01T22:00:00Z')
+    expect(daysSince('2026-10-01', today)).toBe(31)
+    expect(daysSince('2026-11-01', today)).toBe(0)
+    expect(daysSince('2026-12-01', today)).toBe(0)
   })
 })

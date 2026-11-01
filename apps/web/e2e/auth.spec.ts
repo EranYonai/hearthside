@@ -439,6 +439,10 @@ test('the year view shows money in and out and each category', async () => {
     .click()
   await owner.getByRole('link', { name: 'Previous year' }).click()
   await expect(owner.getByText('No spending in 2025 yet.')).toBeVisible()
+
+  // Home says how fresh each account's data is.
+  await owner.goto('/')
+  await expect(owner.getByTestId('freshness')).toContainText('Card ·4821')
 })
 
 test('investment accounts and hand-entered holdings add up on the Invest tab', async () => {
