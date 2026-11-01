@@ -444,10 +444,18 @@ test('the year view shows money in and out and each category', async () => {
   // Home says how fresh each account's data is.
   await owner.goto('/')
   await expect(owner.getByTestId('freshness')).toContainText('Card ·4821')
-  // Import opens from the header on any tab and goes back to where it was opened.
-  await owner.getByRole('banner').getByRole('link', { name: 'Import' }).click()
+  // Import opens from the Add button on any tab and goes back to where it was opened.
+  await owner.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Add' }).click()
+  await owner
+    .getByRole('dialog', { name: 'Add' })
+    .getByRole('link', { name: /Import a file/ })
+    .click()
+  await expect(owner.getByRole('heading', { name: 'Import', exact: true })).toBeVisible()
   await owner.getByRole('link', { name: 'Back to Home' }).click()
   await expect(owner.getByTestId('freshness')).toBeVisible()
+  // Settings sits behind your initial at the top.
+  await owner.getByRole('banner').getByRole('link', { name: 'Settings' }).click()
+  await expect(owner.getByRole('heading', { name: 'Settings' })).toBeVisible()
   // One statement can't show a repeating payment yet.
   await owner.goto('/recurring')
   await expect(owner.getByRole('heading', { name: 'Fixed costs' })).toBeVisible()
@@ -625,8 +633,9 @@ test('property and loans count toward what the home owns', async () => {
   await expect(owner.getByTestId('property-value')).toContainText('$500,000')
   await expect(owner.getByTestId('property-equity')).toContainText('$500,000')
 
-  await owner.getByRole('link', { name: 'Investments' }).click()
-  await estate.getByText('Add a loan').click()
+  // The Add sheet opens the loan form on Invest.
+  await owner.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Add' }).click()
+  await owner.getByRole('dialog', { name: 'Add' }).getByRole('link', { name: 'Add a loan' }).click()
   const addLoan = owner.getByRole('form', { name: 'Add a loan' })
   await addLoan.getByLabel('Name').fill('Test mortgage')
   await addLoan.getByLabel('Currency').selectOption('USD')

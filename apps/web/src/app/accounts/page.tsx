@@ -204,7 +204,7 @@ export default async function AccountsPage({
 
       {editable && (
         <Card aria-labelledby="add-title">
-          <details>
+          <details open={params.add === '1'}>
             <summary id="add-title" className="cursor-pointer text-body-strong text-brand-ink">
               Add an account by hand
             </summary>

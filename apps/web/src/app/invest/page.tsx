@@ -45,7 +45,13 @@ const dayFormat = new Intl.DateTimeFormat('en-GB', {
 
 const SLICE_COLORS = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5']
 
-export default async function InvestPage() {
+export default async function InvestPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  // Opened from the Add sheet: open the matching form.
+  const { add } = await searchParams
   const { member, household } = await requireSession()
   const db = requireDb()
   const [fx] = await Promise.all([currentRates(db), keepQuotesFresh(db)])
@@ -334,8 +340,8 @@ export default async function InvestPage() {
         )}
         {editable && (
           <div className="grid gap-2 border-t border-line pt-3">
-            <details>
-              <summary className="cursor-pointer text-body-strong text-brand-ink">
+            <details open={add === 'property'}>
+              <summary id="add-property" className="cursor-pointer text-body-strong text-brand-ink">
                 Add a property
               </summary>
               <div className="pt-3">
@@ -347,8 +353,8 @@ export default async function InvestPage() {
                 />
               </div>
             </details>
-            <details>
-              <summary className="cursor-pointer text-body-strong text-brand-ink">
+            <details open={add === 'loan'}>
+              <summary id="add-loan" className="cursor-pointer text-body-strong text-brand-ink">
                 Add a loan
               </summary>
               <div className="pt-3">
@@ -367,7 +373,7 @@ export default async function InvestPage() {
 
       {editable && (
         <Card aria-labelledby="add-title">
-          <details open={accounts.length === 0}>
+          <details open={accounts.length === 0 || add === 'account'}>
             <summary id="add-title" className="cursor-pointer text-body-strong text-brand-ink">
               Add an investment account
             </summary>

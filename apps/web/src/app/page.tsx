@@ -98,7 +98,9 @@ export default async function Home({
     <AppShell household={household.name} current="/">
       <div className="grid gap-0.5">
         <h1 className="font-display text-title">Hi {member.name}</h1>
-        <p className="text-caption text-ink-muted">{todayFormat.format(new Date())}</p>
+        <p className="text-caption text-ink-muted">
+          <span>{household.name}</span> · {todayFormat.format(new Date())}
+        </p>
       </div>
       {waiting > 0 && (
         <Notice tone="warning">

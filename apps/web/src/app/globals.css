@@ -27,6 +27,7 @@
    * list-none.
    */
   summary:not(.list-none) {
+    scroll-margin-top: 4.5rem;
     display: flex;
     align-items: center;
     gap: 0.375rem;
@@ -104,4 +105,19 @@
 }
 [data-hide-amounts] [data-private-hide] {
   display: none !important;
+}
+
+/* The Add sheet slides up from the tab bar. */
+.add-sheet[open] {
+  animation: sheet-up 200ms ease-out;
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .add-sheet[open] {
+    animation: none;
+  }
 }
