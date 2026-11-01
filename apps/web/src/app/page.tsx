@@ -1,4 +1,4 @@
-import { accountLook, biggestMoves, daysSince } from '@hearthside/core'
+import { accountLook, biggestMoves, daysSince, isWealthRange } from '@hearthside/core'
 import {
   Card,
   CategoryIcon,
@@ -53,7 +53,13 @@ const todayFormat = new Intl.DateTimeFormat('en-GB', {
   month: 'long',
 })
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const asked = (await searchParams).range
+  const range = isWealthRange(asked) ? asked : '6m'
   if (!(await currentSession()) && !(await getHousehold(requireDb()))) redirect('/setup')
   const { member, household } = await requireSession()
   if (!member.onboardedAt) redirect('/welcome')
@@ -74,7 +80,7 @@ export default async function Home() {
     latest ? totals(db, member, { month: latest }) : undefined,
     householdCategorySet(db, member.householdId),
     listAccounts(db, member),
-    wealth(db, member, fx.rates),
+    wealth(db, member, fx.rates, new Date(), range),
     latest ? monthlyFlows(db, member, {}, trail) : [],
     accountFreshness(db, member),
   ])
