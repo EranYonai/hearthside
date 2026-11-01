@@ -139,7 +139,7 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
         <div data-private-hide className="grid gap-2">
           <nav
             aria-label="Chart range"
-            className="grid grid-cols-4 gap-1 rounded-md bg-surface-2 p-1"
+            className="inline-flex gap-0.5 justify-self-end rounded-pill bg-surface-2 p-0.5"
           >
             {WEALTH_RANGES.map((r) => (
               <Link
@@ -147,7 +147,7 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
                 href={r.key === '6m' ? '/' : `/?range=${r.key}`}
                 scroll={false}
                 aria-current={r.key === wealth.range ? 'page' : undefined}
-                className="flex min-h-9 items-center justify-center rounded-sm text-caption font-semibold text-ink-muted aria-[current=page]:bg-surface-1 aria-[current=page]:text-ink aria-[current=page]:shadow-card"
+                className="rounded-pill px-2.5 py-0.5 text-[0.75rem] leading-5 font-semibold text-ink-muted aria-[current=page]:bg-surface-1 aria-[current=page]:text-ink aria-[current=page]:shadow-card"
               >
                 {r.label}
               </Link>
