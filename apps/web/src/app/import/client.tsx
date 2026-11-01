@@ -494,7 +494,8 @@ export function SupportedExports() {
 }
 
 /** For accounts with no statement file yet; most people never need it. */
-export function AccountForm() {
+export function AccountForm({ doneHref }: { doneHref?: string } = {}) {
+  const router = useRouter()
   const [name, setName] = useState('')
   const [kind, setKind] = useState<AccountOption['kind']>('card')
   const [visibility, setVisibility] = useState<'household' | 'private'>('household')
@@ -506,7 +507,11 @@ export function AccountForm() {
         e.preventDefault()
         run(
           () => createAccountAction({ name, kind, visibility }),
-          () => setName(''),
+          () => {
+            setName('')
+            // Opened from the Add sheet: close the form once it's done.
+            if (doneHref) router.replace(doneHref, { scroll: false })
+          },
         )
       }}
     >

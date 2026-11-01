@@ -12,19 +12,19 @@ const ACTIONS = [
     hint: 'A statement or a holdings file',
   },
   {
-    href: '/accounts?add=1#add-title',
+    href: '/accounts?add=1',
     icon: Wallet,
     label: 'Add an account',
     hint: 'A bank account or card, by hand',
   },
   {
-    href: '/invest?add=account#add-title',
+    href: '/invest?add=account',
     icon: TrendingUp,
     label: 'Add an investment account',
     hint: 'Then its holdings',
   },
-  { href: '/invest?add=property#add-property', icon: Building2, label: 'Add a property' },
-  { href: '/invest?add=loan#add-loan', icon: HandCoins, label: 'Add a loan' },
+  { href: '/invest?add=property', icon: Building2, label: 'Add a property' },
+  { href: '/invest?add=loan', icon: HandCoins, label: 'Add a loan' },
 ]
 
 /** The middle of the tab bar: one place to bring things in. */

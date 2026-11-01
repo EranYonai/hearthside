@@ -324,8 +324,14 @@ test('dropping a card statement picks or creates its account and imports it', as
   await expect(owner.getByText('Also filed 1 other “Corner Bakery” transactions.')).toBeVisible()
   await owner.getByText('More filters').click()
   await owner.getByRole('combobox', { name: 'Category', exact: true }).selectOption('groceries')
-  await owner.getByRole('button', { name: 'Filter' }).click()
+  // Picking a filter applies it; there's no Filter button.
   await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(2)
+  // Typing applies after a short pause, and the field keeps focus.
+  const search = owner.getByRole('searchbox', { name: 'Search' })
+  await search.pressSequentially('Bakery')
+  await expect(owner).toHaveURL(/q=Bakery/)
+  await expect(search).toBeFocused()
+  await expect(search).toHaveValue('Bakery')
 
   await owner.goto('/')
   await expect(owner.getByLabel('Spent in October')).toContainText('Groceries')
@@ -456,6 +462,15 @@ test('the year view shows money in and out and each category', async () => {
   // Settings sits behind your initial at the top.
   await owner.getByRole('banner').getByRole('link', { name: 'Settings' }).click()
   await expect(owner.getByRole('heading', { name: 'Settings' })).toBeVisible()
+  // Add forms open from the Add sheet only, and close with Cancel.
+  await owner.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Add' }).click()
+  await owner
+    .getByRole('dialog', { name: 'Add' })
+    .getByRole('link', { name: /^Add an account/ })
+    .click()
+  await expect(owner.getByRole('heading', { name: 'Add an account' })).toBeVisible()
+  await owner.getByRole('link', { name: 'Cancel' }).click()
+  await expect(owner.getByRole('heading', { name: 'Add an account' })).toHaveCount(0)
   // One statement can't show a repeating payment yet.
   await owner.goto('/recurring')
   await expect(owner.getByRole('heading', { name: 'Fixed costs' })).toBeVisible()
@@ -667,7 +682,11 @@ test('property and loans count toward what the home owns', async () => {
   await expect(estate).toContainText('Add a home you own')
 
   // Synthetic names and numbers only.
-  await estate.getByText('Add a property').click()
+  await owner.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Add' }).click()
+  await owner
+    .getByRole('dialog', { name: 'Add' })
+    .getByRole('link', { name: 'Add a property' })
+    .click()
   const addProperty = owner.getByRole('form', { name: 'Add a property' })
   await addProperty.getByLabel('Name').fill('Test flat')
   await addProperty.getByLabel('Currency').selectOption('USD')

@@ -3,6 +3,7 @@ import { formatMoney, HOLDING_CURRENCIES, loanKindLabel } from '@hearthside/core
 import { Building2, ChartLine, ChevronRight, HandCoins, Lightbulb, Lock } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { AddPanel } from '@/components/AddPanel'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
 import { DISPLAY_CURRENCIES } from '@/lib/onboarding'
@@ -94,6 +95,37 @@ export default async function InvestPage({
           </span>
         )}
       </div>
+
+      {editable && add === 'property' && (
+        <AddPanel id="add-property" title="Add a property" cancelHref="/invest">
+          <PropertyForm
+            people={owners}
+            selfId={member.id}
+            defaultCurrency={defaultCurrency}
+            today={now}
+          />
+        </AddPanel>
+      )}
+      {editable && add === 'loan' && (
+        <AddPanel id="add-loan" title="Add a loan" cancelHref="/invest">
+          <LoanForm
+            properties={estate.properties.map((p) => ({ id: p.row.id, name: p.row.name }))}
+            people={owners}
+            selfId={member.id}
+            defaultCurrency={defaultCurrency}
+            today={now}
+          />
+        </AddPanel>
+      )}
+      {editable && (add === 'account' || accounts.length === 0) && (
+        <AddPanel id="add-title" title="Add an investment account" cancelHref="/invest">
+          <InvestmentAccountForm
+            people={owners}
+            selfId={member.id}
+            defaultCurrency={member.displayCurrency}
+          />
+        </AddPanel>
+      )}
 
       {accounts.length === 0 ? (
         <Card>
@@ -250,8 +282,8 @@ export default async function InvestPage({
         </h2>
         {estate.properties.length === 0 && estate.loans.length === 0 ? (
           <p className="pb-2 text-ink-muted">
-            Add a home you own and the loans on it. Property counts toward what you own, loans are
-            taken off, and rent and payments in your bank are tied to them.
+            Add a home you own and the loans on it with the + button. Property counts toward what
+            you own, loans are taken off, and rent and payments in your bank are tied to them.
           </p>
         ) : (
           <ul data-testid="estate-list">
@@ -338,55 +370,7 @@ export default async function InvestPage({
             ))}
           </ul>
         )}
-        {editable && (
-          <div className="grid gap-2 border-t border-line pt-3">
-            <details open={add === 'property'}>
-              <summary id="add-property" className="cursor-pointer text-body-strong text-brand-ink">
-                Add a property
-              </summary>
-              <div className="pt-3">
-                <PropertyForm
-                  people={owners}
-                  selfId={member.id}
-                  defaultCurrency={defaultCurrency}
-                  today={now}
-                />
-              </div>
-            </details>
-            <details open={add === 'loan'}>
-              <summary id="add-loan" className="cursor-pointer text-body-strong text-brand-ink">
-                Add a loan
-              </summary>
-              <div className="pt-3">
-                <LoanForm
-                  properties={estate.properties.map((p) => ({ id: p.row.id, name: p.row.name }))}
-                  people={owners}
-                  selfId={member.id}
-                  defaultCurrency={defaultCurrency}
-                  today={now}
-                />
-              </div>
-            </details>
-          </div>
-        )}
       </Card>
-
-      {editable && (
-        <Card aria-labelledby="add-title">
-          <details open={accounts.length === 0 || add === 'account'}>
-            <summary id="add-title" className="cursor-pointer text-body-strong text-brand-ink">
-              Add an investment account
-            </summary>
-            <div className="pt-3">
-              <InvestmentAccountForm
-                people={owners}
-                selfId={member.id}
-                defaultCurrency={member.displayCurrency}
-              />
-            </div>
-          </details>
-        </Card>
-      )}
     </AppShell>
   )
 }

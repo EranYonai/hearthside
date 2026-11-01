@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, FileUp, Pencil } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AccountCard } from '@/components/AccountCard'
+import { AddPanel } from '@/components/AddPanel'
 import { AppShell } from '@/components/AppShell'
 import { requireDb } from '@/lib/db'
 import { isMonth, monthName, shiftMonth } from '@/lib/month'
@@ -63,6 +64,11 @@ export default async function AccountsPage({
           <ChevronRight aria-hidden />
         </Link>
       </div>
+      {editable && params.add === '1' && (
+        <AddPanel id="add-title" title="Add an account" cancelHref="/accounts">
+          <AccountForm doneHref="/accounts" />
+        </AddPanel>
+      )}
 
       {summaries.length === 0 && invest.accounts.length === 0 && (
         <Card>
@@ -199,19 +205,6 @@ export default async function AccountsPage({
               )
             })}
           </ul>
-        </Card>
-      )}
-
-      {editable && (
-        <Card aria-labelledby="add-title">
-          <details open={params.add === '1'}>
-            <summary id="add-title" className="cursor-pointer text-body-strong text-brand-ink">
-              Add an account by hand
-            </summary>
-            <div className="pt-3">
-              <AccountForm />
-            </div>
-          </details>
         </Card>
       )}
     </AppShell>

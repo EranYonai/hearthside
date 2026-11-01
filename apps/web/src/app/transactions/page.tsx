@@ -29,7 +29,7 @@ import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
 import { householdCategorySet } from '@/server/categories'
 import { listBudgets } from '@/server/budgets'
-import { CategorisedRow, CategorizeNow, type TxView } from './client'
+import { AutoFilterForm, CategorisedRow, CategorizeNow, type TxView } from './client'
 import { ViewSwitch, YearView } from './year'
 
 export const metadata: Metadata = { title: 'Transactions · Hearthside' }
@@ -277,10 +277,10 @@ export default async function TransactionsPage({
         </p>
       )}
 
-      <form className="grid gap-2" action="/transactions" role="search">
+      <AutoFilterForm>
         <input type="hidden" name="month" value={month} />
         {type && <input type="hidden" name="type" value={type} />}
-        <div className="flex gap-2">
+        <div className="flex">
           <label className="relative min-w-0 flex-1">
             <span className="sr-only">Search</span>
             <Search
@@ -296,9 +296,6 @@ export default async function TransactionsPage({
               placeholder="Search descriptions"
             />
           </label>
-          <button type="submit" className={buttonClasses('secondary')}>
-            Filter
-          </button>
         </div>
         <details className="group" open={narrowed > 0}>
           <summary className="cursor-pointer text-body-strong text-brand-ink">
@@ -346,7 +343,7 @@ export default async function TransactionsPage({
             </label>
           </div>
         </details>
-      </form>
+      </AutoFilterForm>
 
       <Card aria-labelledby="list-title">
         <div className="flex flex-wrap items-center justify-between gap-2">

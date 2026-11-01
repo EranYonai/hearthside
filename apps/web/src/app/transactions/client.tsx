@@ -2,7 +2,8 @@
 
 import type { CategoryIconName, Minor } from '@hearthside/core'
 import { Button, CategoryIcon, Notice, TransactionRow, type Category } from '@hearthside/ui'
-import { useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useAction } from '@/lib/use-action'
 import { categorizeNowAction, dismissAlertAction, setCategoryAction } from './actions'
 
@@ -180,5 +181,42 @@ function EditableRow({ tx, options }: { tx: TxView; options: readonly CategoryCh
         </div>
       </dialog>
     </TransactionRow>
+  )
+}
+
+/**
+ * The Activity filters: a change applies at once (a pick right away, typing after a short pause),
+ * without a Filter button. Enter applies typing straight away.
+ */
+export function AutoFilterForm({ children }: { children: ReactNode }) {
+  const router = useRouter()
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const apply = (form: HTMLFormElement) => {
+    clearTimeout(timer.current)
+    const params = new URLSearchParams()
+    for (const [key, value] of new FormData(form)) {
+      if (typeof value === 'string' && value !== '') params.set(key, value)
+    }
+    router.replace(`/transactions?${params}`, { scroll: false })
+  }
+  useEffect(() => () => clearTimeout(timer.current), [])
+  return (
+    <form
+      className="grid gap-2"
+      action="/transactions"
+      role="search"
+      onSubmit={(e) => {
+        e.preventDefault()
+        apply(e.currentTarget)
+      }}
+      onChange={(e) => {
+        const form = e.currentTarget
+        clearTimeout(timer.current)
+        if ((e.target as HTMLElement).tagName === 'SELECT') apply(form)
+        else timer.current = setTimeout(() => apply(form), 450)
+      }}
+    >
+      {children}
+    </form>
   )
 }
