@@ -777,6 +777,30 @@ function overflowReport() {
   return { width, scrollWidth: document.documentElement.scrollWidth, wider: wider.slice(0, 8) }
 }
 
+// Near the end, so its account does not change the counts the tests above check.
+test('rows can be left out of an import, and stay out next time', async () => {
+  const file = [
+    'Card statement for card ending 5930',
+    'תאריך עסקה,שם בית העסק,סכום חיוב',
+    '11/10/2026,Book Nook,30.00,',
+    '12/10/2026,Mistaken Charge,99.00,',
+    '13/10/2026,Tea House,12.00,',
+  ].join('\n')
+  const preview = await drop(owner, 'other-card.csv', Buffer.from(file), 'text/csv')
+  await expect(preview).toContainText('3 new')
+  await preview.getByRole('button', { name: 'Leave Mistaken Charge out of the import' }).click()
+  await expect(preview).toContainText('2 new · 1 left out')
+  await owner.getByRole('button', { name: 'Import 2 transactions' }).click()
+  await expect(owner.getByText('Added 2 transactions to Card ·5930, left out 1.')).toBeVisible()
+
+  // The same file again remembers the row that was left out; it can be put back.
+  const again = await drop(owner, 'other-card.csv', Buffer.from(file), 'text/csv')
+  await expect(again).toContainText('0 new · 2 already here · 1 left out')
+  await expect(owner.getByRole('button', { name: 'Import 0 transactions' })).toBeDisabled()
+  await again.getByRole('button', { name: 'Put Mistaken Charge back in the import' }).click()
+  await expect(owner.getByRole('button', { name: 'Import 1 transaction' })).toBeEnabled()
+})
+
 test('settings show the app version and sign-in activity', async () => {
   await owner.goto('/settings')
   await expect(owner.getByTestId('app-version')).toHaveText(/^Hearthside v\d+\.\d+\.\d+/)
