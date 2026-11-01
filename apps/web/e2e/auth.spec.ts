@@ -396,6 +396,19 @@ test('a bank statement PDF imports by column position', async () => {
   await expect(owner.getByText('Saved.')).toBeVisible()
   await expect(owner.getByRole('heading', { name: 'Household bank' })).toBeVisible()
 
+  // The statement's running balance is the account's balance, and it can be typed in instead.
+  const balance = owner.getByRole('region', { name: 'Balance' })
+  await expect(balance).toContainText('₪14,500')
+  await expect(balance).toContainText('From the statement')
+  await balance.getByLabel('Balance today').fill('15,000')
+  await balance.getByRole('button', { name: 'Update balance' }).click()
+  await expect(balance).toContainText('₪15,000')
+  await expect(balance).toContainText('Typed in on')
+
+  // Home adds it to what the home owns; with no exchange rate to USD it says so.
+  await owner.goto('/')
+  await expect(owner.getByTestId('wealth')).toContainText('Amounts in ILS are left out')
+
   // Undo removes what that import added.
   await owner.goto('/import')
   await owner.getByRole('button', { name: 'Undo import ops.pdf' }).click()
@@ -547,6 +560,68 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await expect(owner.getByText('Interactive Brokers ·4321: added 1')).toBeVisible()
 })
 
+test('property and loans count toward what the home owns', async () => {
+  await owner.goto('/invest')
+  const estate = owner.getByTestId('estate')
+  await expect(estate).toContainText('Add a home you own')
+
+  // Synthetic names and numbers only.
+  await estate.getByText('Add a property').click()
+  const addProperty = owner.getByRole('form', { name: 'Add a property' })
+  await addProperty.getByLabel('Name').fill('Test flat')
+  await addProperty.getByLabel('Currency').selectOption('USD')
+  await addProperty.getByLabel('What it’s worth').fill('500,000')
+  await addProperty.getByLabel('Price paid (optional)').fill('400,000')
+  await addProperty.getByLabel('Bought on').fill('2020-01-01')
+  await addProperty.getByRole('button', { name: 'Add property' }).click()
+  await expect(owner.getByRole('heading', { name: 'Test flat' })).toBeVisible()
+  await expect(owner.getByTestId('property-value')).toContainText('$500,000')
+  await expect(owner.getByTestId('property-equity')).toContainText('$500,000')
+
+  await owner.getByRole('link', { name: 'Investments' }).click()
+  await estate.getByText('Add a loan').click()
+  const addLoan = owner.getByRole('form', { name: 'Add a loan' })
+  await addLoan.getByLabel('Name').fill('Test mortgage')
+  await addLoan.getByLabel('Currency').selectOption('USD')
+  await addLoan.getByLabel('Amount borrowed').fill('200,000')
+  await addLoan.getByLabel('Yearly rate, %').fill('4')
+  await addLoan.getByLabel('Term, years').fill('25')
+  // Started today, so nothing is paid back yet.
+  await addLoan.getByLabel('Started on').fill(new Date().toISOString().slice(0, 10))
+  await addLoan.getByLabel('Secured on (optional)').selectOption({ label: 'Test flat' })
+  await addLoan.getByRole('button', { name: 'Add loan' }).click()
+  await expect(owner.getByRole('heading', { name: 'Test mortgage' })).toBeVisible()
+  await expect(owner.getByTestId('loan-balance')).toContainText('$200,000')
+  // 200,000 over 25 years at 4%.
+  await expect(owner.getByTestId('loan-payment')).toContainText('$1,056')
+
+  // The lender's statement puts the balance right.
+  await owner.getByText('Correct the balance').click()
+  await owner.getByLabel('Balance the lender reports').fill('199,000')
+  await owner.getByRole('button', { name: 'Update balance' }).click()
+  await expect(owner.getByTestId('loan-balance')).toContainText('$199,000')
+
+  await owner.getByRole('link', { name: 'Test flat' }).click()
+  await expect(owner.getByTestId('property-equity')).toContainText('$301,000')
+
+  // Home: what we own less what we owe.
+  await owner.goto('/')
+  await expect(owner.getByTestId('wealth-net')).toContainText('$199,000 in loans')
+  await expect(owner.getByTestId('wealth-owed')).toContainText('Test mortgage')
+  await expect(owner.getByTestId('wealth-accounts')).toContainText('Test flat')
+
+  // Hide numbers masks the new amounts too, then shows them again.
+  await owner.getByRole('button', { name: 'Hide numbers' }).click()
+  await expect(owner.getByTestId('wealth-owed')).not.toContainText('$199,000', {
+    useInnerText: true,
+  })
+  await expect(owner.getByTestId('wealth-net')).not.toContainText('$199,000', {
+    useInnerText: true,
+  })
+  await owner.getByRole('button', { name: 'Show numbers' }).click()
+  await expect(owner.getByTestId('wealth-owed')).toContainText('$199,000')
+})
+
 test('no page is wider than a phone screen', async ({ browser }) => {
   // The owner's session on a phone: the bottom bar and every page must fit from 320px up.
   const storageState = await owner.context().storageState()
@@ -560,11 +635,16 @@ test('no page is wider than a phone screen', async ({ browser }) => {
     )
   await owner.goto(invest!)
   const holding = await owner.locator('a[href^="/invest/holding/"]').first().getAttribute('href')
+  await owner.goto('/invest')
+  const property = await owner.locator('a[href^="/invest/property/"]').first().getAttribute('href')
+  const loan = await owner.locator('a[href^="/invest/loan/"]').first().getAttribute('href')
   const paths = [
     '/',
     '/invest',
     invest!,
     holding!,
+    property!,
+    loan!,
     '/invest/checkup',
     '/invest/trends',
     '/transactions',

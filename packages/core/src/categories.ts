@@ -15,6 +15,7 @@ export const CATEGORIES = [
   { slug: 'savings', label: 'Savings' },
   { slug: 'transfer', label: 'Transfers' },
   { slug: 'pension', label: 'Pension' },
+  { slug: 'loans', label: 'Loans' },
   { slug: 'other', label: 'Other' },
 ] as const
 
@@ -35,11 +36,11 @@ export function countsAsSpending(category: string | null | undefined): boolean {
   return category !== 'transfer' && category !== 'savings'
 }
 
-/** Icons a household category can use; the first 16 are the built-in categories' own. */
+/** Icons a household category can use; the first 17 are the built-in categories' own. */
 // prettier-ignore
 export const CATEGORY_ICON_NAMES = [
   'groceries', 'eating-out', 'home', 'bills', 'car', 'transport', 'kids', 'health', 'shopping',
-  'subscriptions', 'travel', 'income', 'savings', 'transfer', 'pension', 'other',
+  'subscriptions', 'travel', 'income', 'savings', 'transfer', 'pension', 'loans', 'other',
   'pets', 'gifts', 'education', 'sport', 'fun', 'beauty', 'work', 'charity',
 ] as const
 

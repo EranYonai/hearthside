@@ -90,6 +90,7 @@ const DESCRIPTIONS: Record<CategorySlug, string> = {
   savings: 'to savings',
   transfer: 'between accounts, to people',
   pension: 'pension funds',
+  loans: 'mortgage, loan repayments',
   other: 'anything else',
 }
 

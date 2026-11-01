@@ -11,6 +11,7 @@ export const FIELDS = [
   'notes',
   'reference',
   'last4',
+  'balance',
 ] as const
 export type Field = (typeof FIELDS)[number]
 
@@ -71,6 +72,7 @@ const ALIASES: Record<Field, string[]> = {
     'card number',
     'card',
   ],
+  balance: ['יתרה בשח', 'יתרה', 'running balance', 'balance'],
 }
 
 export function normalizeHeader(value: string): string {

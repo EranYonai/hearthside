@@ -13,9 +13,12 @@ export async function register() {
   startSnapshots(requireDb())
   // Link card bills paid from the bank, for data imported before this was tracked.
   const { linkAllCardBills } = await import('./server/ledger')
-  void linkAllCardBills(requireDb()).catch((e: unknown) =>
-    console.error(
-      JSON.stringify({ level: 'error', msg: 'card bill linking failed', error: String(e) }),
-    ),
-  )
+  const { linkAllLoansAndRent } = await import('./server/loans')
+  void linkAllCardBills(requireDb())
+    .then(() => linkAllLoansAndRent(requireDb()))
+    .catch((e: unknown) =>
+      console.error(
+        JSON.stringify({ level: 'error', msg: 'card bill linking failed', error: String(e) }),
+      ),
+    )
 }

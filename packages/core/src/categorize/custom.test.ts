@@ -105,7 +105,7 @@ describe('household categories in the categorizer', () => {
       string,
       string | null
     >
-    expect(Object.keys(big)).toHaveLength(31)
+    expect(Object.keys(big)).toHaveLength(32)
     expect(Object.values(big).every((v) => v === null)).toBe(true)
   })
 })
