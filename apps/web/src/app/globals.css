@@ -56,6 +56,7 @@
 }
 [data-hide-amounts] [data-private]::after {
   content: attr(data-mask);
+  filter: blur(0.08em);
   user-select: none;
 }
 [data-hide-amounts] [data-private-hide] {
