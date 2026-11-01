@@ -322,6 +322,7 @@ test('dropping a card statement picks or creates its account and imports it', as
     .click()
   await owner.getByRole('dialog').getByRole('button', { name: 'Groceries' }).click()
   await expect(owner.getByText('Also filed 1 other “Corner Bakery” transactions.')).toBeVisible()
+  await owner.getByText('More filters').click()
   await owner.getByRole('combobox', { name: 'Category', exact: true }).selectOption('groceries')
   await owner.getByRole('button', { name: 'Filter' }).click()
   await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(2)

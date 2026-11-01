@@ -82,7 +82,7 @@ export function TransactionRow({
             aria-label={selectLabel}
             className={cx(
               row,
-              'w-full rounded-md text-start hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+              'w-full rounded-md text-start hover:bg-surface-2 active:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
             )}
           >
             {body}

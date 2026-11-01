@@ -84,7 +84,12 @@ export function BackLink({ href, label }: { href?: string; label?: string }) {
 
   const target = state.prev?.url ?? href
   if (!target) return null
-  const name = state.prev ? nameOf(state.prev) : (label ?? 'Back')
+  const pathOf = (url: string) => url.split('?')[0]
+  // The page's own name for its parent (an account's name) beats a generic title.
+  const name =
+    state.prev && !(href && label && pathOf(state.prev.url) === pathOf(href))
+      ? nameOf(state.prev)
+      : (label ?? 'Back')
 
   const onClick = (e: MouseEvent<HTMLAnchorElement>) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey) return

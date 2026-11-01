@@ -19,7 +19,7 @@ const variants: Record<ButtonVariant, string> = {
 export function buttonClasses(variant: ButtonVariant = 'primary', block = false): string {
   return cx(
     'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border px-4',
-    'font-body text-body-strong font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none',
+    'font-body text-body-strong font-semibold transition-[color,background-color,border-color,scale] duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none',
     'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
     'disabled:cursor-not-allowed disabled:border-transparent disabled:bg-surface-2 disabled:text-ink-faint',
     '[&_svg]:size-5',

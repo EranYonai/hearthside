@@ -162,7 +162,7 @@ export default async function HoldingPage({
                     'grid min-h-11 min-w-11 place-items-center rounded-pill px-2 text-caption font-semibold',
                     r.key === range
                       ? 'bg-brand text-on-brand'
-                      : 'text-ink-muted hover:bg-surface-2',
+                      : 'text-ink-muted hover:bg-surface-2 active:bg-surface-2',
                   )}
                 >
                   {r.label}

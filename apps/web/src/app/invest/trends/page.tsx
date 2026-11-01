@@ -55,7 +55,9 @@ export default async function TrendsPage({
             aria-current={r.key === range ? 'page' : undefined}
             className={cx(
               'grid min-h-11 min-w-11 place-items-center rounded-pill px-3 text-caption font-semibold',
-              r.key === range ? 'bg-brand text-on-brand' : 'text-ink-muted hover:bg-surface-2',
+              r.key === range
+                ? 'bg-brand text-on-brand'
+                : 'text-ink-muted hover:bg-surface-2 active:bg-surface-2',
             )}
           >
             {r.label}
