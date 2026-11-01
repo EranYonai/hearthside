@@ -311,6 +311,56 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
     expect(empty[0]!.proposed.name).toBe('Max ·9')
   })
 
+  it('leaves out rows taken out of an import, also on the next import', async () => {
+    const { alex } = await home()
+    const rows = [
+      ['תאריך עסקה', 'שם בית העסק', 'סכום חיוב'],
+      ['01/10/2026', 'Shop A', '10'],
+      ['02/10/2026', 'Shop B', '20'],
+      ['03/10/2026', 'Shop C', '30'],
+    ]
+    const parsed = parseStatement([{ name: 'S', rows }], { spendingIsPositive: true }).transactions
+    const source = { provider: 'cal' as const, kind: 'card' as const, network: null, last4: '4321' }
+    const plan = await planImport(db, alex, source, parsed)
+    const shopB = plan[0]!.rows[1]!.dedupKey
+
+    const [first] = await commitPlan(db, alex, plan, {
+      fileName: 'c.xlsx',
+      fileHash: 'c1',
+      skipped: 0,
+      exclude: new Set([shopB]),
+    })
+    expect([first!.batch.added, first!.batch.removed, first!.batch.duplicates]).toEqual([2, 1, 0])
+    const account = first!.account
+    const listed = await listTransactions(db, alex, { month: '2026-10', accountId: account.id })
+    expect(listed.map((t) => t.t.description).sort()).toEqual(['Shop A', 'Shop C'])
+
+    // The next import of the same rows marks it as left out and keeps it out by default.
+    const again = await planImport(db, alex, source, parsed)
+    expect(again[0]!.rows.map((r) => [r.duplicate, !!r.excluded])).toEqual([
+      [true, false],
+      [false, true],
+      [true, false],
+    ])
+    const [second] = await commitPlan(db, alex, again, {
+      fileName: 'c.xlsx',
+      fileHash: 'c2',
+      skipped: 0,
+    })
+    expect([second!.batch.added, second!.batch.removed]).toEqual([0, 1])
+
+    // Putting it back imports it and forgets that it was left out.
+    const [third] = await commitPlan(db, alex, again, {
+      fileName: 'c.xlsx',
+      fileHash: 'c3',
+      skipped: 0,
+      exclude: new Set(),
+    })
+    expect([third!.batch.added, third!.batch.removed]).toEqual([1, 0])
+    const last = await planImport(db, alex, source, parsed)
+    expect(last[0]!.rows.every((r) => r.duplicate && !r.excluded)).toBe(true)
+  })
+
   it('links accounts to the member who holds them', async () => {
     const { alex, sam, robin } = await home()
     // Alex imports Sam's card, privately.

@@ -10,6 +10,8 @@ moves the Unreleased notes under the new version.
 
 ### Added
 
+- Leave rows out of an import: swipe a row left in the preview (or use the × on a computer).
+  The next import of the same file remembers it, and "Put back" brings it in.
 - Property and loans on the Invest tab: what a property is worth, what a loan still owes on its
   schedule, and recurring records tied to them. The home total is now what the home owns less
   what it owes. Payments keep counting as spending, under a new Loans category.

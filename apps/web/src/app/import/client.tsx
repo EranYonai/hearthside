@@ -1,15 +1,7 @@
 'use client'
 
 import type { Minor } from '@hearthside/core'
-import {
-  Button,
-  Card,
-  Notice,
-  TextField,
-  TransactionList,
-  TransactionRow,
-  cx,
-} from '@hearthside/ui'
+import { Button, Card, Notice, TextField, TransactionList, cx } from '@hearthside/ui'
 import { FileUp, Plus, Undo2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -17,6 +9,10 @@ import { useRef, useState } from 'react'
 import { AccountCard } from '@/components/AccountCard'
 import { useAction } from '@/lib/use-action'
 import { createAccountAction, undoImportAction } from './actions'
+import { ImportRow } from './ImportRow'
+
+/** Rows shown per account before "Show all". */
+const SHOWN = 50
 
 const selectClass = 'min-h-11 w-full rounded-md border border-line bg-surface-2 px-3'
 
@@ -37,12 +33,16 @@ interface Group {
   fresh: number
   duplicates: number
   sample: {
+    /** Stable id of the row, used to take it out of the import. */
+    key: string
     occurredOn: string
     description: string
     amountMinor: Minor
     original: { minor: Minor; currency: string } | null
     installment: { n: number; total: number } | null
     duplicate: boolean
+    /** Taken out of an earlier import; stays out unless put back. */
+    removed: boolean
   }[]
 }
 
@@ -79,6 +79,7 @@ type Done =
       type: 'statement'
       added: number
       duplicates: number
+      removed?: number
       accounts: string[]
       month: string | null
     }
@@ -132,6 +133,17 @@ export function ImportForm({
   const [done, setDone] = useState<Done>()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState<'check' | 'import'>()
+  /** Rows the person took out of this import, by key. */
+  const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set())
+  const [showAll, setShowAll] = useState<ReadonlySet<number>>(new Set())
+
+  const toggle = (key: string) =>
+    setRemoved((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   const send = async (f: File, target: string, commit: boolean) => {
     const form = new FormData()
@@ -140,6 +152,7 @@ export function ImportForm({
     if (commit) form.set('commit', '1')
     if (commit && holderId) form.set('holderId', holderId)
     if (commit && !removeMissing) form.set('removeMissing', '0')
+    if (commit && preview?.type === 'statement') form.set('exclude', JSON.stringify([...removed]))
     setBusy(commit ? 'import' : 'check')
     setError(undefined)
     try {
@@ -151,7 +164,21 @@ export function ImportForm({
         setAccountId('')
         if (input.current) input.current.value = ''
         router.refresh()
-      } else setPreview(body as unknown as Preview)
+      } else {
+        const next = body as unknown as Preview | HoldingsPreview
+        setPreview(next)
+        setShowAll(new Set())
+        // Keep what was taken out when only the target account changed.
+        setRemoved(
+          (prev) =>
+            new Set([
+              ...prev,
+              ...(next.type === 'statement'
+                ? next.groups.flatMap((g) => g.sample.filter((t) => t.removed).map((t) => t.key))
+                : []),
+            ]),
+        )
+      }
     } catch (err) {
       setError((err as Error).message)
       if (!commit) setPreview(undefined)
@@ -164,13 +191,15 @@ export function ImportForm({
     if (!f) return
     setFile(f)
     setDone(undefined)
+    setRemoved(new Set())
     setAccountId('')
     void send(f, '', false)
   }
 
   const statement = preview?.type === 'statement' ? preview : undefined
   const held = preview?.type === 'holdings' ? preview : undefined
-  const fresh = statement?.groups.reduce((n, g) => n + g.fresh, 0) ?? 0
+  const leftOut = (g: Group) => g.sample.filter((t) => !t.duplicate && removed.has(t.key)).length
+  const fresh = statement?.groups.reduce((n, g) => n + g.fresh - leftOut(g), 0) ?? 0
   const created = statement
     ? statement.groups.filter((g) => g.account.isNew).map((g) => g.account.name)
     : held?.account.isNew
@@ -239,27 +268,43 @@ export function ImportForm({
                   {...(g.account.isNew ? { note: 'New' } : {})}
                 />
                 <p>
-                  <span className="text-body-strong">{g.fresh} new</span>
+                  <span className="text-body-strong">{g.fresh - leftOut(g)} new</span>
                   {g.duplicates > 0 && ` · ${g.duplicates} already here`}
+                  {leftOut(g) > 0 && ` · ${leftOut(g)} left out`}
                   <span className="block text-caption text-ink-muted">
                     {g.account.isNew ? `Creates ${g.account.name}` : `Into ${g.account.name}`}
                   </span>
                 </p>
               </div>
+              {g.fresh > 0 && (
+                <p className="text-caption text-ink-muted">
+                  Something you don’t want? Swipe it left, or use the ×, to leave it out.
+                </p>
+              )}
               <TransactionList>
-                {g.sample.map((t, j) => (
-                  <TransactionRow
-                    key={j}
-                    category="other"
+                {(showAll.has(i) ? g.sample : g.sample.slice(0, SHOWN)).map((t) => (
+                  <ImportRow
+                    key={t.key}
                     merchant={t.description}
-                    meta={`${t.duplicate ? 'Already here · ' : ''}${day.format(new Date(t.occurredOn))}`}
+                    meta={day.format(new Date(t.occurredOn))}
                     minor={t.amountMinor}
-                    {...(t.original ? { original: t.original } : {})}
-                    {...(t.installment ? { installment: t.installment } : {})}
-                    className={t.duplicate ? 'opacity-60' : undefined}
+                    original={t.original}
+                    installment={t.installment}
+                    duplicate={t.duplicate}
+                    removed={!t.duplicate && removed.has(t.key)}
+                    onToggle={() => toggle(t.key)}
                   />
                 ))}
               </TransactionList>
+              {g.sample.length > SHOWN && !showAll.has(i) && (
+                <Button
+                  variant="ghost"
+                  className="justify-self-start"
+                  onClick={() => setShowAll((prev) => new Set(prev).add(i))}
+                >
+                  Show all {g.sample.length}
+                </Button>
+              )}
               {g.total > g.sample.length && (
                 <p className="text-caption text-ink-muted">
                   Showing the first {g.sample.length} of {g.total}.
@@ -360,7 +405,8 @@ export function ImportForm({
       {done?.type === 'statement' && (
         <Notice tone="positive">
           Added {done.added} transactions to {done.accounts.join(', ')}
-          {done.duplicates > 0 ? `, skipped ${done.duplicates} already here` : ''}.{' '}
+          {done.duplicates > 0 ? `, skipped ${done.duplicates} already here` : ''}
+          {done.removed ? `, left out ${done.removed}` : ''}.{' '}
           <Link
             className="text-body-strong underline"
             href={done.month ? `/transactions?month=${done.month}` : '/transactions'}
