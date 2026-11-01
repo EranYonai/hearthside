@@ -807,6 +807,49 @@ export async function accountSummaries(db: Conn, member: MemberRow, month: strin
   return [...byAccount.values()]
 }
 
+/** Each visible account's newest transaction date and last import, oldest data first. */
+export async function accountFreshness(db: Conn, member: MemberRow) {
+  const [list, newest, imported] = await Promise.all([
+    db
+      .select({ id: accounts.id, name: accounts.name, kind: accounts.kind })
+      .from(accounts)
+      .where(visibleTo(member))
+      .orderBy(accounts.createdAt),
+    db
+      .select({
+        id: transactions.accountId,
+        on: sql<string>`max(${transactions.occurredOn})::text`,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(accounts.id, transactions.accountId))
+      .where(visibleTo(member))
+      .groupBy(transactions.accountId),
+    db
+      .select({
+        id: importBatches.accountId,
+        at: sql<string>`max(${importBatches.createdAt})::text`,
+      })
+      .from(importBatches)
+      .innerJoin(accounts, eq(accounts.id, importBatches.accountId))
+      .where(visibleTo(member))
+      .groupBy(importBatches.accountId),
+  ])
+  const newestBy = new Map(newest.map((r) => [r.id, r.on]))
+  const importedBy = new Map(imported.map((r) => [r.id, r.at]))
+  const rows = list.map((a) => ({
+    ...a,
+    newest: newestBy.get(a.id) ?? null,
+    importedAt: importedBy.get(a.id) ?? null,
+  }))
+  return rows
+    .map((r) => ({
+      ...r,
+      newest: r.newest?.slice(0, 10) ?? null,
+      importedAt: r.importedAt ? new Date(r.importedAt) : null,
+    }))
+    .sort((a, b) => (a.newest ?? '').localeCompare(b.newest ?? ''))
+}
+
 /** Months that have transactions, newest first. */
 export async function listMonths(db: Conn, member: MemberRow) {
   const rows = await db

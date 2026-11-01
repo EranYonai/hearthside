@@ -20,6 +20,7 @@ import {
   listTransactions,
   monthlySpending,
   monthlyFlows,
+  accountFreshness,
   monthRange,
   prepareImport,
   setCategory,
@@ -465,6 +466,13 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
     ])
     expect(Object.values(flows[0]!.byCategory).reduce((n, m) => n + m, 0)).toBe(-130000)
     expect(await monthlyFlows(db, alex, {}, [])).toEqual([])
+    // Oldest data first, each with its newest entry and when it was last imported.
+    const fresh = await accountFreshness(db, alex)
+    expect(fresh.map((a) => [a.name, a.newest])).toEqual([
+      ['Card', '2026-10-05'],
+      ['Bank', '2026-10-12'],
+    ])
+    expect(fresh.every((a) => a.importedAt instanceof Date)).toBe(true)
     expect(await listTransactions(db, alex, { month: '2026-10', kind: 'bank' })).toHaveLength(3)
 
     const summary = await accountSummaries(db, alex, '2026-10')

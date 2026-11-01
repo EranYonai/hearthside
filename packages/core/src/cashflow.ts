@@ -92,3 +92,32 @@ export function categoryChanges(
     })
     .sort((a, b) => a.minor - b.minor || a.previous - b.previous)
 }
+
+export interface CategoryMove {
+  category: string
+  minor: Minor
+  previous: Minor
+  /** This month minus last, as spending: positive means more was spent. */
+  change: Minor
+}
+
+/** The categories whose spending moved most between two months, biggest move first. */
+export function biggestMoves(current: MonthFlow, previous: MonthFlow, count = 3): CategoryMove[] {
+  return categoryChanges([current], [previous])
+    .map((c) => ({
+      category: c.category,
+      minor: c.minor,
+      previous: c.previous,
+      change: Math.abs(c.minor) - Math.abs(c.previous),
+    }))
+    .filter((m) => m.change !== 0)
+    .sort((a, b) => Math.abs(b.change) - Math.abs(a.change) || a.category.localeCompare(b.category))
+    .slice(0, count)
+}
+
+/** Whole days from a YYYY-MM-DD date to today (UTC). */
+export function daysSince(on: string, today: Date = new Date()): number {
+  const start = Date.parse(`${on}T00:00:00Z`)
+  const end = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  return Math.max(0, Math.round((end - start) / 86_400_000))
+}

@@ -1,5 +1,14 @@
-import { accountLook } from '@hearthside/core'
-import { Card, Label, MonthBars, Notice, SummaryCard, buttonClasses } from '@hearthside/ui'
+import { accountLook, biggestMoves, daysSince } from '@hearthside/core'
+import {
+  Card,
+  CategoryIcon,
+  Label,
+  MonthBars,
+  Notice,
+  SummaryCard,
+  buttonClasses,
+  type Category,
+} from '@hearthside/ui'
 import { ArrowDownLeft, ArrowUpRight, FileUp, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -9,7 +18,14 @@ import { WealthCard } from '@/components/WealthCard'
 import { requireDb } from '@/lib/db'
 import { householdCategorySet } from '@/server/categories'
 import { currentRates } from '@/server/fx'
-import { canEdit, listAccounts, listMonths, monthlySpending, totals } from '@/server/ledger'
+import {
+  accountFreshness,
+  canEdit,
+  listAccounts,
+  listMonths,
+  monthlyFlows,
+  totals,
+} from '@/server/ledger'
 import { keepQuotesFresh } from '@/server/prices'
 import { getHousehold, isApproved, listMembers } from '@/server/repo'
 import { currentSession, requireSession } from '@/server/session'
@@ -54,13 +70,15 @@ export default async function Home() {
   const solo = people.length === 1
   const latest = months[0]
   const trail = latest ? lastMonths(latest) : []
-  const [sum, categories, accounts, owned, history] = await Promise.all([
+  const [sum, categories, accounts, owned, history, fresh] = await Promise.all([
     latest ? totals(db, member, { month: latest }) : undefined,
     householdCategorySet(db, member.householdId),
     listAccounts(db, member),
     wealth(db, member, fx.rates),
-    latest ? monthlySpending(db, member, {}, trail) : [],
+    latest ? monthlyFlows(db, member, {}, trail) : [],
+    accountFreshness(db, member),
   ])
+  const moves = history.length > 1 ? biggestMoves(history.at(-1)!, history.at(-2)!) : []
   const before = trail.length > 1 ? await totals(db, member, { month: trail.at(-2)! }) : undefined
   const accountById = new Map(accounts.map((a) => [a.id, a]))
   const spent = sum ? Math.abs(sum.spent) : 0
@@ -147,6 +165,36 @@ export default async function Home() {
               />
             </Card>
           )}
+          {moves.length > 0 && (
+            <Card aria-labelledby="moves-title">
+              <Label id="moves-title">What changed since {monthName(trail.at(-2)!)}</Label>
+              <ul className="-mx-2 grid" data-testid="moves">
+                {moves.map((m) => {
+                  const slug = m.category || null
+                  return (
+                    <li key={m.category || 'none'}>
+                      <Link
+                        href={`/transactions?month=${latest}&category=${m.category || 'none'}`}
+                        className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus"
+                      >
+                        <CategoryIcon category={categories.icon(slug) as Category} />
+                        <span className="truncate text-body-strong">{categories.label(slug)}</span>
+                        <span className="flex items-center gap-1 text-caption text-ink-muted">
+                          {m.change > 0 ? '▲' : '▼'}
+                          <PrivateAmount
+                            minor={Math.abs(m.change)}
+                            whole
+                            className="text-caption"
+                          />
+                          {m.change > 0 ? 'more' : 'less'}
+                        </span>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </Card>
+          )}
         </>
       ) : (
         editable && (
@@ -161,6 +209,16 @@ export default async function Home() {
         )
       )}
 
+      {fresh.some((a) => a.newest) && (
+        <Card aria-labelledby="fresh-title">
+          <Label id="fresh-title">Up to date to</Label>
+          <ul className="grid gap-2" data-testid="freshness">
+            {fresh.map((a) => (
+              <Fresh key={a.id} name={a.name} newest={a.newest} editable={editable} />
+            ))}
+          </ul>
+        </Card>
+      )}
       <Card>
         <div className="flex flex-wrap items-center gap-3">
           <span className="grid size-10 place-items-center rounded-pill bg-brand-soft text-brand-ink">
@@ -218,5 +276,44 @@ function Flow(props: {
         </span>
       )}
     </Card>
+  )
+}
+
+const dayFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+})
+
+/** A month without new entries usually means a statement is waiting to be imported. */
+const STALE_DAYS = 35
+
+function Fresh({
+  name,
+  newest,
+  editable,
+}: {
+  name: string
+  newest: string | null
+  editable: boolean
+}) {
+  const days = newest ? daysSince(newest) : null
+  const stale = days === null || days > STALE_DAYS
+  let note = 'No entries yet'
+  if (newest) note = days === 0 ? 'Today' : dayFormat.format(new Date(`${newest}T00:00:00Z`))
+  return (
+    <li className="flex items-center justify-between gap-3">
+      <span className="min-w-0 truncate">{name}</span>
+      <span className="flex flex-none items-center gap-2 text-caption">
+        <span className={stale ? 'text-warning' : 'text-ink-muted'} data-stale={stale || undefined}>
+          {note}
+        </span>
+        {stale && editable && (
+          <Link href="/import" className="text-brand-ink underline">
+            Import
+          </Link>
+        )}
+      </span>
+    </li>
   )
 }
