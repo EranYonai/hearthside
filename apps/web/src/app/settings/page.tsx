@@ -1,6 +1,7 @@
 import { CATEGORIES, CATEGORY_ICON_NAMES, MAX_CUSTOM_CATEGORIES } from '@hearthside/core'
 import { Card, Label, Notice } from '@hearthside/ui'
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { AddPasskeyButton } from '@/components/AddPasskeyButton'
 import { AppShell } from '@/components/AppShell'
 import { SignOutButton } from '@/components/SignOutButton'
@@ -14,12 +15,15 @@ import {
   recentAudit,
   unusedRecoveryCodeCount,
 } from '@/server/repo'
+import { backupAge, getBackupKey, lastBackupDownload } from '@/server/backups'
 import { listCustomCategories } from '@/server/categories'
 import { requireSession } from '@/server/session'
 import { ProfileForm, RestartWelcome } from '../welcome/client'
 import { CategoryManager } from './categories'
 import {
+  DownloadBackup,
   InviteCreator,
+  LinkPasskeyBackup,
   MemberControls,
   PendingControls,
   RegenerateCodes,
@@ -37,14 +41,18 @@ export default async function SettingsPage() {
   const { member, household } = await requireSession()
   const db = requireDb()
   const isOwner = member.role === 'owner'
-  const [people, keys, codesLeft, invites, activity, custom] = await Promise.all([
-    listMembers(db, household.id, { includePending: isOwner }),
-    listPasskeys(db, member.id),
-    unusedRecoveryCodeCount(db, member.id),
-    isOwner ? listOpenInvites(db, household.id) : Promise.resolve([]),
-    isOwner ? recentAudit(db, household.id, 15) : Promise.resolve([]),
-    listCustomCategories(db, household.id),
-  ])
+  const [people, keys, codesLeft, invites, activity, custom, backup, backupKey] = await Promise.all(
+    [
+      listMembers(db, household.id, { includePending: isOwner }),
+      listPasskeys(db, member.id),
+      unusedRecoveryCodeCount(db, member.id),
+      isOwner ? listOpenInvites(db, household.id) : Promise.resolve([]),
+      isOwner ? recentAudit(db, household.id, 15) : Promise.resolve([]),
+      listCustomCategories(db, household.id),
+      isOwner ? lastBackupDownload(db, household.id) : Promise.resolve(undefined),
+      isOwner ? getBackupKey(db, household.id) : Promise.resolve(undefined),
+    ],
+  )
   const editor = member.role !== 'viewer'
   const waiting = people.filter((p) => !isApproved(p))
   const current = people.filter(isApproved)
@@ -188,6 +196,27 @@ export default async function SettingsPage() {
       </Card>
 
       {isOwner && (
+        <Card aria-labelledby="backups">
+          <Label id="backups">Backups</Label>
+          <BackupLine at={backup} />
+          <DownloadBackup />
+          <p className="text-caption text-ink-muted">
+            Made on the spot and saved only on this device, never on the server. It’s encrypted:
+            {backupKey
+              ? ' your passkey or your offline backup key opens it.'
+              : ' your offline backup key opens it.'}{' '}
+            Restoring also needs the master key.
+          </p>
+          <LinkPasskeyBackup linked={Boolean(backupKey)} />
+          {backupKey && (
+            <Link href="/settings/open-backup" className="text-caption underline">
+              Open a backup with your passkey
+            </Link>
+          )}
+        </Card>
+      )}
+
+      {isOwner && (
         <Card aria-labelledby="activity">
           <Label id="activity">Recent sign-in activity</Label>
           <ul className="grid gap-1 text-caption">
@@ -207,4 +236,24 @@ export default async function SettingsPage() {
       )}
     </AppShell>
   )
+}
+
+const stamp = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+function BackupLine({ at }: { at: Date | undefined }) {
+  const age = backupAge(at)
+  if (age.state === 'never') return <Notice tone="negative">No backup downloaded yet.</Notice>
+  const when = stamp.format(age.at)
+  if (age.state === 'old')
+    return (
+      <Notice tone="negative">
+        Last backup downloaded {age.days} days ago ({when}). Time for a fresh one.
+      </Notice>
+    )
+  return <p className="text-caption">Last backup downloaded {when}.</p>
 }

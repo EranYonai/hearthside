@@ -70,3 +70,15 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --start-interval=5s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>r.json()).then(b=>process.exit(b.status==='ok'?0:1),()=>process.exit(1))"]
 CMD ["node", "src/main.ts"]
+
+# Encrypted database dumps on request (docs/backups.md). Same Postgres version as the database.
+FROM postgres:18.6-trixie AS backup
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends age \
+  && rm -rf /var/lib/apt/lists/*
+COPY deploy/backup/server.pl deploy/backup/restore.sh /usr/local/bin/
+USER postgres
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["perl", "-MIO::Socket::INET", "-e", "my $s=IO::Socket::INET->new('127.0.0.1:8080') or exit 1; print $s qq(GET /health HTTP/1.0\r\n\r\n); exit((<$s>//'')=~/200/?0:1)"]
+CMD ["perl", "/usr/local/bin/server.pl"]

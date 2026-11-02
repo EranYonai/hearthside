@@ -15,6 +15,7 @@ import { scheduleCategorize } from '@/server/categorize'
 import { commitHoldingsPlan, planHoldingsImport, type HoldingsPlan } from '@/server/holdings-plan'
 import { fail, json } from '@/server/http'
 import {
+  canEdit,
   commitPlan,
   findBatchByHash,
   getOwnAccount,
@@ -86,6 +87,7 @@ export const POST = authRoute(async ({ request, db }) => {
   if (!session || session.session.viaRecovery) return fail('Please sign in again', 401)
   if (!isApproved(session.member)) return fail('Waiting for the owner to approve you', 403)
   const { member } = session
+  if (!canEdit(member)) return fail('Viewers can’t import files', 403)
 
   const form = await request.formData().catch(() => undefined)
   const file = form?.get('file')

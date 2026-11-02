@@ -57,6 +57,8 @@ services:
       FX_RATES_URL: ${FX_RATES_URL:-}
       # Delayed market prices (docs/self-hosting.md). "off" stops fetching.
       QUOTES_URL: ${QUOTES_URL:-}
+      # Makes encrypted backups on request for the owner to download (docs/backups.md).
+      BACKUP_URL: http://backup:8080
     secrets: [db_password, encryption_key]
     ports:
       # Loopback only by default. WEB_BIND=0.0.0.0 in .env opens it to the LAN for testing.
@@ -118,6 +120,26 @@ services:
         condition: service_healthy
     # The worker is on the app network only: it reaches the web API, never the database.
     networks: [app]
+    logging: *logging
+
+  # Encrypted database dumps, made only when the owner downloads one (docs/backups.md).
+  # Encrypts to BACKUP_RECIPIENT, a public key; the private key stays offline. Writes
+  # nothing to disk and has no route to the internet.
+  backup:
+    build:
+      context: .
+      target: backup
+    image: hearthside-backup
+    restart: unless-stopped
+    <<: *hardening
+    environment:
+      DATABASE_PASSWORD_FILE: /run/secrets/db_password
+      BACKUP_RECIPIENT: ${BACKUP_RECIPIENT:-}
+    secrets: [db_password]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [data]
     logging: *logging
 
 secrets:

@@ -26,7 +26,7 @@ export async function registrationOptions(
     userDisplayName: user.name,
     userID: user.id ? new TextEncoder().encode(user.id) : undefined,
     attestationType: 'none',
-    authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
+    authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
     excludeCredentials: existing.map((p) => ({
       id: p.id,
       transports: p.transports as AuthenticatorTransport[],
@@ -45,7 +45,7 @@ export async function verifyRegistration(
     expectedChallenge,
     expectedOrigin: config.origin,
     expectedRPID: config.rpId,
-    requireUserVerification: false,
+    requireUserVerification: true,
   })
   if (!result.verified || !result.registrationInfo) return undefined
   const { credential, credentialDeviceType, credentialBackedUp } = result.registrationInfo
@@ -63,7 +63,7 @@ export async function verifyRegistration(
 export async function authenticationOptions(config: AuthConfig) {
   // No allowCredentials: the browser offers whatever passkeys it has for this site,
   // so the sign-in page never needs to know (or reveal) who is signing in.
-  return generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'preferred' })
+  return generateAuthenticationOptions({ rpID: config.rpId, userVerification: 'required' })
 }
 
 export async function verifyAuthentication(
@@ -77,7 +77,7 @@ export async function verifyAuthentication(
     expectedChallenge,
     expectedOrigin: config.origin,
     expectedRPID: config.rpId,
-    requireUserVerification: false,
+    requireUserVerification: true,
     credential: {
       id: passkey.id,
       publicKey: isoBase64URL.toBuffer(passkey.publicKey),

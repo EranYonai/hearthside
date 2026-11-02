@@ -24,4 +24,6 @@ export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 /** Extend a session at most once a day, so busy pages don't write on every request. */
 export const SESSION_REFRESH_MS = 24 * 60 * 60 * 1000
 export const CHALLENGE_TTL_MS = 5 * 60 * 1000
+/** Open sign-in challenges allowed at once; more are refused until old ones expire. */
+export const MAX_OPEN_CHALLENGES = 500
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000

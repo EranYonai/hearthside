@@ -335,6 +335,7 @@ export async function commitPlan(
     exclude?: ReadonlySet<string>
   },
 ) {
+  assertEditor(member)
   const { holderId, exclude, ...batchInput } = input
   const batches = []
   for (const [i, g] of groups.entries()) {
@@ -368,6 +369,7 @@ export async function commitImport(
   account: AccountRow,
   input: { fileName: string; fileHash: string; rows: readonly PreparedRow[]; skipped: number },
 ) {
+  assertEditor(member)
   if (account.ownerId !== member.id) throw new AuthError('not_allowed', 'Not your account')
   const run = async (tx: Tx) => {
     const categories = await loadContext(tx, member.householdId)

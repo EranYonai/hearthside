@@ -1,12 +1,15 @@
 'use client'
 
 import { Button, Notice } from '@hearthside/ui'
-import { Check, Copy, Trash2, UserPlus, X } from 'lucide-react'
+import { Check, Copy, Download, Trash2, UserPlus, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { RecoveryCodes } from '@/components/RecoveryCodes'
+import { recipientFromSecret } from '@/lib/backup-key'
+import { passkeyBackupSecret } from '@/lib/passkey-prf'
 import {
   approveMemberAction,
+  linkBackupKeyAction,
   changeRoleAction,
   createInviteAction,
   regenerateCodesAction,
@@ -265,5 +268,101 @@ export function RegenerateCodes() {
       <p className="text-caption text-ink-muted">Your old codes stop working.</p>
       {error && <Notice tone="negative">{error}</Notice>}
     </>
+  )
+}
+
+/** Makes a fresh encrypted backup and saves it on this device. The server keeps no copy. */
+export function DownloadBackup() {
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function download() {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/backup', { method: 'POST' })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        setError(body.error ?? 'The backup failed. Please try again.')
+        return
+      }
+      const name =
+        /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ??
+        'hearthside.dump.age'
+      const url = URL.createObjectURL(await res.blob())
+      const a = document.createElement('a')
+      a.href = url
+      a.download = name
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      router.refresh()
+    } catch {
+      setError('The backup failed. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="grid gap-2">
+      <Button
+        variant="secondary"
+        disabled={busy}
+        icon={<Download aria-hidden />}
+        className="justify-self-start"
+        onClick={download}
+      >
+        {busy ? 'Making backup…' : 'Download backup'}
+      </Button>
+      {error && <Notice tone="negative">{error}</Notice>}
+    </div>
+  )
+}
+
+/** Turns the owner's passkey into a second key every backup is encrypted to. */
+export function LinkPasskeyBackup({ linked }: { linked: boolean }) {
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function link() {
+    setBusy(true)
+    setError(null)
+    try {
+      const { secret, credentialId } = await passkeyBackupSecret()
+      const recipient = await recipientFromSecret(secret)
+      secret.fill(0)
+      const result = await linkBackupKeyAction({ recipient, credentialId })
+      if (!result.ok) setError(result.error)
+      else router.refresh()
+    } catch (err) {
+      setError(err instanceof Error && err.name !== 'NotAllowedError' ? err.message : 'Cancelled')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function unlink() {
+    setBusy(true)
+    const result = await linkBackupKeyAction(null)
+    if (!result.ok) setError(result.error)
+    else router.refresh()
+    setBusy(false)
+  }
+
+  return (
+    <div className="grid gap-2">
+      {linked ? (
+        <Button variant="ghost" disabled={busy} className="justify-self-start" onClick={unlink}>
+          Stop using my passkey for backups
+        </Button>
+      ) : (
+        <Button variant="secondary" disabled={busy} className="justify-self-start" onClick={link}>
+          Use my passkey to open backups
+        </Button>
+      )}
+      {error && <Notice tone="negative">{error}</Notice>}
+    </div>
   )
 }

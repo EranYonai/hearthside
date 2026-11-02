@@ -6,3 +6,4 @@
 - [Releases](releases.md): versions and the changelog.
 - [Privacy principles](privacy.md): how household data is treated.
 - [Encryption](encryption.md): how private fields are encrypted, and key rotation.
+- [Backups](backups.md): nightly encrypted dumps and how to restore them.

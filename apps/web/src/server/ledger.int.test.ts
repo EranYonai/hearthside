@@ -30,7 +30,14 @@ import {
   countAccountTransactions,
   deleteAccount,
 } from './ledger'
-import { acceptInvite, AuthError, createHousehold, createInvite, type NewPasskey } from './repo'
+import {
+  acceptInvite,
+  AuthError,
+  changeRole,
+  createHousehold,
+  createInvite,
+  type NewPasskey,
+} from './repo'
 
 const url = process.env.TEST_DATABASE_URL
 const client = url ? createDb(url, { max: 2 }) : undefined
@@ -265,6 +272,22 @@ describe.skipIf(!url)('ledger (Postgres)', () => {
     expect(await listTransactions(db, sam, { month: '2026-10' })).toHaveLength(2)
     await undoBatch(db, sam, own.id)
     expect(await listTransactions(db, sam, { month: '2026-10' })).toHaveLength(0)
+  })
+
+  it('stops a member moved to viewer from importing into their own account', async () => {
+    const { alex, sam } = await home()
+    const card = await createAccount(db, sam, {
+      name: 'Sam card',
+      kind: 'card',
+      visibility: 'household',
+    })
+    await changeRole(db, alex, sam.id, 'viewer')
+    const demoted = { ...sam, role: 'viewer' as const }
+    const input = { fileName: 'v.csv', fileHash: 'v', rows: [], skipped: 0 }
+    await expect(commitImport(db, demoted, card, input)).rejects.toBeInstanceOf(AuthError)
+    await expect(
+      commitPlan(db, demoted, [], { fileName: 'v.csv', fileHash: 'v', skipped: 0 }),
+    ).rejects.toBeInstanceOf(AuthError)
   })
 
   it('detects accounts, creates them once and splits multi-card files', async () => {
