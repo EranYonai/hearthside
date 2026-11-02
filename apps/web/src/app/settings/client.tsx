@@ -5,8 +5,11 @@ import { Check, Copy, Download, Trash2, UserPlus, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { RecoveryCodes } from '@/components/RecoveryCodes'
+import { recipientFromSecret } from '@/lib/backup-key'
+import { passkeyBackupSecret } from '@/lib/passkey-prf'
 import {
   approveMemberAction,
+  linkBackupKeyAction,
   changeRoleAction,
   createInviteAction,
   regenerateCodesAction,
@@ -312,6 +315,53 @@ export function DownloadBackup() {
       >
         {busy ? 'Making backup…' : 'Download backup'}
       </Button>
+      {error && <Notice tone="negative">{error}</Notice>}
+    </div>
+  )
+}
+
+/** Turns the owner's passkey into a second key every backup is encrypted to. */
+export function LinkPasskeyBackup({ linked }: { linked: boolean }) {
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function link() {
+    setBusy(true)
+    setError(null)
+    try {
+      const { secret, credentialId } = await passkeyBackupSecret()
+      const recipient = await recipientFromSecret(secret)
+      secret.fill(0)
+      const result = await linkBackupKeyAction({ recipient, credentialId })
+      if (!result.ok) setError(result.error)
+      else router.refresh()
+    } catch (err) {
+      setError(err instanceof Error && err.name !== 'NotAllowedError' ? err.message : 'Cancelled')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function unlink() {
+    setBusy(true)
+    const result = await linkBackupKeyAction(null)
+    if (!result.ok) setError(result.error)
+    else router.refresh()
+    setBusy(false)
+  }
+
+  return (
+    <div className="grid gap-2">
+      {linked ? (
+        <Button variant="ghost" disabled={busy} className="justify-self-start" onClick={unlink}>
+          Stop using my passkey for backups
+        </Button>
+      ) : (
+        <Button variant="secondary" disabled={busy} className="justify-self-start" onClick={link}>
+          Use my passkey to open backups
+        </Button>
+      )}
       {error && <Notice tone="negative">{error}</Notice>}
     </div>
   )

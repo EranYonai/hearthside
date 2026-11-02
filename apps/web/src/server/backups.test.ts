@@ -23,7 +23,12 @@ describe('fetchBackup', () => {
 
   it('returns the dump and sends the token', async () => {
     const f = respond(200, 'secret-bytes')
-    const r = await fetchBackup('http://backup:8080', 'tok', f as unknown as typeof fetch)
+    const r = await fetchBackup(
+      'http://backup:8080',
+      'tok',
+      undefined,
+      f as unknown as typeof fetch,
+    )
     expect(r.ok && new TextDecoder().decode(r.data)).toBe('secret-bytes')
     expect(f).toHaveBeenCalledWith(
       'http://backup:8080/dump',
@@ -33,15 +38,17 @@ describe('fetchBackup', () => {
 
   it('explains each failure', async () => {
     expect(await fetchBackup(undefined, 't')).toMatchObject({ ok: false })
-    const noKey = await fetchBackup('u', 't', respond(503) as unknown as typeof fetch)
+    const noKey = await fetchBackup('u', 't', undefined, respond(503) as unknown as typeof fetch)
     expect(noKey).toEqual({ ok: false, error: 'No backup key is set on the server' })
-    expect(await fetchBackup('u', 't', respond(500) as unknown as typeof fetch)).toMatchObject({
+    expect(
+      await fetchBackup('u', 't', undefined, respond(500) as unknown as typeof fetch),
+    ).toMatchObject({
       ok: false,
     })
     const down = vi.fn(async () => {
       throw new Error('ECONNREFUSED')
     })
-    expect(await fetchBackup('u', 't', down as unknown as typeof fetch)).toMatchObject({
+    expect(await fetchBackup('u', 't', undefined, down as unknown as typeof fetch)).toMatchObject({
       ok: false,
     })
   })

@@ -28,6 +28,21 @@ Settings shows when the last backup was downloaded and reminds the owner after a
 
 3. `docker compose up -d --build`, then download one backup from Settings to check it.
 
+## Open backups with your passkey
+
+The owner can also link their passkey (**Settings → Backups → Use my passkey to open
+backups**). The browser asks the passkey for a secret through the WebAuthn PRF extension
+(after Face ID or a PIN) and turns it into an age key pair; only the public half goes to the
+server. From then on every backup is encrypted to **both** keys, and either one opens it.
+
+To open a backup with the passkey, use **Settings → Open a backup**. The file is decrypted on
+your device and never uploaded; you get a plain dump for the restore step below (skip the
+key: `pg_restore` it directly).
+
+A passkey only works on the site it was made for. If the server or its address is gone, the
+passkey can't open anything, so keep the offline key as well. Passkeys that don't support
+PRF (some security keys and password managers) can't be linked.
+
 ## Restore
 
 Restore into an **empty** database (a fresh `db-data` volume), with the app stopped. Put

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { BACKUP_DOWNLOADED, fetchBackup } from '@/server/backups'
+import { BACKUP_DOWNLOADED, fetchBackup, getBackupKey } from '@/server/backups'
 import { clientIp, fail } from '@/server/http'
 import { audit, isApproved } from '@/server/repo'
 import { authRoute } from '@/server/route'
@@ -27,7 +27,8 @@ export const POST = authRoute(async ({ request, db }) => {
   if (!isApproved(member) || member.role !== 'owner')
     return fail('Only the owner can download backups', 403)
 
-  const result = await fetchBackup(process.env.BACKUP_URL, serviceToken())
+  const key = await getBackupKey(db, member.householdId)
+  const result = await fetchBackup(process.env.BACKUP_URL, serviceToken(), key?.recipient)
   if (!result.ok) return fail(result.error, 502)
 
   await audit(db, {

@@ -67,6 +67,10 @@ export const households = pgTable(
       emergencyMonths?: number
       checkupOn?: boolean
     }>('households', 'invest_settings'),
+    /** Public age key derived from the owner's passkey; backups are also encrypted to it. */
+    backupRecipient: text('backup_recipient'),
+    /** The passkey (credential id, base64url) that derives it. */
+    backupCredentialId: text('backup_credential_id'),
     createdAt: createdAt(),
   },
   () => [uniqueIndex('households_singleton').on(sql`(true)`)],

@@ -23,6 +23,7 @@ import {
   revokeInvite,
   type Role,
 } from '@/server/repo'
+import { setBackupKey } from '@/server/backups'
 import { requireSession } from '@/server/session'
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string }
@@ -149,5 +150,14 @@ export async function deleteCategoryAction(slug: string) {
     const result = await deleteCategory(requireDb(), member, String(slug))
     await refileAfterChange(member.householdId)
     return result
+  })
+}
+
+/** Links the owner's passkey as a second backup key. Only the public half arrives here. */
+export async function linkBackupKeyAction(key: { recipient: string; credentialId: string } | null) {
+  const { member } = await requireSession()
+  return run(async () => {
+    await setBackupKey(requireDb(), member, key)
+    return {}
   })
 }

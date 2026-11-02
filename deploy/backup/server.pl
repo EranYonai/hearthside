@@ -39,9 +39,12 @@ while (my $c = $server->accept) {
   my $line = <$c> // '';
   my ($method, $path) = $line =~ m{^(\S+)\s+(\S+)};
   my $auth = '';
+  my $extra = '';
   while (my $h = <$c>) {
     last if $h =~ /^\r?\n$/;
     $auth = $1 if $h =~ /^Authorization:\s*Bearer\s+(\S+)/i;
+    # A second key (the owner's passkey key), also a public age key.
+    $extra = $1 if $h =~ /^X-Backup-Recipient:\s*(age1[02-9ac-hj-np-z]{58})\s*$/i;
   }
   $method //= '';
   $path //= '';
@@ -54,8 +57,9 @@ while (my $c = $server->accept) {
   my $user = $ENV{PGUSER} || 'hearthside';
   my $db = $ENV{PGDATABASE} || 'hearthside';
   open(my $out, '-|', 'bash', '-c',
-    'set -o pipefail; pg_dump -h "$1" -U "$2" -d "$3" --format=custom --no-owner | age -r "$4"',
-    'sh', $host, $user, $db, $recipient) or exit 1;
+    'set -o pipefail; r="-r $4"; [ -n "$5" ] && r="$r -r $5";'
+      . ' pg_dump -h "$1" -U "$2" -d "$3" --format=custom --no-owner | age $r',
+    'sh', $host, $user, $db, $recipient, $extra) or exit 1;
   binmode $out;
   my $data = do { local $/; <$out> } // '';
   close $out;
