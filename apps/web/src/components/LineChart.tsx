@@ -1,7 +1,7 @@
 'use client'
 
 import { formatMoney } from '@hearthside/core'
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 export interface ChartPoint {
   on: string
@@ -42,8 +42,8 @@ const DOT = {
 }
 
 /**
- * Lines over time on one axis. Hover or touch shows every series for the nearest day; pages carry
- * the same numbers in a table.
+ * Lines over time on one axis. Hover, or drag a finger across like a stocks app, to see every
+ * series for the nearest day.
  */
 export function LineChart({
   points,
@@ -70,6 +70,7 @@ export function LineChart({
 }) {
   const gradient = useId()
   const [active, setActive] = useState<number | null>(null)
+  const plot = useRef<HTMLDivElement>(null)
   const times = points.map((p) => Date.parse(`${p.on}T00:00:00Z`))
   const t0 = times[0]!
   const span = Math.max(times.at(-1)! - t0, 1)
@@ -102,6 +103,33 @@ export function LineChart({
     })
     setActive(best)
   }
+  const pickRef = useRef(pick)
+  pickRef.current = pick
+
+  // A finger drag scrubs through the days. Touch events, not pointer events: phone browsers may
+  // take a drag for a page scroll and cancel the pointer, which hid the readout mid-drag. These
+  // listeners are not passive so the drag can stay on the chart.
+  useEffect(() => {
+    const el = plot.current
+    if (!el) return
+    const onTouch = (e: TouchEvent) => {
+      const touch = e.touches[0]
+      if (!touch) return
+      if (e.cancelable) e.preventDefault()
+      pickRef.current(touch.clientX, el.getBoundingClientRect())
+    }
+    const onEnd = () => setActive(null)
+    el.addEventListener('touchstart', onTouch, { passive: false })
+    el.addEventListener('touchmove', onTouch, { passive: false })
+    el.addEventListener('touchend', onEnd)
+    el.addEventListener('touchcancel', onEnd)
+    return () => {
+      el.removeEventListener('touchstart', onTouch)
+      el.removeEventListener('touchmove', onTouch)
+      el.removeEventListener('touchend', onEnd)
+      el.removeEventListener('touchcancel', onEnd)
+    }
+  }, [])
 
   return (
     <figure className="grid gap-2" aria-label={label}>
@@ -125,10 +153,19 @@ export function LineChart({
             <span>{format(bottom)}</span>
           </div>
           <div
-            className={`relative touch-none ${compact ? 'h-32' : 'h-48'}`}
-            onPointerMove={(e) => pick(e.clientX, e.currentTarget.getBoundingClientRect())}
-            onPointerDown={(e) => pick(e.clientX, e.currentTarget.getBoundingClientRect())}
-            onPointerLeave={() => setActive(null)}
+            ref={plot}
+            className={`relative touch-none select-none [-webkit-touch-callout:none] ${compact ? 'h-32' : 'h-48'}`}
+            onPointerMove={(e) => {
+              if (e.pointerType === 'mouse' || e.pointerType === 'pen')
+                pick(e.clientX, e.currentTarget.getBoundingClientRect())
+            }}
+            onPointerDown={(e) => {
+              if (e.pointerType === 'mouse' || e.pointerType === 'pen')
+                pick(e.clientX, e.currentTarget.getBoundingClientRect())
+            }}
+            onPointerLeave={(e) => {
+              if (e.pointerType === 'mouse' || e.pointerType === 'pen') setActive(null)
+            }}
             data-testid="line-chart"
           >
             <svg

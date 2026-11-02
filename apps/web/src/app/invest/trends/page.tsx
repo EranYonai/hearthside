@@ -112,45 +112,6 @@ export default async function TrendsPage({
             Accounts in {t.missingRates.join(', ')} are left out until there’s an exchange rate.
           </p>
         )}
-        {t.series.length >= 2 && (
-          <details>
-            <summary className="cursor-pointer text-caption text-brand-ink">
-              Show as a table
-            </summary>
-            <table className="mt-2 w-full text-caption tabular-nums">
-              <thead className="text-ink-muted">
-                <tr>
-                  <th className="text-start font-normal">Day</th>
-                  <th className="text-end font-normal">Value</th>
-                  <th className="text-end font-normal">Put in</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...t.series].reverse().map((p) => (
-                  <tr key={p.on} className="border-t border-line">
-                    <td className="py-1">{p.on}</td>
-                    <td className="text-end">
-                      <Amount
-                        minor={p.valueMinor}
-                        currency={t.currency}
-                        whole
-                        className="text-caption"
-                      />
-                    </td>
-                    <td className="text-end">
-                      <Amount
-                        minor={p.contributedMinor}
-                        currency={t.currency}
-                        whole
-                        className="text-caption"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </details>
-        )}
       </Card>
 
       {t.years.length > 0 && (
