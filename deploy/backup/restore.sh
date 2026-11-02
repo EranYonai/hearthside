@@ -1,6 +1,7 @@
 #!/bin/sh
 # Restore a backup into an EMPTY database. Run from the backup container:
-#   docker compose run --rm -u root -v /path/to/key.txt:/key.txt:ro backup restore.sh /backups/<file> /key.txt
+#   docker compose run --rm -u root -v /path/to/key.txt:/key.txt:ro -v /path/to/file:/backup.age:ro \
+#     backup restore.sh /backup.age /key.txt
 # The private key is the one kept offline; it never stays on the server.
 set -eu
 file=$1

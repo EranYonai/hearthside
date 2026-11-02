@@ -84,7 +84,7 @@ their price can be entered by hand. Set `QUOTES_URL=off` in `.env` to turn this 
 
 ## Backups
 
-See [Backups](backups.md). Set `BACKUP_RECIPIENT` before going live.
+See [Backups](backups.md). Set `BACKUP_RECIPIENT` before going live, then download backups from Settings.
 
 ## Changing the database password
 

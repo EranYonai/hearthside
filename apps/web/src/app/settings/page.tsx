@@ -14,12 +14,13 @@ import {
   recentAudit,
   unusedRecoveryCodeCount,
 } from '@/server/repo'
-import { backupStatus, type BackupStatus } from '@/server/backups'
+import { backupAge, lastBackupDownload } from '@/server/backups'
 import { listCustomCategories } from '@/server/categories'
 import { requireSession } from '@/server/session'
 import { ProfileForm, RestartWelcome } from '../welcome/client'
 import { CategoryManager } from './categories'
 import {
+  DownloadBackup,
   InviteCreator,
   MemberControls,
   PendingControls,
@@ -45,7 +46,7 @@ export default async function SettingsPage() {
     isOwner ? listOpenInvites(db, household.id) : Promise.resolve([]),
     isOwner ? recentAudit(db, household.id, 15) : Promise.resolve([]),
     listCustomCategories(db, household.id),
-    isOwner ? backupStatus() : Promise.resolve<BackupStatus>({ state: 'none' }),
+    isOwner ? lastBackupDownload(db, household.id) : Promise.resolve(undefined),
   ])
   const editor = member.role !== 'viewer'
   const waiting = people.filter((p) => !isApproved(p))
@@ -192,7 +193,12 @@ export default async function SettingsPage() {
       {isOwner && (
         <Card aria-labelledby="backups">
           <Label id="backups">Backups</Label>
-          <BackupLine status={backup} />
+          <BackupLine at={backup} />
+          <DownloadBackup />
+          <p className="text-caption text-ink-muted">
+            Made on the spot and saved only on this device. It’s encrypted: restoring needs your
+            backup key and the master key.
+          </p>
         </Card>
       )}
 
@@ -225,26 +231,15 @@ const stamp = new Intl.DateTimeFormat('en-GB', {
   minute: '2-digit',
 })
 
-function BackupLine({ status }: { status: BackupStatus }) {
-  if (status.state === 'none')
-    return (
-      <p className="text-caption text-ink-muted">
-        No backup yet. See docs/backups.md to set it up.
-      </p>
-    )
-  const when = stamp.format(status.at)
-  if (status.state === 'failed')
+function BackupLine({ at }: { at: Date | undefined }) {
+  const age = backupAge(at)
+  if (age.state === 'never') return <Notice tone="negative">No backup downloaded yet.</Notice>
+  const when = stamp.format(age.at)
+  if (age.state === 'old')
     return (
       <Notice tone="negative">
-        Last backup failed ({when}): {status.error || 'unknown error'}
+        Last backup downloaded {age.days} days ago ({when}). Time for a fresh one.
       </Notice>
     )
-  const where = status.offsite ? 'saved here and offsite' : 'saved here only'
-  if (status.state === 'stale')
-    return <Notice tone="negative">No backup since {when}. Check the backup service.</Notice>
-  return (
-    <p className="text-caption">
-      Last backup {when}, {where}.
-    </p>
-  )
+  return <p className="text-caption">Last backup downloaded {when}.</p>
 }

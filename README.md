@@ -23,13 +23,13 @@ Hearthside is a private hub for your household. It gives you one clear view of h
 - **Monthly and yearly views.** See trends over time.
 - **For any household.** Solo or shared, with room for privacy.
 - **Works on any phone.** Install it like an app on iPhone or Android.
-- **Self-hosted.** Runs on your own machine with Docker. Private fields are encrypted at rest, and nightly backups are encrypted before they leave the box.
+- **Self-hosted.** Runs on your own machine with Docker. Private fields are encrypted at rest, and backups are encrypted and downloaded straight to your device, never kept on the server.
 - **Passkey sign-in.** No passwords to leak.
 
 ## Running it
 
 - [Self-hosting](docs/self-hosting.md): set up your own instance.
-- [Backups](docs/backups.md): nightly encrypted backups and restores.
+- [Backups](docs/backups.md): encrypted backups you download, and restores.
 - [Development](docs/development.md): local setup, tests and QA.
 
 More in [docs](docs/README.md).
