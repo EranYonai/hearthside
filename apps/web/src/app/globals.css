@@ -91,36 +91,6 @@
 }
 
 /*
- * The Home "What we own" slab: always dark and warm, in both themes, like embers. It re-themes the
- * tokens inside it so text, pills and focus rings stay readable on the dark ground.
- */
-.ember-slab {
-  --hs-ink: #fff4e6;
-  --hs-ink-muted: #d2bca3;
-  --hs-ink-faint: #a8927a;
-  --hs-line: #3d2f22;
-  --hs-surface-2: #2a2018;
-  --hs-positive: #8fdcab;
-  --hs-positive-soft: rgb(143 220 171 / 0.14);
-  --hs-negative: #ffab95;
-  --hs-negative-soft: rgb(255 171 149 / 0.14);
-  --slab-line: #ffb27a;
-  color: var(--hs-ink);
-  background:
-    radial-gradient(120% 90% at 100% 0%, rgb(255 138 61 / 0.32) 0%, transparent 55%),
-    radial-gradient(90% 70% at 0% 100%, rgb(255 90 40 / 0.18) 0%, transparent 60%), #1a130d;
-  box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.06) inset,
-    0 10px 30px -12px rgb(40 20 5 / 0.55);
-}
-.ember-slab .text-amount-hero {
-  font-size: 2.6rem;
-  line-height: 1.05;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-/*
  * "Hide numbers" (per device). The real text is removed and replaced with stars (two fewer than
  * the digits), so the exact value can't be read. Charts and changes that would reveal it are
  * hidden outright. Unlayered and !important so display utilities on these elements can't win.

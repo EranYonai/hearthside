@@ -3,9 +3,10 @@ import { buttonClasses, Card, Label } from '@hearthside/ui'
 import { Building2, ChevronRight, FileUp, HandCoins, Landmark, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import { PrivateAmount } from './PrivateAmount'
+import { HideAmountsToggle } from '@/lib/HideAmountsToggle'
 import type { Wealth } from '@/server/wealth'
 import { AccountMark } from './AccountCard'
-import { WealthSlab } from './WealthSlab'
+import { LineChart } from './LineChart'
 
 const KIND_LABEL = {
   cash: 'Bank',
@@ -61,57 +62,52 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
   const up = change.minor >= 0
 
   return (
-    <section aria-labelledby="wealth-title" className="grid gap-3" data-testid="wealth">
-      <WealthSlab
-        total={<PrivateAmount minor={totalMinor} currency={currency} whole hero />}
-        under={
-          owedMinor > 0 ? (
-            <span data-testid="wealth-net">
-              <PrivateAmount
-                minor={wealth.ownMinor}
-                currency={currency}
-                whole
-                className="text-caption"
-              />{' '}
-              owned, less{' '}
-              <PrivateAmount minor={owedMinor} currency={currency} whole className="text-caption" />{' '}
-              in loans
-            </span>
-          ) : undefined
-        }
-        change={
-          wealth.series.length > 1 && change.minor !== 0
-            ? {
-                up,
-                text: `${formatMoney(change.minor, { currency, whole: true, signed: true })}${
-                  change.percent !== null
-                    ? ` (${up ? '+' : '−'}${Math.abs(change.percent).toFixed(1)}%)`
-                    : ''
-                } · ${span.label}`,
-              }
-            : undefined
-        }
-        currency={currency}
-        series={wealth.series.map((p) => ({ on: p.on, minor: p.totalMinor }))}
-        ranges={WEALTH_RANGES.map((r) => ({
-          key: r.key,
-          label: r.label,
-          href: r.key === '6m' ? '/' : `/?range=${r.key}`,
-          current: r.key === wealth.range,
-        }))}
-      />
+    <Card aria-labelledby="wealth-title" className="wealth-glow gap-4" data-testid="wealth">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1">
+          <HideAmountsToggle />
+          <Label id="wealth-title">What we own</Label>
+        </span>
+        {wealth.series.length > 1 && change.minor !== 0 && (
+          <span
+            className={`inline-flex items-center gap-1 whitespace-nowrap rounded-pill px-2.5 py-0.5 text-caption font-semibold tabular-nums ${up ? 'bg-positive-soft text-positive' : 'bg-negative-soft text-negative'}`}
+            data-testid="wealth-change"
+            data-private-hide
+          >
+            {formatMoney(change.minor, { currency, whole: true, signed: true })}
+            {change.percent !== null &&
+              ` (${up ? '+' : '−'}${Math.abs(change.percent).toFixed(1)}%)`}
+            <span className="font-normal opacity-80">· {span.label}</span>
+          </span>
+        )}
+      </div>
+      <div data-testid="wealth-total">
+        <PrivateAmount minor={totalMinor} currency={currency} whole hero />
+      </div>
+      {owedMinor > 0 && (
+        <p className="-mt-3 text-caption text-ink-muted" data-testid="wealth-net">
+          <PrivateAmount
+            minor={wealth.ownMinor}
+            currency={currency}
+            whole
+            className="text-caption"
+          />{' '}
+          owned, less{' '}
+          <PrivateAmount minor={owedMinor} currency={currency} whole className="text-caption" /> in
+          loans
+        </p>
+      )}
 
-      <div className="grid grid-cols-2 gap-2 [&>:last-child:nth-child(odd)]:col-span-2">
+      <div className="grid grid-cols-2 gap-2">
         <Split
-          icon={<Landmark size={16} aria-hidden />}
-          label="Bank"
+          icon={<Landmark size={18} aria-hidden />}
+          label="In the bank"
           minor={cashMinor}
           currency={currency}
           share={pct(Math.max(cashMinor, 0), base)}
-          href="/accounts"
         />
         <Split
-          icon={<TrendingUp size={16} aria-hidden />}
+          icon={<TrendingUp size={18} aria-hidden />}
           label="Invested"
           minor={investedMinor}
           currency={currency}
@@ -120,7 +116,7 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
         />
         {propertyMinor > 0 && (
           <Split
-            icon={<Building2 size={16} aria-hidden />}
+            icon={<Building2 size={18} aria-hidden />}
             label="Property"
             minor={propertyMinor}
             currency={currency}
@@ -130,7 +126,7 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
         )}
         {owedMinor > 0 && (
           <Split
-            icon={<HandCoins size={16} aria-hidden />}
+            icon={<HandCoins size={18} aria-hidden />}
             label="Loans"
             minor={-owedMinor}
             currency={currency}
@@ -139,72 +135,75 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
         )}
       </div>
 
-      <Card className="gap-3">
-        {colored.length > 0 && (
-          <div className="grid gap-2">
-            <div className="flex h-3 gap-1" aria-hidden data-testid="wealth-meter">
-              {colored.map((p) => (
-                <span
-                  key={p.key}
-                  title={p.name}
-                  className="block h-full min-w-1.5 rounded-pill"
-                  style={{ flex: `${p.minor} 1 0`, background: p.paint }}
-                />
-              ))}
-            </div>
-            <ul aria-label="What we own, by account" data-testid="wealth-accounts">
-              {colored.map((p) => (
-                <li key={p.key} className="border-t border-line first:border-t-0">
-                  <Link
-                    href={p.href}
-                    className="flex min-h-12 items-center gap-3 py-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-                  >
-                    <span
-                      className="h-6 w-1 flex-none rounded-pill"
-                      style={{ background: p.paint }}
-                      aria-hidden
-                    />
-                    <AccountMark name={p.name} provider={p.provider} size="sm" />
-                    <span className="grid min-w-0 flex-1">
-                      <span className="truncate text-body-strong">{p.name}</span>
-                      <span className="text-caption text-ink-muted">
-                        {KIND_LABEL[p.kind]} · {pct(p.minor, shown)}%
-                      </span>
-                    </span>
-                    <PrivateAmount
-                      minor={p.minor}
-                      currency={currency}
-                      whole
-                      className="text-body-strong"
-                    />
-                    <ChevronRight size={18} aria-hidden className="text-ink-muted" />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+      {wealth.series.length > 1 && (
+        <div data-private-hide className="grid gap-2">
+          <nav
+            aria-label="Chart range"
+            className="inline-flex gap-0.5 justify-self-end rounded-pill bg-surface-2 p-0.5"
+          >
+            {WEALTH_RANGES.map((r) => (
+              <Link
+                key={r.key}
+                href={r.key === '6m' ? '/' : `/?range=${r.key}`}
+                scroll={false}
+                aria-current={r.key === wealth.range ? 'page' : undefined}
+                className="rounded-pill px-2.5 py-0.5 text-[0.75rem] leading-5 font-semibold text-ink-muted aria-[current=page]:bg-surface-1 aria-[current=page]:text-ink aria-[current=page]:shadow-card"
+              >
+                {r.label}
+              </Link>
+            ))}
+          </nav>
+          <LineChart
+            label={`What we own over ${span.label}`}
+            kind="money"
+            currency={currency}
+            area
+            compact
+            points={wealth.series.map((p) => ({
+              on: p.on,
+              values: [p.totalMinor, p.investedMinor],
+            }))}
+            series={[
+              { label: 'Everything', color: 'chart-1' },
+              { label: 'Invested', color: 'chart-2', dashed: true },
+            ]}
+          />
+        </div>
+      )}
 
-        {wealth.owed.length > 0 && (
-          <ul aria-label="What we owe, by loan" data-testid="wealth-owed">
-            {wealth.owed.map((p) => (
+      {colored.length > 0 && (
+        <div className="grid gap-2">
+          <div className="flex h-3 gap-1" aria-hidden data-testid="wealth-meter">
+            {colored.map((p) => (
+              <span
+                key={p.key}
+                title={p.name}
+                className="block h-full min-w-1.5 rounded-pill"
+                style={{ flex: `${p.minor} 1 0`, background: p.paint }}
+              />
+            ))}
+          </div>
+          <ul aria-label="What we own, by account" data-testid="wealth-accounts">
+            {colored.map((p) => (
               <li key={p.key} className="border-t border-line first:border-t-0">
                 <Link
                   href={p.href}
                   className="flex min-h-12 items-center gap-3 py-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                 >
-                  <span className="h-6 w-1 flex-none rounded-pill bg-negative" aria-hidden />
-                  <span className="grid size-7 flex-none place-items-center rounded-pill bg-surface-2 text-ink-muted">
-                    <HandCoins size={16} aria-hidden />
-                  </span>
+                  <span
+                    className="h-6 w-1 flex-none rounded-pill"
+                    style={{ background: p.paint }}
+                    aria-hidden
+                  />
+                  <AccountMark name={p.name} provider={p.provider} size="sm" />
                   <span className="grid min-w-0 flex-1">
                     <span className="truncate text-body-strong">{p.name}</span>
                     <span className="text-caption text-ink-muted">
-                      {['Loan', p.provider].filter(Boolean).join(' · ')}
+                      {KIND_LABEL[p.kind]} · {pct(p.minor, shown)}%
                     </span>
                   </span>
                   <PrivateAmount
-                    minor={-p.minor}
+                    minor={p.minor}
                     currency={currency}
                     whole
                     className="text-body-strong"
@@ -214,29 +213,60 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
               </li>
             ))}
           </ul>
-        )}
+        </div>
+      )}
 
-        {wealth.missing.length > 0 && (
-          <p className="text-caption text-ink-muted" data-testid="wealth-missing">
-            Not counted yet, no balance:{' '}
-            {wealth.missing.map((m, i) => (
-              <span key={m.id}>
-                {i > 0 && ', '}
-                <Link href={`/accounts/${m.id}`} className="text-brand-ink underline">
-                  {m.name}
-                </Link>
-              </span>
-            ))}
-            .
-          </p>
-        )}
-        {wealth.unconverted.length > 0 && (
-          <p className="text-caption text-ink-muted">
-            Amounts in {wealth.unconverted.join(', ')} are left out until there’s an exchange rate.
-          </p>
-        )}
-      </Card>
-    </section>
+      {wealth.owed.length > 0 && (
+        <ul aria-label="What we owe, by loan" data-testid="wealth-owed">
+          {wealth.owed.map((p) => (
+            <li key={p.key} className="border-t border-line first:border-t-0">
+              <Link
+                href={p.href}
+                className="flex min-h-12 items-center gap-3 py-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              >
+                <span className="h-6 w-1 flex-none rounded-pill bg-negative" aria-hidden />
+                <span className="grid size-7 flex-none place-items-center rounded-pill bg-surface-2 text-ink-muted">
+                  <HandCoins size={16} aria-hidden />
+                </span>
+                <span className="grid min-w-0 flex-1">
+                  <span className="truncate text-body-strong">{p.name}</span>
+                  <span className="text-caption text-ink-muted">
+                    {['Loan', p.provider].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
+                <PrivateAmount
+                  minor={-p.minor}
+                  currency={currency}
+                  whole
+                  className="text-body-strong"
+                />
+                <ChevronRight size={18} aria-hidden className="text-ink-muted" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {wealth.missing.length > 0 && (
+        <p className="text-caption text-ink-muted" data-testid="wealth-missing">
+          Not counted yet, no balance:{' '}
+          {wealth.missing.map((m, i) => (
+            <span key={m.id}>
+              {i > 0 && ', '}
+              <Link href={`/accounts/${m.id}`} className="text-brand-ink underline">
+                {m.name}
+              </Link>
+            </span>
+          ))}
+          .
+        </p>
+      )}
+      {wealth.unconverted.length > 0 && (
+        <p className="text-caption text-ink-muted">
+          Amounts in {wealth.unconverted.join(', ')} are left out until there’s an exchange rate.
+        </p>
+      )}
+    </Card>
   )
 }
 
@@ -247,13 +277,10 @@ function Split(props: {
   currency: string
   /** Share of what's owned; left out for loans. */
   share?: number
-  href: string
+  href?: string
 }) {
-  return (
-    <Link
-      href={props.href}
-      className="grid min-w-0 gap-0.5 rounded-lg border border-line bg-surface-1 px-3 py-2.5 shadow-card active:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus"
-    >
+  const body = (
+    <>
       <span className="flex items-center gap-1.5 text-caption text-ink-muted">
         {props.icon}
         {props.label}
@@ -262,12 +289,23 @@ function Split(props: {
         )}
       </span>
       <PrivateAmount
-        wrapClassName="font-display text-body-strong"
+        wrapClassName="font-display text-heading"
         minor={props.minor}
         currency={props.currency}
         whole
-        className="font-display text-body-strong"
+        className="font-display text-heading"
       />
+    </>
+  )
+  const cls = 'grid gap-1 rounded-md bg-surface-2 p-3'
+  return props.href ? (
+    <Link
+      href={props.href}
+      className={`${cls} hover:outline-1 hover:outline-line focus-visible:outline-2 focus-visible:outline-focus`}
+    >
+      {body}
     </Link>
+  ) : (
+    <div className={cls}>{body}</div>
   )
 }
