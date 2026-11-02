@@ -10,3 +10,6 @@ secrets
 !apps/**/*.md
 brand
 deploy
+.env
+.env.*
+!.env.example

@@ -36,7 +36,7 @@ import {
   isApproved,
   type NewPasskey,
 } from './repo'
-import { SESSION_REFRESH_MS } from './config'
+import { CHALLENGE_TTL_MS, MAX_OPEN_CHALLENGES, SESSION_REFRESH_MS } from './config'
 
 const url = process.env.TEST_DATABASE_URL
 const client = url ? createDb(url, { max: 2 }) : undefined
@@ -267,6 +267,25 @@ describe.skipIf(!url)('repo (Postgres)', () => {
       new Date(Date.now() - 10 * 60 * 1000),
     )
     expect(await takeChallenge(db, old, 'login')).toBeUndefined()
+  })
+
+  it('caps open challenges and clears expired ones', async () => {
+    const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS)
+    await db.insert(schema.authChallenges).values(
+      Array.from({ length: MAX_OPEN_CHALLENGES }, (_, i) => ({
+        id: `flood-${i}`,
+        challenge: 'x',
+        purpose: 'login' as const,
+        payload: {},
+        expiresAt,
+      })),
+    )
+    await expect(saveChallenge(db, { challenge: 'c', purpose: 'login' })).rejects.toBeInstanceOf(
+      AuthError,
+    )
+    const later = new Date(expiresAt.getTime() + 1000)
+    const id = await saveChallenge(db, { challenge: 'c', purpose: 'login' }, later)
+    expect(id).toBeTruthy()
   })
 
   it('keeps an audit trail and counts recent failures per ip', async () => {

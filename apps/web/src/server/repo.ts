@@ -1,7 +1,13 @@
 import type { Db, MemberRow, PasskeyRow } from '@hearthside/db'
 import { blindIndex, schema } from '@hearthside/db'
-import { and, asc, count, desc, eq, gt, isNotNull, isNull } from 'drizzle-orm'
-import { CHALLENGE_TTL_MS, INVITE_TTL_MS, SESSION_REFRESH_MS, SESSION_TTL_MS } from './config'
+import { and, asc, count, desc, eq, gt, isNotNull, isNull, lt } from 'drizzle-orm'
+import {
+  CHALLENGE_TTL_MS,
+  MAX_OPEN_CHALLENGES,
+  INVITE_TTL_MS,
+  SESSION_REFRESH_MS,
+  SESSION_TTL_MS,
+} from './config'
 import {
   RECOVERY_CODE_COUNT,
   normalizeRecoveryCode,
@@ -468,6 +474,11 @@ export async function saveChallenge(
   },
   now = new Date(),
 ) {
+  // Anyone can ask for a challenge, so clear out expired ones and cap the rest.
+  await db.delete(authChallenges).where(lt(authChallenges.expiresAt, now))
+  const [row] = await db.select({ open: count() }).from(authChallenges)
+  if ((row?.open ?? 0) >= MAX_OPEN_CHALLENGES)
+    throw new AuthError('not_allowed', 'Too many sign-in attempts. Try again in a few minutes.')
   const id = randomToken(24)
   await db.insert(authChallenges).values({
     id,
