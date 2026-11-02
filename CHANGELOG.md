@@ -55,6 +55,8 @@ moves the Unreleased notes under the new version.
 
 ### Fixed
 
+- Dragging a finger across a chart shows each day's numbers again on phones, and the Trends
+  page drops its "Show as a table" list.
 - The bottom tab bar fits phone screens from 320px wide: five tabs with short labels
   (Transactions is now Activity), and Import moved to a button in the header.
 
