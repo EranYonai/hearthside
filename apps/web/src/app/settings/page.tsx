@@ -14,6 +14,7 @@ import {
   recentAudit,
   unusedRecoveryCodeCount,
 } from '@/server/repo'
+import { backupStatus, type BackupStatus } from '@/server/backups'
 import { listCustomCategories } from '@/server/categories'
 import { requireSession } from '@/server/session'
 import { ProfileForm, RestartWelcome } from '../welcome/client'
@@ -37,13 +38,14 @@ export default async function SettingsPage() {
   const { member, household } = await requireSession()
   const db = requireDb()
   const isOwner = member.role === 'owner'
-  const [people, keys, codesLeft, invites, activity, custom] = await Promise.all([
+  const [people, keys, codesLeft, invites, activity, custom, backup] = await Promise.all([
     listMembers(db, household.id, { includePending: isOwner }),
     listPasskeys(db, member.id),
     unusedRecoveryCodeCount(db, member.id),
     isOwner ? listOpenInvites(db, household.id) : Promise.resolve([]),
     isOwner ? recentAudit(db, household.id, 15) : Promise.resolve([]),
     listCustomCategories(db, household.id),
+    isOwner ? backupStatus() : Promise.resolve<BackupStatus>({ state: 'none' }),
   ])
   const editor = member.role !== 'viewer'
   const waiting = people.filter((p) => !isApproved(p))
@@ -188,6 +190,13 @@ export default async function SettingsPage() {
       </Card>
 
       {isOwner && (
+        <Card aria-labelledby="backups">
+          <Label id="backups">Backups</Label>
+          <BackupLine status={backup} />
+        </Card>
+      )}
+
+      {isOwner && (
         <Card aria-labelledby="activity">
           <Label id="activity">Recent sign-in activity</Label>
           <ul className="grid gap-1 text-caption">
@@ -206,5 +215,36 @@ export default async function SettingsPage() {
         </Card>
       )}
     </AppShell>
+  )
+}
+
+const stamp = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+function BackupLine({ status }: { status: BackupStatus }) {
+  if (status.state === 'none')
+    return (
+      <p className="text-caption text-ink-muted">
+        No backup yet. See docs/backups.md to set it up.
+      </p>
+    )
+  const when = stamp.format(status.at)
+  if (status.state === 'failed')
+    return (
+      <Notice tone="negative">
+        Last backup failed ({when}): {status.error || 'unknown error'}
+      </Notice>
+    )
+  const where = status.offsite ? 'saved here and offsite' : 'saved here only'
+  if (status.state === 'stale')
+    return <Notice tone="negative">No backup since {when}. Check the backup service.</Notice>
+  return (
+    <p className="text-caption">
+      Last backup {when}, {where}.
+    </p>
   )
 }

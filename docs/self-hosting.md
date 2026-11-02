@@ -82,6 +82,10 @@ delayed while markets are open. The app asks at most every 15 minutes per holdin
 someone has the Invest tab open, and only sends the ticker. Unknown tickers are retried daily;
 their price can be entered by hand. Set `QUOTES_URL=off` in `.env` to turn this off.
 
+## Backups
+
+See [Backups](backups.md). Set `BACKUP_RECIPIENT` before going live.
+
 ## Changing the database password
 
 Postgres only reads `secrets/db_password.txt` when it creates the database volume. Rewriting
