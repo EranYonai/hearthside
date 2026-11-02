@@ -322,9 +322,16 @@ test('dropping a card statement picks or creates its account and imports it', as
     .click()
   await owner.getByRole('dialog').getByRole('button', { name: 'Groceries' }).click()
   await expect(owner.getByText('Also filed 1 other “Corner Bakery” transactions.')).toBeVisible()
+  await owner.getByText('More filters').click()
   await owner.getByRole('combobox', { name: 'Category', exact: true }).selectOption('groceries')
-  await owner.getByRole('button', { name: 'Filter' }).click()
+  // Picking a filter applies it; there's no Filter button.
   await expect(owner.getByTestId('transactions').getByRole('listitem')).toHaveCount(2)
+  // Typing applies after a short pause, and the field keeps focus.
+  const search = owner.getByRole('searchbox', { name: 'Search' })
+  await search.pressSequentially('Bakery')
+  await expect(owner).toHaveURL(/q=Bakery/)
+  await expect(search).toBeFocused()
+  await expect(search).toHaveValue('Bakery')
 
   await owner.goto('/')
   await expect(owner.getByLabel('Spent in October')).toContainText('Groceries')
@@ -443,6 +450,27 @@ test('the year view shows money in and out and each category', async () => {
   // Home says how fresh each account's data is.
   await owner.goto('/')
   await expect(owner.getByTestId('freshness')).toContainText('Card ·4821')
+  // Import opens from the Add button on any tab and goes back to where it was opened.
+  await owner.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Add' }).click()
+  await owner
+    .getByRole('dialog', { name: 'Add' })
+    .getByRole('link', { name: /Import a file/ })
+    .click()
+  await expect(owner.getByRole('heading', { name: 'Import', exact: true })).toBeVisible()
+  await owner.getByRole('link', { name: 'Back to Home' }).click()
+  await expect(owner.getByTestId('freshness')).toBeVisible()
+  // Settings sits behind your initial at the top.
+  await owner.getByRole('banner').getByRole('link', { name: 'Settings' }).click()
+  await expect(owner.getByRole('heading', { name: 'Settings' })).toBeVisible()
+  // Add forms open from the Add sheet only, and close with Cancel.
+  await owner.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Add' }).click()
+  await owner
+    .getByRole('dialog', { name: 'Add' })
+    .getByRole('link', { name: /^Add an account/ })
+    .click()
+  await expect(owner.getByRole('heading', { name: 'Add an account' })).toBeVisible()
+  await owner.getByRole('link', { name: 'Cancel' }).click()
+  await expect(owner.getByRole('heading', { name: 'Add an account' })).toHaveCount(0)
   // One statement can't show a repeating payment yet.
   await owner.goto('/recurring')
   await expect(owner.getByRole('heading', { name: 'Fixed costs' })).toBeVisible()
@@ -574,12 +602,23 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await expect(owner.getByTestId('movements')).toContainText('Deposit')
   await expect(owner.getByTestId('movements')).toContainText('+$1,000')
 
-  await owner.getByRole('link', { name: 'Investments' }).click()
+  // Opened from Accounts, so back goes to Accounts.
+  await owner.getByRole('link', { name: 'Back to Accounts' }).click()
+  await expect(owner.getByTestId('accounts-investment')).toBeVisible()
+  await owner
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Invest' })
+    .click()
+  // A tab starts fresh: no back button on it.
+  await expect(owner.getByTestId('back')).toHaveCount(0)
   await owner.getByRole('link', { name: 'Trends' }).click()
   await expect(owner.getByRole('heading', { name: 'Trends' })).toBeVisible()
   await expect(owner.getByTestId('trend-empty')).toContainText('recorded once a day')
   await owner.getByRole('navigation', { name: 'Range' }).getByRole('link', { name: 'All' }).click()
   await expect(owner.getByTestId('years')).toContainText('$1,000')
+  // Changing the range doesn't trap back on the same page.
+  await owner.getByRole('link', { name: 'Back to Investments' }).click()
+  await expect(owner.getByRole('heading', { name: 'Investments' })).toBeVisible()
 
   // The same file again updates the same account.
   await drop(
@@ -621,7 +660,7 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
   await owner.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(owner.getByTestId('checkup')).toContainText('60/40 target')
   await owner.goto('/invest')
-  await expect(owner.getByRole('link', { name: /Check-up/ })).toBeVisible()
+  await expect(owner.getByRole('main').getByRole('link', { name: /Check-up/ })).toBeVisible()
 
   // A file from a broker we know, with an account number, adds its own account.
   const broker = await drop(
@@ -643,7 +682,11 @@ test('property and loans count toward what the home owns', async () => {
   await expect(estate).toContainText('Add a home you own')
 
   // Synthetic names and numbers only.
-  await estate.getByText('Add a property').click()
+  await owner.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Add' }).click()
+  await owner
+    .getByRole('dialog', { name: 'Add' })
+    .getByRole('link', { name: 'Add a property' })
+    .click()
   const addProperty = owner.getByRole('form', { name: 'Add a property' })
   await addProperty.getByLabel('Name').fill('Test flat')
   await addProperty.getByLabel('Currency').selectOption('USD')
@@ -655,8 +698,9 @@ test('property and loans count toward what the home owns', async () => {
   await expect(owner.getByTestId('property-value')).toContainText('$500,000')
   await expect(owner.getByTestId('property-equity')).toContainText('$500,000')
 
-  await owner.getByRole('link', { name: 'Investments' }).click()
-  await estate.getByText('Add a loan').click()
+  // The Add sheet opens the loan form on Invest.
+  await owner.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Add' }).click()
+  await owner.getByRole('dialog', { name: 'Add' }).getByRole('link', { name: 'Add a loan' }).click()
   const addLoan = owner.getByRole('form', { name: 'Add a loan' })
   await addLoan.getByLabel('Name').fill('Test mortgage')
   await addLoan.getByLabel('Currency').selectOption('USD')

@@ -24,7 +24,7 @@ export default async function ImportPage() {
   const db = requireDb()
   if (!canEdit(member)) {
     return (
-      <AppShell household={household.name} current="/import">
+      <AppShell household={household.name} current="/import" back={{ href: '/', label: 'Home' }}>
         <h1 className="font-display text-title">Import</h1>
         <Notice tone="info">Viewers can see transactions but can’t import them.</Notice>
       </AppShell>
@@ -39,7 +39,7 @@ export default async function ImportPage() {
   const investable = investAccounts.filter((a) => mayManage(member, a))
   const mine = accounts.filter((a) => a.ownerId === member.id)
   return (
-    <AppShell household={household.name} current="/import">
+    <AppShell household={household.name} current="/import" back={{ href: '/', label: 'Home' }}>
       <h1 className="font-display text-title">Import</h1>
 
       <Card aria-labelledby="import-title">

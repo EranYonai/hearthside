@@ -5,8 +5,8 @@ import {
   loanKindLabel,
   parseRate,
 } from '@hearthside/core'
-import { Amount, buttonClasses, Card, Label, Notice } from '@hearthside/ui'
-import { ChevronLeft, HandCoins } from 'lucide-react'
+import { Amount, Card, Label, Notice } from '@hearthside/ui'
+import { HandCoins } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -73,11 +73,11 @@ export default async function LoanPage({ params }: { params: Promise<{ id: strin
   const principalYear = year.reduce((n, p) => n + p.principalMinor, 0)
 
   return (
-    <AppShell household={household.name} current="/invest">
-      <Link href="/invest" className={`${buttonClasses('ghost')} justify-self-start`}>
-        <ChevronLeft aria-hidden />
-        Investments
-      </Link>
+    <AppShell
+      household={household.name}
+      current="/invest"
+      back={{ href: '/invest', label: 'Investments' }}
+    >
       <div className="grid gap-1">
         <h1 className="flex items-center gap-2 font-display text-title">
           <span className="grid size-10 place-items-center rounded-pill bg-surface-2 text-ink-muted">

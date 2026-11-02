@@ -8,7 +8,7 @@ import {
   SpendingBreakdown,
   TransactionList,
 } from '@hearthside/ui'
-import { ChevronLeft, ChevronRight, FileUp } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileUp, Search } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AppShell } from '@/components/AppShell'
@@ -29,7 +29,7 @@ import { listMembers } from '@/server/repo'
 import { requireSession } from '@/server/session'
 import { householdCategorySet } from '@/server/categories'
 import { listBudgets } from '@/server/budgets'
-import { CategorisedRow, CategorizeNow, type TxView } from './client'
+import { AutoFilterForm, CategorisedRow, CategorizeNow, type TxView } from './client'
 import { ViewSwitch, YearView } from './year'
 
 export const metadata: Metadata = { title: 'Transactions · Hearthside' }
@@ -193,6 +193,8 @@ export default async function TransactionsPage({
       : {}),
   }))
   const label = monthName.format(new Date(`${month}-01`))
+  // Filters other than search, to open the filter panel when any is on.
+  const narrowed = [holderId, accountId, filter.category].filter(Boolean).length
 
   return (
     <AppShell household={household.name} current="/transactions">
@@ -275,64 +277,73 @@ export default async function TransactionsPage({
         </p>
       )}
 
-      <form
-        className={`grid gap-2 ${people.length > 1 ? 'sm:grid-cols-[1fr_1fr_1fr_1fr_auto]' : 'sm:grid-cols-[1fr_1fr_1fr_auto]'}`}
-        action="/transactions"
-        role="search"
-      >
+      <AutoFilterForm>
         <input type="hidden" name="month" value={month} />
         {type && <input type="hidden" name="type" value={type} />}
-        {people.length > 1 && (
-          <label className="grid gap-1">
-            <span className="text-caption text-ink-muted">Whose</span>
-            <select name="who" defaultValue={holderId ?? ''} className={selectClass}>
-              <option value="">Everyone</option>
-              {people.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.id === member.id ? `${p.name} (you)` : p.name}
-                </option>
-              ))}
-            </select>
+        <div className="flex">
+          <label className="relative min-w-0 flex-1">
+            <span className="sr-only">Search</span>
+            <Search
+              size={18}
+              aria-hidden
+              className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-ink-faint"
+            />
+            <input
+              name="q"
+              type="search"
+              defaultValue={filter.search ?? ''}
+              className={`${selectClass} w-full ps-10`}
+              placeholder="Search descriptions"
+            />
           </label>
-        )}
-        <label className="grid gap-1">
-          <span className="text-caption text-ink-muted">Account</span>
-          <select name="account" defaultValue={accountId ?? ''} className={selectClass}>
-            <option value="">All accounts</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1">
-          <span className="text-caption text-ink-muted">Category</span>
-          <select name="category" defaultValue={filter.category ?? ''} className={selectClass}>
-            <option value="">All categories</option>
-            <option value="none">Uncategorized</option>
-            <option value="alerts">Alerts to check</option>
-            {categories.all.map((c) => (
-              <option key={c.slug} value={c.slug}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1">
-          <span className="text-caption text-ink-muted">Search</span>
-          <input
-            name="q"
-            type="search"
-            defaultValue={filter.search ?? ''}
-            className={selectClass}
-            placeholder="Description"
-          />
-        </label>
-        <button type="submit" className={`${buttonClasses('secondary')} self-end`}>
-          Filter
-        </button>
-      </form>
+        </div>
+        <details className="group" open={narrowed > 0}>
+          <summary className="cursor-pointer text-body-strong text-brand-ink">
+            {narrowed ? `Filters · ${narrowed} on` : 'More filters'}
+          </summary>
+          <div
+            className={`grid gap-2 pt-2 ${people.length > 1 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}
+          >
+            {people.length > 1 && (
+              <label className="grid gap-1">
+                <span className="text-caption text-ink-muted">Whose</span>
+                <select name="who" defaultValue={holderId ?? ''} className={selectClass}>
+                  <option value="">Everyone</option>
+                  {people.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.id === member.id ? `${p.name} (you)` : p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="grid gap-1">
+              <span className="text-caption text-ink-muted">Account</span>
+              <select name="account" defaultValue={accountId ?? ''} className={selectClass}>
+                <option value="">All accounts</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1">
+              <span className="text-caption text-ink-muted">Category</span>
+              <select name="category" defaultValue={filter.category ?? ''} className={selectClass}>
+                <option value="">All categories</option>
+                <option value="none">Uncategorized</option>
+                <option value="alerts">Alerts to check</option>
+                {categories.all.map((c) => (
+                  <option key={c.slug} value={c.slug}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </details>
+      </AutoFilterForm>
 
       <Card aria-labelledby="list-title">
         <div className="flex flex-wrap items-center justify-between gap-2">

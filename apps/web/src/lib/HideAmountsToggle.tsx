@@ -29,7 +29,7 @@ export function HideAmountsToggle() {
       aria-pressed={hidden}
       aria-label={hidden ? 'Show numbers' : 'Hide numbers'}
       title={hidden ? 'Show numbers' : 'Hide numbers'}
-      className="inline-flex size-11 items-center justify-center rounded-pill text-ink-muted hover:bg-surface-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-focus"
+      className="inline-flex size-11 items-center justify-center rounded-pill text-ink-muted hover:bg-surface-2 active:bg-surface-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-focus"
       onClick={() => {
         applyHidden(!hidden, document.documentElement, globalThis.localStorage)
         window.dispatchEvent(new Event(CHANGE))

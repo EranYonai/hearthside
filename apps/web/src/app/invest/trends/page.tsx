@@ -1,6 +1,5 @@
 import { isTrendRange, TREND_RANGES } from '@hearthside/core'
-import { Amount, buttonClasses, Card, cx, Label } from '@hearthside/ui'
-import { ChevronLeft } from 'lucide-react'
+import { Amount, Card, cx, Label } from '@hearthside/ui'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AppShell } from '@/components/AppShell'
@@ -41,11 +40,11 @@ export default async function TrendsPage({
   const gain = last ? last.valueMinor - last.contributedMinor : 0
 
   return (
-    <AppShell household={household.name} current="/invest">
-      <Link href="/invest" className={`${buttonClasses('ghost')} justify-self-start`}>
-        <ChevronLeft aria-hidden />
-        Investments
-      </Link>
+    <AppShell
+      household={household.name}
+      current="/invest"
+      back={{ href: '/invest', label: 'Investments' }}
+    >
       <h1 className="font-display text-title">Trends</h1>
 
       <nav aria-label="Range" className="flex gap-1 overflow-x-auto">
@@ -56,7 +55,9 @@ export default async function TrendsPage({
             aria-current={r.key === range ? 'page' : undefined}
             className={cx(
               'grid min-h-11 min-w-11 place-items-center rounded-pill px-3 text-caption font-semibold',
-              r.key === range ? 'bg-brand text-on-brand' : 'text-ink-muted hover:bg-surface-2',
+              r.key === range
+                ? 'bg-brand text-on-brand'
+                : 'text-ink-muted hover:bg-surface-2 active:bg-surface-2',
             )}
           >
             {r.label}

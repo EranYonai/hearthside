@@ -24,7 +24,7 @@ export default async function RecurringPage() {
   const changed = items.filter((r) => r.changedPercent !== null)
 
   return (
-    <AppShell household={household.name} current="/transactions">
+    <AppShell household={household.name} current="/" back={{ href: '/', label: 'Home' }}>
       <h1 className="font-display text-title">Fixed costs</h1>
       <Card aria-label="Fixed costs a month">
         <Label>About this much goes out every month</Label>

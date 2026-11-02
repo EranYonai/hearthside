@@ -101,7 +101,9 @@ export default async function Home({
     <AppShell household={household.name} current="/">
       <div className="grid gap-0.5">
         <h1 className="font-display text-title">Hi {member.name}</h1>
-        <p className="text-caption text-ink-muted">{todayFormat.format(new Date())}</p>
+        <p className="text-caption text-ink-muted">
+          <span>{household.name}</span> · {todayFormat.format(new Date())}
+        </p>
       </div>
       {waiting > 0 && (
         <Notice tone="warning">
@@ -187,7 +189,7 @@ export default async function Home({
                     <li key={m.category || 'none'}>
                       <Link
                         href={`/transactions?month=${latest}&category=${m.category || 'none'}`}
-                        className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus"
+                        className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2 hover:bg-surface-2 active:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus"
                       >
                         <CategoryIcon category={categories.icon(slug) as Category} />
                         <span className="truncate text-body-strong">{categories.label(slug)}</span>

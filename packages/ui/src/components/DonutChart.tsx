@@ -148,7 +148,7 @@ export function DonutChart({
                 <a
                   href={s.href}
                   aria-label={`${s.name}, ${formatMoney(s.minor, { currency, whole: true })}, ${Math.round(s.percent)}%`}
-                  className={`${cls} hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus`}
+                  className={`${cls} hover:bg-surface-2 active:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus`}
                 >
                   {row}
                 </a>

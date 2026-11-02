@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
-import type { ReactNode } from 'react'
+import { type ReactNode, Suspense } from 'react'
+import { NavTracker } from '@/components/BackLink'
 import { PRIVACY_BOOT_SCRIPT } from '@/lib/privacy'
 import { THEME_BOOT_SCRIPT } from '@/lib/theme'
 import './globals.css'
@@ -35,7 +36,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT + PRIVACY_BOOT_SCRIPT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <Suspense>
+          <NavTracker />
+        </Suspense>
+      </body>
     </html>
   )
 }
