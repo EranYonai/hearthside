@@ -183,3 +183,92 @@ export function cleanFundFacts(input: {
     documents,
   }
 }
+
+/** A company's or fund's headline numbers from the quote source. Every field may be missing. */
+export interface KeyStats {
+  /** "fund" for ETFs and mutual funds, "share" for companies. */
+  kind: 'fund' | 'share' | null
+  marketCap: number | null
+  /** Price to earnings, trailing and expected. */
+  pe: number | null
+  forwardPe: number | null
+  /** Earnings per share, trailing, in the price currency. */
+  eps: number | null
+  /** Yearly, in the reporting currency. */
+  revenue: number | null
+  netIncome: number | null
+  /** Fractions, e.g. 0.012 for 1.2%. */
+  profitMargin: number | null
+  dividendYield: number | null
+  beta: number | null
+  low52: number | null
+  high52: number | null
+  sector: string | null
+  industry: string | null
+  country: string | null
+  /** Funds: yearly fee as a fraction, total assets, category and manager. */
+  expenseRatio: number | null
+  fundSize: number | null
+  category: string | null
+  family: string | null
+  ytdReturn: number | null
+  fiveYearReturn: number | null
+}
+
+/**
+ * Read a quote summary answer (modules price, summaryDetail, defaultKeyStatistics,
+ * financialData, assetProfile, fundProfile). Values come as `{ raw, fmt }` or plain numbers.
+ * Null when the symbol is unknown.
+ */
+export function parseQuoteSummary(body: unknown): KeyStats | null {
+  const qs = (body as { quoteSummary?: { result?: unknown; error?: unknown } } | null)?.quoteSummary
+  if (!qs) throw new Error('summary: unexpected answer')
+  const result = Array.isArray(qs.result) ? (qs.result[0] as Record<string, unknown>) : null
+  if (!result) {
+    if (qs.error) return null
+    throw new Error('summary: empty answer')
+  }
+  const mod = (name: string) => (result[name] ?? {}) as Record<string, unknown>
+  const num = (v: unknown): number | null => {
+    const raw = v && typeof v === 'object' ? (v as { raw?: unknown }).raw : v
+    return typeof raw === 'number' && Number.isFinite(raw) ? raw : null
+  }
+  const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 80) : null)
+  const first = <T>(...values: (T | null)[]) => values.find((v) => v !== null) ?? null
+  const price = mod('price')
+  const detail = mod('summaryDetail')
+  const stats = mod('defaultKeyStatistics')
+  const fin = mod('financialData')
+  const profile = mod('assetProfile')
+  const fund = mod('fundProfile')
+  const fees = (fund.feesExpensesInvestment ?? {}) as Record<string, unknown>
+  const type = text(price.quoteType)
+  const kind = type === 'ETF' || type === 'MUTUALFUND' ? 'fund' : type === 'EQUITY' ? 'share' : null
+  return {
+    kind,
+    marketCap: first(num(price.marketCap), num(detail.marketCap)),
+    pe: num(detail.trailingPE),
+    forwardPe: first(num(detail.forwardPE), num(stats.forwardPE)),
+    eps: num(stats.trailingEps),
+    revenue: num(fin.totalRevenue),
+    netIncome: num(stats.netIncomeToCommon),
+    profitMargin: first(num(fin.profitMargins), num(stats.profitMargins)),
+    dividendYield: first(num(detail.dividendYield), num(detail.yield), num(stats.yield)),
+    beta: first(num(detail.beta), num(stats.beta3Year)),
+    low52: num(detail.fiftyTwoWeekLow),
+    high52: num(detail.fiftyTwoWeekHigh),
+    sector: text(profile.sector),
+    industry: text(profile.industry),
+    country: text(profile.country),
+    expenseRatio: first(
+      num(fees.annualReportExpenseRatio),
+      num(stats.annualReportExpenseRatio),
+      num(detail.expenseRatio),
+    ),
+    fundSize: first(num(detail.totalAssets), num(stats.totalAssets)),
+    category: first(text(fund.categoryName), text(stats.category)),
+    family: first(text(fund.family), text(stats.fundFamily)),
+    ytdReturn: num(stats.ytdReturn),
+    fiveYearReturn: num(stats.fiveYearAverageReturn),
+  }
+}

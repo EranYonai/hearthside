@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { clearHistoryCache, lookupTicker } from './prices'
+import { clearHistoryCache, keyStats, lookupTicker } from './prices'
 
 const source = 'https://quotes.test'
 
@@ -56,5 +56,68 @@ describe('lookupTicker', () => {
       async () => new Response('{}', { status: 404 }),
     ) as unknown as typeof globalThis.fetch
     expect(await lookupTicker('NOPE', { url: source, fetch })).toBeNull()
+  })
+})
+
+describe('keyStats', () => {
+  const fund = { symbol: 'TST1', currency: 'USD', quoteSymbol: null }
+  const summary = {
+    quoteSummary: {
+      result: [{ price: { quoteType: 'ETF' }, summaryDetail: { trailingPE: { raw: 25 } } }],
+      error: null,
+    },
+  }
+
+  function source(opts: { refuseFirst?: boolean } = {}) {
+    let refused = !opts.refuseFirst
+    return vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input)
+      const cookie = new Headers(init?.headers).get('cookie')
+      if (url.startsWith('https://cookie.test'))
+        return new Response('', { status: 404, headers: { 'set-cookie': 'A3=abc; Path=/' } })
+      if (url.includes('/getcrumb'))
+        return new Response(cookie === 'A3=abc' ? 'crumb1' : '', {
+          status: cookie ? 200 : 401,
+        })
+      if (url.includes('/quoteSummary/')) {
+        if (!refused) {
+          refused = true
+          return new Response('{}', { status: 401 })
+        }
+        expect(url).toContain('crumb=crumb1')
+        expect(cookie).toBe('A3=abc')
+        return new Response(JSON.stringify(summary))
+      }
+      return new Response('{}', { status: 500 })
+    }) as unknown as typeof globalThis.fetch
+  }
+  const opts = (fetch: typeof globalThis.fetch) => ({
+    url: 'https://quotes.test',
+    cookieUrl: 'https://cookie.test',
+    fetch,
+  })
+
+  it('gets a session, reads the summary and caches it for a day', async () => {
+    const fetch = source()
+    expect(await keyStats(fund, opts(fetch))).toMatchObject({ kind: 'fund', pe: 25 })
+    const calls = vi.mocked(fetch).mock.calls.length
+    await keyStats(fund, opts(fetch))
+    expect(vi.mocked(fetch).mock.calls.length).toBe(calls)
+    // Only the symbol goes out.
+    for (const [u] of vi.mocked(fetch).mock.calls) expect(String(u)).not.toMatch(/units|name/i)
+  })
+
+  it('asks for a new session when the old one is refused', async () => {
+    const fetch = source({ refuseFirst: true })
+    expect(await keyStats(fund, opts(fetch))).toMatchObject({ pe: 25 })
+  })
+
+  it('is null when the source is off or failing', async () => {
+    expect(await keyStats(fund, { url: null })).toBeNull()
+    const down = vi.fn(async () => {
+      throw new Error('offline')
+    }) as unknown as typeof globalThis.fetch
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await keyStats(fund, { ...opts(down) })).toBeNull()
   })
 })

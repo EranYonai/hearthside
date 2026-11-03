@@ -5,6 +5,7 @@ import {
   isHistoryRange,
   NOT_FOUND_RETRY_MS,
   parseChartHistory,
+  parseQuoteSummary,
   parseChartQuote,
   quoteIsDue,
   quoteSymbolFor,
@@ -168,5 +169,77 @@ describe('cleanFundFacts', () => {
       { documents: Array.from({ length: 6 }, () => ({ url: 'https://example.com' })) },
     ])
       expect(() => cleanFundFacts(bad)).toThrow(FundFactsError)
+  })
+})
+
+describe('parseQuoteSummary', () => {
+  const answer = (result: unknown) => ({ quoteSummary: { result: [result], error: null } })
+
+  it('reads a share’s headline numbers, raw or plain', () => {
+    const stats = parseQuoteSummary(
+      answer({
+        price: { quoteType: 'EQUITY', marketCap: { raw: 2.5e12, fmt: '2.5T' } },
+        summaryDetail: {
+          trailingPE: { raw: 31.2 },
+          forwardPE: 28,
+          dividendYield: { raw: 0.0045 },
+          fiftyTwoWeekLow: { raw: 150 },
+          fiftyTwoWeekHigh: { raw: 230 },
+          beta: { raw: 1.1 },
+        },
+        defaultKeyStatistics: { trailingEps: { raw: 6.5 }, netIncomeToCommon: { raw: 9.9e10 } },
+        financialData: { totalRevenue: { raw: 3.9e11 }, profitMargins: { raw: 0.25 } },
+        assetProfile: { sector: 'Technology', industry: 'Test devices', country: 'Testland' },
+      }),
+    )
+    expect(stats).toMatchObject({
+      kind: 'share',
+      marketCap: 2.5e12,
+      pe: 31.2,
+      forwardPe: 28,
+      eps: 6.5,
+      revenue: 3.9e11,
+      netIncome: 9.9e10,
+      profitMargin: 0.25,
+      dividendYield: 0.0045,
+      low52: 150,
+      high52: 230,
+      sector: 'Technology',
+      expenseRatio: null,
+    })
+  })
+
+  it('reads a fund’s fee, size and category', () => {
+    expect(
+      parseQuoteSummary(
+        answer({
+          price: { quoteType: 'ETF' },
+          summaryDetail: { yield: { raw: 0.012 }, totalAssets: { raw: 5e11 }, trailingPE: {} },
+          defaultKeyStatistics: { ytdReturn: { raw: 0.15 }, fiveYearAverageReturn: { raw: 0.13 } },
+          fundProfile: {
+            categoryName: 'Large Blend',
+            family: 'Test Funds',
+            feesExpensesInvestment: { annualReportExpenseRatio: { raw: 0.0003 } },
+          },
+        }),
+      ),
+    ).toMatchObject({
+      kind: 'fund',
+      pe: null,
+      dividendYield: 0.012,
+      fundSize: 5e11,
+      expenseRatio: 0.0003,
+      category: 'Large Blend',
+      family: 'Test Funds',
+      ytdReturn: 0.15,
+      fiveYearReturn: 0.13,
+    })
+  })
+
+  it('is null for an unknown symbol and throws on junk', () => {
+    expect(
+      parseQuoteSummary({ quoteSummary: { result: null, error: { code: 'Not Found' } } }),
+    ).toBe(null)
+    expect(() => parseQuoteSummary({})).toThrow()
   })
 })

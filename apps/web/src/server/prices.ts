@@ -2,6 +2,8 @@ import {
   type HistoryRange,
   parseChartHistory,
   parseChartQuote,
+  parseQuoteSummary,
+  type KeyStats,
   type PriceHistory,
   quoteIsDue,
   quoteSymbolFor,
@@ -279,7 +281,91 @@ export async function lookupTicker(
   return { symbol, name: h.longName, currency: h.currency, price: h.points.at(-1)?.price ?? null }
 }
 
+const STATS_TTL_MS = 24 * 60 * 60 * 1000
+const STATS_MODULES =
+  'price,summaryDetail,defaultKeyStatistics,financialData,assetProfile,fundProfile'
+const statsCache = new Map<string, { at: number; stats: KeyStats | null }>()
+/** The source's session cookie and crumb, asked for once and reused until refused. */
+let session: { cookie: string; crumb: string } | null = null
+
+/** Where the quote source hands out its session cookie. */
+export function quoteCookieUrl(env: Record<string, string | undefined> = process.env) {
+  return (env.QUOTES_COOKIE_URL || 'https://fc.yahoo.com').replace(/\/+$/, '')
+}
+
+const HEADERS = { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (Hearthside)' }
+
+async function newSession(base: string, cookieUrl: string, doFetch: typeof fetch) {
+  const first = await doFetch(cookieUrl, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: HEADERS,
+    redirect: 'manual',
+  })
+  const cookie = first.headers
+    .getSetCookie()
+    .map((c) => c.split(';')[0]!.trim())
+    .filter(Boolean)
+    .join('; ')
+  const res = await doFetch(`${base}/v1/test/getcrumb`, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: { ...HEADERS, accept: 'text/plain', cookie },
+  })
+  const crumb = (await res.text()).trim()
+  if (!res.ok || !crumb || crumb.length > 64 || /[\s<{]/.test(crumb))
+    throw new Error(`crumb: HTTP ${res.status}`)
+  return { cookie, crumb }
+}
+
+/**
+ * Headline numbers for a security (P/E, earnings, fund fee and size, …) from the quote source,
+ * cached for a day. Only the symbol is sent. Null when the source is off, doesn't know the
+ * symbol, or can't be reached.
+ */
+export async function keyStats(
+  instrument: { symbol: string; currency: string; quoteSymbol: string | null },
+  options: { url?: string | null; cookieUrl?: string; fetch?: typeof fetch; now?: Date } = {},
+): Promise<KeyStats | null> {
+  const url = options.url === undefined ? quoteSourceUrl() : options.url
+  if (!url) return null
+  const doFetch = options.fetch ?? fetch
+  const now = (options.now ?? new Date()).getTime()
+  const symbol = quoteSymbolFor(instrument.symbol, instrument.currency, instrument.quoteSymbol)
+  const key = `${url}|${symbol}`
+  const hit = statsCache.get(key)
+  if (hit && now - hit.at < STATS_TTL_MS) return hit.stats
+  let stats: KeyStats | null = null
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      session ??= await newSession(url, options.cookieUrl ?? quoteCookieUrl(), doFetch)
+      const res = await doFetch(
+        `${url}/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${STATS_MODULES}&crumb=${encodeURIComponent(session.crumb)}`,
+        {
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          headers: { ...HEADERS, cookie: session.cookie },
+        },
+      )
+      if (res.status === 401 || res.status === 403) {
+        session = null
+        continue
+      }
+      if (res.status === 404) break
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      stats = parseQuoteSummary(await res.json())
+      break
+    }
+  } catch (err) {
+    console.error(JSON.stringify({ level: 'warn', msg: 'key stats failed', error: String(err) }))
+    // Try again in an hour rather than a day.
+    statsCache.set(key, { at: now - STATS_TTL_MS + 60 * 60 * 1000, stats: null })
+    return null
+  }
+  statsCache.set(key, { at: now, stats })
+  return stats
+}
+
 /** For tests. */
 export function clearHistoryCache() {
   historyCache.clear()
+  statsCache.clear()
+  session = null
 }
