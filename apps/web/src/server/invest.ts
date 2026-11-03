@@ -5,6 +5,7 @@ import {
   normalizeSymbol,
   parseDecimal,
   summarizePortfolio,
+  addDecimals,
   valueMinor,
   type AssetClass,
   cleanFundFacts,
@@ -290,40 +291,70 @@ async function upsertInstrument(
   return row!
 }
 
-/** Add a holding by hand, or replace the units of one the account already has. */
+/**
+ * Add a holding by hand, or change one. With `mode: 'add'` (the add form) a holding the account
+ * already has grows by the new units and what was paid for them, so a second buy of the same
+ * ticker adds to the first. With `mode: 'replace'` (the edit form) the units are set as typed.
+ */
 export async function saveHolding(
   db: Db,
   member: MemberRow,
   accountId: string,
   input: HoldingInput,
   now = new Date(),
+  mode: 'add' | 'replace' = 'replace',
 ) {
   const account = await getVisibleInvestmentAccount(db, member, accountId)
   assertManage(member, account)
   const h = cleanHolding(input)
   return db.transaction(async (tx) => {
     const instrument = await upsertInstrument(tx, member, h)
-    const [row] = await tx
-      .insert(holdings)
-      .values({
-        householdId: member.householdId,
-        accountId,
-        instrumentId: instrument.id,
-        units: h.units,
-        costMinor: h.costMinor,
-        source: 'manual',
-      })
-      .onConflictDoUpdate({
-        target: [holdings.accountId, holdings.instrumentId],
-        set: {
+    const [existing] = await tx
+      .select()
+      .from(holdings)
+      .where(and(eq(holdings.accountId, accountId), eq(holdings.instrumentId, instrument.id)))
+      .for('update')
+    let row: typeof existing
+    if (!existing) {
+      ;[row] = await tx
+        .insert(holdings)
+        .values({
+          householdId: member.householdId,
+          accountId,
+          instrumentId: instrument.id,
+          units: h.units,
+          costMinor: h.costMinor,
+          source: 'manual',
+        })
+        .returning()
+    } else if (mode === 'add') {
+      // What was paid in total stays known only when both parts are known.
+      const added = h.costMinor
+      const costMinor =
+        existing.costMinor === null || added === null ? null : existing.costMinor + added
+      ;[row] = await tx
+        .update(holdings)
+        .set({
+          units: addDecimals(existing.units, h.units),
+          costMinor,
+          source: 'manual',
+          updatedAt: now,
+        })
+        .where(eq(holdings.id, existing.id))
+        .returning()
+    } else {
+      ;[row] = await tx
+        .update(holdings)
+        .set({
           units: h.units,
           // An empty "total paid" keeps what was there.
           ...(h.costMinor === null ? {} : { costMinor: h.costMinor }),
           source: 'manual',
           updatedAt: now,
-        },
-      })
-      .returning()
+        })
+        .where(eq(holdings.id, existing.id))
+        .returning()
+    }
     if (h.price)
       await tx
         .insert(instrumentPrices)
@@ -332,7 +363,7 @@ export async function saveHolding(
       householdId: member.householdId,
       memberId: member.id,
       action: 'holding.saved',
-      detail: { accountId, holdingId: row!.id },
+      detail: { accountId, holdingId: row!.id, mode: existing ? mode : 'add' },
     })
     return row!
   })
