@@ -15,7 +15,7 @@ import { LineChart } from '@/components/LineChart'
 import { requireDb } from '@/lib/db'
 import { LocalTime } from '@/lib/LocalTime'
 import { currentRates } from '@/server/fx'
-import { getHolding, listHoldings, mayManage } from '@/server/invest'
+import { getHolding, holdingBuys, listHoldings, mayManage } from '@/server/invest'
 import { keepQuotesFresh, priceHistory } from '@/server/prices'
 import { AuthError } from '@/server/repo'
 import { requireSession } from '@/server/session'
@@ -47,6 +47,19 @@ function priceText(price: string, currency: string): string {
   }).format(n)
 }
 
+function percentText(ratio: number): string {
+  return `${ratio >= 0 ? '+' : '−'}${Math.abs(ratio * 100).toFixed(1)}%`
+}
+
+function dayText(on: string): string {
+  return new Date(`${on}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid gap-0.5">
@@ -74,10 +87,11 @@ export default async function HoldingPage({
     throw err
   })
   const security = h.kind === 'security'
-  const [history, all, { rates }] = await Promise.all([
+  const [history, all, { rates }, lots] = await Promise.all([
     security ? priceHistory(db, { ...h, id: h.instrumentId }, range) : null,
     listHoldings(db, member),
     currentRates(db),
+    security ? holdingBuys(db, h) : null,
   ])
   const total = summarizePortfolio(all, member.displayCurrency, rates).totalMinor
   const mine =
@@ -145,6 +159,65 @@ export default async function HoldingPage({
           )}
         </dl>
       </Card>
+
+      {lots && (lots.buys.length > 0 || lots.rest) && (
+        <Card aria-labelledby="buys-title">
+          <h2 id="buys-title" className="font-display text-heading">
+            Buys
+          </h2>
+          <ul className="grid divide-y divide-line" data-testid="buys">
+            {lots.buys.map((b) => (
+              <li key={b.id} className="flex items-start justify-between gap-3 py-2">
+                <div className="grid gap-0.5">
+                  <span className="text-body-strong">{dayText(b.on)}</span>
+                  <span className="text-caption text-ink-muted">
+                    {formatUnits(b.units)} at {priceText(b.paid, h.currency)}
+                  </span>
+                </div>
+                <div className="grid justify-items-end gap-0.5 text-right">
+                  {b.gainMinor !== null ? (
+                    <>
+                      <Amount minor={b.gainMinor} currency={h.currency} signed whole />
+                      {b.gainRatio !== null && (
+                        <span
+                          className={cx(
+                            'text-caption font-semibold',
+                            b.gainRatio >= 0 ? 'text-positive' : 'text-negative',
+                          )}
+                        >
+                          {percentText(b.gainRatio)}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-caption text-ink-muted">No price yet</span>
+                  )}
+                </div>
+              </li>
+            ))}
+            {lots.rest && (
+              <li className="flex items-start justify-between gap-3 py-2">
+                <div className="grid gap-0.5">
+                  <span className="text-body-strong">Earlier units</span>
+                  <span className="text-caption text-ink-muted">
+                    {formatUnits(lots.rest.units)}
+                    {lots.rest.costMinor !== null ? (
+                      <>
+                        , paid <Amount minor={lots.rest.costMinor} currency={h.currency} whole />
+                      </>
+                    ) : (
+                      ', no buy price'
+                    )}
+                  </span>
+                </div>
+              </li>
+            )}
+          </ul>
+          <p className="text-caption text-ink-muted">
+            Each buy’s gain is today’s price against what you paid, before fees and dividends.
+          </p>
+        </Card>
+      )}
 
       {security && history && (
         <Card aria-labelledby="history-title">

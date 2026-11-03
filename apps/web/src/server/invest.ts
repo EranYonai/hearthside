@@ -20,7 +20,14 @@ import { cleanName } from './http'
 import { canEdit } from './ledger'
 import { audit, AuthError, type Tx } from './repo'
 
-const { investmentAccounts, instruments, holdings, instrumentPrices, members } = schema
+const {
+  investmentAccounts,
+  instruments,
+  holdings,
+  instrumentPrices,
+  investmentTransactions,
+  members,
+} = schema
 
 type Conn = Db | Tx
 
@@ -215,6 +222,10 @@ export interface HoldingInput {
   price?: unknown
   /** Total paid, in `currency`. */
   cost?: unknown
+  /** Price paid per unit, in `currency`; sets the total paid as units × this. */
+  paid?: unknown
+  /** When it was bought, YYYY-MM-DD; today when left out. Kept with the buy. */
+  boughtOn?: unknown
 }
 
 interface CleanHolding {
@@ -226,6 +237,8 @@ interface CleanHolding {
   units: string
   price: string | null
   costMinor: number | null
+  /** Price paid per unit, when given. */
+  paid: string | null
 }
 
 export function cleanHolding(input: HoldingInput): CleanHolding {
@@ -237,7 +250,11 @@ export function cleanHolding(input: HoldingInput): CleanHolding {
   const cost = input.cost === undefined || input.cost === '' ? null : parseDecimal(input.cost)
   if (cost === null && input.cost !== undefined && input.cost !== '')
     throw new AuthError('not_allowed', 'Enter what you paid as a number')
-  const costMinor = cost === null ? null : valueMinor(cost, '1')
+  const paid = input.paid === undefined || input.paid === '' ? null : parseDecimal(input.paid)
+  if (paid === null && input.paid !== undefined && input.paid !== '')
+    throw new AuthError('not_allowed', 'Enter what you paid per unit as a number')
+  const costMinor =
+    cost !== null ? valueMinor(cost, '1') : paid !== null ? valueMinor(units, paid) : null
   if (kind === 'cash')
     return {
       kind,
@@ -248,18 +265,32 @@ export function cleanHolding(input: HoldingInput): CleanHolding {
       units,
       price: null,
       costMinor: null,
+      paid: null,
     }
   const symbol = typeof input.symbol === 'string' ? normalizeSymbol(input.symbol) : ''
   if (!symbol || symbol.length > 20)
     throw new AuthError('not_allowed', 'Enter the ticker or fund number')
-  const name = cleanName(input.name, 100)
-  if (!name) throw new AuthError('not_allowed', 'Give the holding a name, up to 100 characters')
+  // No name means "use what we know": the stored one, a looked-up one, or the ticker.
+  const blank = input.name === undefined || (typeof input.name === 'string' && !input.name.trim())
+  const name = blank ? '' : cleanName(input.name, 100)
+  if (name === undefined)
+    throw new AuthError('not_allowed', 'Give the holding a name, up to 100 characters')
   if (!isAssetClass(input.assetClass))
     throw new AuthError('not_allowed', 'Pick what kind of asset it is')
   const price = input.price === undefined || input.price === '' ? null : parseDecimal(input.price)
   if (price === null && input.price !== undefined && input.price !== '')
     throw new AuthError('not_allowed', 'Enter the price as a number')
-  return { kind, symbol, name, currency, assetClass: input.assetClass, units, price, costMinor }
+  return {
+    kind,
+    symbol,
+    name,
+    currency,
+    assetClass: input.assetClass,
+    units,
+    price,
+    costMinor,
+    paid,
+  }
 }
 
 async function upsertInstrument(
@@ -277,7 +308,7 @@ async function upsertInstrument(
       kind: h.kind,
       symbol: h.symbol,
       symbolKey,
-      name: h.name,
+      name: h.name || h.symbol,
       currency: h.currency,
       assetClass: h.assetClass,
     })
@@ -285,7 +316,7 @@ async function upsertInstrument(
       target: [instruments.householdId, instruments.symbolKey],
       set: keepExisting
         ? { symbolKey: sql`excluded.symbol_key` }
-        : { name: h.name, assetClass: h.assetClass },
+        : { ...(h.name ? { name: h.name } : {}), assetClass: h.assetClass },
     })
     .returning()
   return row!
@@ -307,6 +338,7 @@ export async function saveHolding(
   const account = await getVisibleInvestmentAccount(db, member, accountId)
   assertManage(member, account)
   const h = cleanHolding(input)
+  const boughtOn = cleanBoughtOn(input.boughtOn, now)
   return db.transaction(async (tx) => {
     const instrument = await upsertInstrument(tx, member, h)
     const [existing] = await tx
@@ -355,10 +387,27 @@ export async function saveHolding(
         .where(eq(holdings.id, existing.id))
         .returning()
     }
-    if (h.price)
+    // Each add with a price paid is kept as its own buy, so the holding can show every buy's gain.
+    if (mode === 'add' && h.kind === 'security' && h.paid !== null)
+      await tx.insert(investmentTransactions).values({
+        householdId: member.householdId,
+        accountId,
+        instrumentId: instrument.id,
+        kind: 'buy',
+        occurredOn: boughtOn,
+        units: h.units,
+        amountMinor: -valueMinor(h.units, h.paid),
+        currency: h.currency,
+        source: 'manual',
+      })
+    // With no price yet (a symbol the quote source doesn't know), what was paid is the price.
+    const price =
+      h.price ??
+      (mode === 'add' && h.paid !== null && !(await hasPrice(tx, instrument.id)) ? h.paid : null)
+    if (price)
       await tx
         .insert(instrumentPrices)
-        .values({ instrumentId: instrument.id, price: h.price, pricedAt: now, source: 'manual' })
+        .values({ instrumentId: instrument.id, price, pricedAt: now, source: 'manual' })
     await audit(tx, {
       householdId: member.householdId,
       memberId: member.id,
@@ -367,6 +416,112 @@ export async function saveHolding(
     })
     return row!
   })
+}
+
+function cleanBoughtOn(value: unknown, now: Date): string {
+  const today = now.toISOString().slice(0, 10)
+  if (value === undefined || value === '') return today
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  )
+    throw new AuthError('not_allowed', 'Enter the date you bought it')
+  if (value > today) throw new AuthError('not_allowed', 'The date can’t be in the future')
+  return value
+}
+
+async function hasPrice(db: Conn, instrumentId: string) {
+  const [row] = await db
+    .select({ id: instrumentPrices.id })
+    .from(instrumentPrices)
+    .where(eq(instrumentPrices.instrumentId, instrumentId))
+    .limit(1)
+  return !!row
+}
+
+/** One buy of a holding, with how it has done against the current price. */
+export interface BuyView {
+  id: string
+  on: string
+  units: string
+  /** Price paid per unit, exact decimal string. */
+  paid: string
+  costMinor: number
+  /** Value now, and gain against what was paid; null without a current price. */
+  valueMinor: number | null
+  gainMinor: number | null
+  /** Gain as a fraction of what was paid, e.g. 0.12 for +12%. */
+  gainRatio: number | null
+}
+
+/**
+ * The buys recorded for a holding, newest first, plus any units not covered by them (holdings
+ * from before buys were kept, imports, or edits), shown at the average price paid when known.
+ */
+export async function holdingBuys(
+  db: Conn,
+  holding: Pick<HoldingView, 'accountId' | 'instrumentId' | 'units' | 'costMinor' | 'price'>,
+): Promise<{ buys: BuyView[]; rest: { units: string; costMinor: number | null } | null }> {
+  const rows = await db
+    .select()
+    .from(investmentTransactions)
+    .where(
+      and(
+        eq(investmentTransactions.accountId, holding.accountId),
+        eq(investmentTransactions.instrumentId, holding.instrumentId),
+        eq(investmentTransactions.kind, 'buy'),
+      ),
+    )
+    .orderBy(desc(investmentTransactions.occurredOn), desc(investmentTransactions.createdAt))
+  const buys = rows
+    .filter((r) => r.units)
+    .map((r): BuyView => {
+      const costMinor = -r.amountMinor
+      const valueNow = holding.price === null ? null : valueMinor(r.units!, holding.price)
+      return {
+        id: r.id,
+        on: r.occurredOn,
+        units: r.units!,
+        paid: unitPrice(costMinor, r.units!),
+        costMinor,
+        valueMinor: valueNow,
+        gainMinor: valueNow === null ? null : valueNow - costMinor,
+        gainRatio: valueNow === null || costMinor <= 0 ? null : valueNow / costMinor - 1,
+      }
+    })
+  const restUnits = buys.reduce<string | null>(
+    (left, b) => subtractDecimals(left, b.units),
+    holding.units,
+  )
+  if (restUnits === null || restUnits === '0') return { buys, rest: null }
+  const boughtCost = buys.reduce((sum, b) => sum + b.costMinor, 0)
+  const restCost =
+    holding.costMinor === null || holding.costMinor < boughtCost
+      ? null
+      : holding.costMinor - boughtCost
+  return { buys, rest: { units: restUnits, costMinor: restCost } }
+}
+
+/** Minor units ÷ units, as a decimal string with up to 4 places. */
+function unitPrice(costMinor: number, units: string): string {
+  const n = costMinor / 100 / Number(units)
+  return parseDecimal(n.toFixed(4)) ?? '0'
+}
+
+/** a − b for decimal strings; null when b is larger. */
+function subtractDecimals(a: string | null, b: string): string | null {
+  if (a === null) return null
+  const scale = Math.max(a.split('.')[1]?.length ?? 0, b.split('.')[1]?.length ?? 0)
+  const toN = (d: string) => {
+    const [w, f = ''] = d.split('.')
+    return BigInt(w! + f.padEnd(scale, '0'))
+  }
+  const diff = toN(a) - toN(b)
+  if (diff < 0n) return null
+  if (scale === 0) return diff.toString()
+  const padded = diff.toString().padStart(scale + 1, '0')
+  return parseDecimal(`${padded.slice(0, -scale)}.${padded.slice(-scale)}`)
 }
 
 /**
@@ -440,13 +595,24 @@ export async function importHoldings(
 
 export async function removeHolding(db: Conn, member: MemberRow, holdingId: string) {
   const [row] = await db
-    .select({ accountId: holdings.accountId })
+    .select({ accountId: holdings.accountId, instrumentId: holdings.instrumentId })
     .from(holdings)
     .where(and(eq(holdings.id, holdingId), eq(holdings.householdId, member.householdId)))
   if (!row) throw new AuthError('not_found', 'That holding isn’t here')
   const account = await getVisibleInvestmentAccount(db, member, row.accountId)
   assertManage(member, account)
-  await db.delete(holdings).where(eq(holdings.id, holdingId))
+  await db.transaction(async (tx) => {
+    await tx.delete(holdings).where(eq(holdings.id, holdingId))
+    await tx
+      .delete(investmentTransactions)
+      .where(
+        and(
+          eq(investmentTransactions.accountId, row.accountId),
+          eq(investmentTransactions.instrumentId, row.instrumentId),
+          eq(investmentTransactions.kind, 'buy'),
+        ),
+      )
+  })
   await audit(db, {
     householdId: member.householdId,
     memberId: member.id,

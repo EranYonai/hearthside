@@ -15,7 +15,9 @@ import {
 import { saveInvestSettings } from '@/server/checkup'
 import { setDisplayCurrency } from '@/server/profile'
 import { addMovement, removeMovement, type MovementInput } from '@/server/trends'
+import { lookupTicker } from '@/server/prices'
 import { requireSession } from '@/server/session'
+import { normalizeSymbol } from '@hearthside/core'
 
 const PATHS = ['/invest']
 
@@ -120,4 +122,12 @@ export async function saveInvestSettingsAction(input: {
     await saveInvestSettings(requireDb(), member, input)
     return {}
   })
+}
+
+/** Look a ticker or fund number up at the quote source, for the add holding form. */
+export async function lookupTickerAction(symbol: string) {
+  await requireSession()
+  const clean = typeof symbol === 'string' ? normalizeSymbol(symbol) : ''
+  if (!clean || clean.length > 20) return null
+  return lookupTicker(clean)
 }

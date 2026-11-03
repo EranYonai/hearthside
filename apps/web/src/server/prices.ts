@@ -248,6 +248,37 @@ async function fetchHistory(
   }
 }
 
+export interface TickerLookup {
+  /** The symbol as typed, normalized. */
+  symbol: string
+  name: string | null
+  currency: string
+  /** Last close, exact decimal string. */
+  price: string | null
+}
+
+/**
+ * What the quote source knows about a ticker or fund number, so the add form can fill in the
+ * name, currency and price. Only the symbol is sent. Null when the source is off or doesn't
+ * know it. Fund numbers are tried on the local exchange.
+ */
+export async function lookupTicker(
+  symbol: string,
+  options: { url?: string | null; fetch?: typeof fetch } = {},
+): Promise<TickerLookup | null> {
+  const url = options.url === undefined ? quoteSourceUrl() : options.url
+  if (!url) return null
+  const quoteSymbol = quoteSymbolFor(symbol, /^\d+$/.test(symbol) ? 'ILS' : 'USD')
+  const key = `${url}|${quoteSymbol}|1mo`
+  let h = historyCache.get(key)?.history
+  if (h === undefined) {
+    h = await fetchHistory(url, quoteSymbol, '1mo', options.fetch ?? fetch)
+    historyCache.set(key, { at: Date.now(), history: h })
+  }
+  if (!h) return null
+  return { symbol, name: h.longName, currency: h.currency, price: h.points.at(-1)?.price ?? null }
+}
+
 /** For tests. */
 export function clearHistoryCache() {
   historyCache.clear()
