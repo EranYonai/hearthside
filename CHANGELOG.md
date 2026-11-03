@@ -10,6 +10,12 @@ moves the Unreleased notes under the new version.
 
 ### Added
 
+- Categories learned from your own picks: once a household has made about 20 picks by hand,
+  similar descriptions it hasn't seen before are filed the same way. Rules and past picks still
+  come first, and nothing leaves the server.
+- Local fund details: with a fund data key in `secrets/fund_data_key.txt`, local fund numbers
+  show their classification, exposure and what they invest in, and the add form fills in the
+  name.
 - Budgets: a monthly limit per category for the whole household, with progress for each month,
   a pace mark for the current one, starting limits suggested from recent months, a Home card,
   and the budget shown when Activity is filtered to one category.
