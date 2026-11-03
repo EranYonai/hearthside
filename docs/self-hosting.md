@@ -82,6 +82,10 @@ delayed while markets are open. The app asks at most every 15 minutes per holdin
 someone has the Invest tab open, and only sends the ticker. Unknown tickers are retried daily;
 their price can be entered by hand. Set `QUOTES_URL=off` in `.env` to turn this off.
 
+The same feed fills in the add holding form (name, currency, price) and each holding's key stats
+and fund facts, which are cached for a day. For those it first picks up a session cookie from
+`QUOTES_COOKIE_URL` (the feed's default if unset). Again, only the ticker is sent.
+
 ## Backups
 
 See [Backups](backups.md). Set `BACKUP_RECIPIENT` before going live, then download backups from Settings.

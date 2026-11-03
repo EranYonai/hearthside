@@ -268,7 +268,11 @@ export default async function InvestmentAccountPage({
                 Add a holding by hand
               </summary>
               <div className="pt-3">
-                <HoldingForm accountId={account.id} accountCurrency={account.currency} />
+                <HoldingForm
+                  accountId={account.id}
+                  accountCurrency={account.currency}
+                  today={dayOf(new Date())}
+                />
               </div>
             </details>
           </Card>

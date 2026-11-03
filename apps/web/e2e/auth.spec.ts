@@ -538,9 +538,11 @@ test('investment accounts and hand-entered holdings add up on the Invest tab', a
 
   const add = owner.getByRole('region', { name: 'Add a holding by hand' })
   await add.getByLabel('Ticker or fund number').fill('tst1')
-  await add.getByLabel('Name', { exact: true }).fill('Test World Index')
+  // The quote source is off here, so the lookup finds nothing and asks for the name.
+  await add.getByLabel('Ticker or fund number').blur()
+  await add.getByLabel('Name (optional)').fill('Test World Index')
   await add.getByLabel('Units').fill('10')
-  await add.getByLabel('Price per unit in USD (optional)').fill('100.50')
+  await add.getByLabel('Price you paid per unit in USD (optional)').fill('100.50')
   await add.getByRole('button', { name: 'Add holding' }).click()
   await expect(owner.getByTestId('holdings')).toContainText('Test World Index')
   await expect(owner.getByTestId('holdings')).toContainText('$1,005')

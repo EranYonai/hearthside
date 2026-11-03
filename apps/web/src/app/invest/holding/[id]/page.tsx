@@ -15,8 +15,8 @@ import { LineChart } from '@/components/LineChart'
 import { requireDb } from '@/lib/db'
 import { LocalTime } from '@/lib/LocalTime'
 import { currentRates } from '@/server/fx'
-import { getHolding, listHoldings, mayManage } from '@/server/invest'
-import { keepQuotesFresh, priceHistory } from '@/server/prices'
+import { getHolding, holdingBuys, listHoldings, mayManage } from '@/server/invest'
+import { keepQuotesFresh, keyStats, priceHistory } from '@/server/prices'
 import { AuthError } from '@/server/repo'
 import { requireSession } from '@/server/session'
 import { FundFactsForm } from '../../client'
@@ -47,6 +47,31 @@ function priceText(price: string, currency: string): string {
   }).format(n)
 }
 
+function compact(n: number, currency?: string): string {
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 2,
+    ...(currency ? { style: 'currency', currency, currencyDisplay: 'narrowSymbol' } : {}),
+  }).format(n)
+}
+
+function ratioText(ratio: number, digits = 2): string {
+  return `${(ratio * 100).toFixed(digits).replace(/\.?0+$/, '')}%`
+}
+
+function percentText(ratio: number): string {
+  return `${ratio >= 0 ? '+' : '−'}${Math.abs(ratio * 100).toFixed(1)}%`
+}
+
+function dayText(on: string): string {
+  return new Date(`${on}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid gap-0.5">
@@ -74,10 +99,12 @@ export default async function HoldingPage({
     throw err
   })
   const security = h.kind === 'security'
-  const [history, all, { rates }] = await Promise.all([
+  const [history, all, { rates }, lots, stats] = await Promise.all([
     security ? priceHistory(db, { ...h, id: h.instrumentId }, range) : null,
     listHoldings(db, member),
     currentRates(db),
+    security ? holdingBuys(db, h) : null,
+    security ? keyStats(h) : null,
   ])
   const total = summarizePortfolio(all, member.displayCurrency, rates).totalMinor
   const mine =
@@ -146,6 +173,113 @@ export default async function HoldingPage({
         </dl>
       </Card>
 
+      {lots && (lots.buys.length > 0 || lots.rest) && (
+        <Card aria-labelledby="buys-title">
+          <h2 id="buys-title" className="font-display text-heading">
+            Buys
+          </h2>
+          <ul className="grid divide-y divide-line" data-testid="buys">
+            {lots.buys.map((b) => (
+              <li key={b.id} className="flex items-start justify-between gap-3 py-2">
+                <div className="grid gap-0.5">
+                  <span className="text-body-strong">{dayText(b.on)}</span>
+                  <span className="text-caption text-ink-muted">
+                    {formatUnits(b.units)} at {priceText(b.paid, h.currency)}
+                  </span>
+                </div>
+                <div className="grid justify-items-end gap-0.5 text-right">
+                  {b.gainMinor !== null ? (
+                    <>
+                      <Amount minor={b.gainMinor} currency={h.currency} signed whole />
+                      {b.gainRatio !== null && (
+                        <span
+                          className={cx(
+                            'text-caption font-semibold',
+                            b.gainRatio >= 0 ? 'text-positive' : 'text-negative',
+                          )}
+                        >
+                          {percentText(b.gainRatio)}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-caption text-ink-muted">No price yet</span>
+                  )}
+                </div>
+              </li>
+            ))}
+            {lots.rest && (
+              <li className="flex items-start justify-between gap-3 py-2">
+                <div className="grid gap-0.5">
+                  <span className="text-body-strong">Earlier units</span>
+                  <span className="text-caption text-ink-muted">
+                    {formatUnits(lots.rest.units)}
+                    {lots.rest.costMinor !== null ? (
+                      <>
+                        , paid <Amount minor={lots.rest.costMinor} currency={h.currency} whole />
+                      </>
+                    ) : (
+                      ', no buy price'
+                    )}
+                  </span>
+                </div>
+              </li>
+            )}
+          </ul>
+          <p className="text-caption text-ink-muted">
+            Each buy’s gain is today’s price against what you paid, before fees and dividends.
+          </p>
+        </Card>
+      )}
+
+      {stats && (
+        <Card aria-labelledby="stats-title">
+          <h2 id="stats-title" className="font-display text-heading">
+            Key stats
+          </h2>
+          <dl className="grid grid-cols-2 gap-3" data-testid="key-stats">
+            {(
+              [
+                ['Market cap', stats.marketCap !== null && compact(stats.marketCap, h.currency)],
+                ['Fund size', stats.fundSize !== null && compact(stats.fundSize, h.currency)],
+                ['P/E', stats.pe !== null && stats.pe.toFixed(1)],
+                ['Forward P/E', stats.forwardPe !== null && stats.forwardPe.toFixed(1)],
+                ['EPS', stats.eps !== null && priceText(String(stats.eps), h.currency)],
+                ['Revenue', stats.revenue !== null && compact(stats.revenue)],
+                ['Net income', stats.netIncome !== null && compact(stats.netIncome)],
+                ['Profit margin', stats.profitMargin !== null && ratioText(stats.profitMargin, 1)],
+                ['Dividend yield', stats.dividendYield !== null && ratioText(stats.dividendYield)],
+                [
+                  '52-week range',
+                  stats.low52 !== null &&
+                    stats.high52 !== null &&
+                    `${priceText(String(stats.low52), h.currency)} – ${priceText(String(stats.high52), h.currency)}`,
+                ],
+                ['Beta', stats.beta !== null && stats.beta.toFixed(2)],
+                ['Return this year', stats.ytdReturn !== null && percentText(stats.ytdReturn)],
+                [
+                  '5-year average return',
+                  stats.fiveYearReturn !== null && percentText(stats.fiveYearReturn),
+                ],
+                ['Sector', stats.sector],
+                ['Industry', stats.industry],
+                ['Category', stats.category],
+                ['Fund manager', stats.family],
+              ] as [string, string | false | null][]
+            )
+              .filter((row): row is [string, string] => !!row[1])
+              .map(([label, value]) => (
+                <Fact key={label} label={label}>
+                  {value}
+                </Fact>
+              ))}
+          </dl>
+          <p className="text-caption text-ink-muted">
+            From the quote source, updated daily. Only the symbol is sent.
+          </p>
+        </Card>
+      )}
+
       {security && history && (
         <Card aria-labelledby="history-title">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -202,12 +336,18 @@ export default async function HoldingPage({
             Fund facts
           </h2>
           <dl className="grid grid-cols-2 gap-3" data-testid="fund-facts">
-            <Fact label="Yearly fee">{facts?.fee ? `${facts.fee}%` : '–'}</Fact>
+            <Fact label="Yearly fee">
+              {facts?.fee
+                ? `${facts.fee}%`
+                : stats?.expenseRatio != null
+                  ? ratioText(stats.expenseRatio)
+                  : '–'}
+            </Fact>
             <Fact label="Type">
               {history?.type ? (TYPE_LABEL[history.type] ?? history.type) : '–'}
             </Fact>
             <Fact label="Index it tracks">{facts?.index ?? '–'}</Fact>
-            <Fact label="Domicile">{facts?.domicile ?? '–'}</Fact>
+            <Fact label="Domicile">{facts?.domicile ?? stats?.country ?? '–'}</Fact>
           </dl>
           {facts && facts.documents.length > 0 && (
             <ul className="grid gap-1" data-testid="fund-documents">
@@ -237,8 +377,8 @@ export default async function HoldingPage({
             </details>
           )}
           <p className="text-caption text-ink-muted">
-            Find the fee, index and documents on the fund manager’s site. Links open there; nothing
-            about you is sent.
+            The fee and domicile come from the quote source when it knows the fund. What you type
+            here wins. Links open on the fund manager’s site; nothing about you is sent.
           </p>
         </Card>
       )}

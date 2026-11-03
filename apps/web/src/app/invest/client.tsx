@@ -15,9 +15,11 @@ import {
   saveFundFactsAction,
   saveInvestSettingsAction,
   saveHoldingAction,
+  lookupTickerAction,
   setDisplayCurrencyAction,
   updateInvestmentAccountAction,
 } from './actions'
+import type { TickerLookup } from '@/server/prices'
 
 const selectClass = 'min-h-11 w-full rounded-md border border-line bg-surface-2 px-3'
 
@@ -175,6 +177,8 @@ export function InvestmentAccountForm(props: {
 export function HoldingForm(props: {
   accountId: string
   accountCurrency: string
+  /** Today, YYYY-MM-DD, the default buy date. */
+  today?: string
   holding?: {
     kind: 'security' | 'cash'
     symbol: string
@@ -195,27 +199,52 @@ export function HoldingForm(props: {
   const [units, setUnits] = useState(h?.units ?? '')
   const [price, setPrice] = useState('')
   const [cost, setCost] = useState('')
+  const [paid, setPaid] = useState('')
+  const [boughtOn, setBoughtOn] = useState(props.today ?? '')
+  /** What the quote source said about the typed ticker: found, not found, or not asked yet. */
+  const [found, setFound] = useState<TickerLookup | null | undefined>(undefined)
+  const [looking, setLooking] = useState(false)
   const { pending, error, run } = useAction()
   const editing = !!h
+
+  const lookup = async () => {
+    const typed = symbol.trim()
+    if (!typed || editing || kind !== 'security') return
+    if (found && found.symbol === typed.toUpperCase()) return
+    setLooking(true)
+    try {
+      const result = await lookupTickerAction(typed)
+      setFound(result)
+      if (result) {
+        if (result.name) setName(result.name)
+        setCurrency(result.currency)
+        if (result.price && !paid) setPaid(result.price)
+      }
+    } catch {
+      setFound(null)
+    } finally {
+      setLooking(false)
+    }
+  }
+  const known = !!found && (HOLDING_CURRENCIES as readonly string[]).includes(found.currency)
+
   return (
     <form
       className="grid gap-4"
       onSubmit={(e) => {
         e.preventDefault()
+        // Look the ticker up first, so the name and currency are right before it is saved.
+        if (!editing && kind === 'security' && found === undefined) {
+          void lookup()
+          return
+        }
         run(
           () =>
             saveHoldingAction(
               props.accountId,
-              {
-                kind,
-                symbol,
-                name,
-                currency,
-                assetClass,
-                units,
-                price,
-                cost,
-              },
+              editing
+                ? { kind, symbol, name, currency, assetClass, units, price, cost }
+                : { kind, symbol, name, currency, assetClass, units, paid, boughtOn },
               editing ? 'replace' : 'add',
             ),
           () => {
@@ -223,8 +252,9 @@ export function HoldingForm(props: {
               setSymbol('')
               setName('')
               setUnits('')
-              setPrice('')
-              setCost('')
+              setPaid('')
+              setFound(undefined)
+              setBoughtOn(props.today ?? '')
             }
             props.onDone?.()
             router.refresh()
@@ -263,19 +293,38 @@ export function HoldingForm(props: {
             required
             maxLength={20}
             value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
+            onChange={(e) => {
+              setSymbol(e.target.value)
+              if (found !== undefined) setFound(undefined)
+            }}
+            onBlur={() => void lookup()}
             autoComplete="off"
             autoCapitalize="characters"
+            hint={
+              looking
+                ? 'Looking it up…'
+                : known
+                  ? [found!.name, found!.price && `${found!.price} ${found!.currency}`]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : found === null
+                    ? 'We couldn’t find it, so add the name and currency'
+                    : undefined
+            }
           />
-          <TextField
-            label="Name"
-            name="holding-name"
-            required
-            maxLength={100}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoComplete="off"
-          />
+          {found !== undefined && !known && (
+            <>
+              <TextField
+                label="Name (optional)"
+                name="holding-name"
+                maxLength={100}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="off"
+              />
+              <CurrencySelect label="Priced in" value={currency} onChange={setCurrency} />
+            </>
+          )}
         </>
       )}
       {kind === 'security' && (
@@ -294,12 +343,8 @@ export function HoldingForm(props: {
           </select>
         </label>
       )}
-      {!editing && (
-        <CurrencySelect
-          label={kind === 'cash' ? 'Currency' : 'Priced in'}
-          value={currency}
-          onChange={setCurrency}
-        />
+      {kind === 'cash' && !editing && (
+        <CurrencySelect label="Currency" value={currency} onChange={setCurrency} />
       )}
       <TextField
         label={kind === 'cash' ? 'Amount' : 'Units'}
@@ -309,21 +354,43 @@ export function HoldingForm(props: {
         value={units}
         onChange={(e) => setUnits(e.target.value)}
         autoComplete="off"
+        hint={
+          !editing && kind === 'security'
+            ? 'Already hold this one? This is added to it as another buy'
+            : undefined
+        }
       />
-      {kind === 'security' && (
+      {kind === 'security' && !editing && (
         <>
           <TextField
-            label={`Price per unit in ${currency} (optional)`}
+            label={`Price you paid per unit in ${currency} (optional)`}
+            name="paid"
+            inputMode="decimal"
+            value={paid}
+            onChange={(e) => setPaid(e.target.value)}
+            autoComplete="off"
+            hint="Starts at today’s price. It’s what each buy’s gain is measured against"
+          />
+          <TextField
+            label="Bought on"
+            name="bought-on"
+            type="date"
+            max={props.today}
+            value={boughtOn}
+            onChange={(e) => setBoughtOn(e.target.value)}
+          />
+        </>
+      )}
+      {kind === 'security' && editing && (
+        <>
+          <TextField
+            label={`Current price per unit in ${currency} (optional)`}
             name="price"
             inputMode="decimal"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             autoComplete="off"
-            hint={
-              editing
-                ? 'Leave empty to keep the last price'
-                : 'Until live prices arrive, this is the price we use'
-            }
+            hint="Leave empty to keep the last price"
           />
           <TextField
             label={`Total paid in ${currency} (optional)`}
@@ -332,16 +399,11 @@ export function HoldingForm(props: {
             value={cost}
             onChange={(e) => setCost(e.target.value)}
             autoComplete="off"
-            hint={
-              editing
-                ? undefined
-                : 'Already hold this one? The units and what you paid are added to it'
-            }
           />
         </>
       )}
       {error && <Notice tone="negative">{error}</Notice>}
-      <Button type="submit" disabled={pending} className="justify-self-start">
+      <Button type="submit" disabled={pending || looking} className="justify-self-start">
         {editing ? 'Save' : 'Add holding'}
       </Button>
     </form>

@@ -6,6 +6,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   cleanHolding,
   createInvestmentAccount,
+  getHolding,
+  holdingBuys,
   deleteInvestmentAccount,
   getVisibleInvestmentAccount,
   importHoldings,
@@ -225,6 +227,66 @@ describe.skipIf(!url)('investments (Postgres)', () => {
     expect([edited.units, edited.costMinor]).toEqual(['20', 200000])
   })
 
+  it('keeps each buy with its price and shows how each one has done', async () => {
+    const { alex } = await home()
+    const account = await createInvestmentAccount(db, alex, {
+      name: 'Long term',
+      currency: 'USD',
+      visibility: 'household',
+    })
+    const now = new Date('2026-06-01T10:00:00Z')
+    const add = (input: HoldingInput) => saveHolding(db, alex, account.id, input, now, 'add')
+    const base = {
+      kind: 'security',
+      symbol: 'TST1',
+      name: '',
+      currency: 'USD',
+      assetClass: 'global_stocks',
+    }
+    // No name: the ticker stands in. The price paid is the price until a live one arrives.
+    const first = await add({ ...base, units: '10', paid: '50', boughtOn: '2026-03-03' })
+    await add({ ...base, name: 'Test Fund', units: '5', paid: '65', boughtOn: '2026-05-12' })
+    const { holding } = await getHolding(db, alex, first.id)
+    expect([holding.name, holding.units, holding.costMinor, holding.price]).toEqual([
+      'Test Fund',
+      '15',
+      82500,
+      '50',
+    ])
+
+    const { buys, rest } = await holdingBuys(db, holding)
+    expect(rest).toBeNull()
+    expect(buys.map((b) => [b.on, b.units, b.paid, b.costMinor, b.gainMinor])).toEqual([
+      ['2026-05-12', '5', '65', 32500, -7500],
+      ['2026-03-03', '10', '50', 50000, 0],
+    ])
+    expect(buys[0]!.gainRatio).toBeCloseTo(50 / 65 - 1, 10)
+
+    // Units from before buys were kept show as one "earlier" line.
+    const edited = await saveHolding(
+      db,
+      alex,
+      account.id,
+      { ...base, units: '20', cost: '1000' },
+      now,
+      'replace',
+    )
+    const after = await holdingBuys(db, (await getHolding(db, alex, edited.id)).holding)
+    expect(after.rest).toEqual({ units: '5', costMinor: 17500 })
+
+    await expect(add({ ...base, units: '1', paid: '1', boughtOn: '2026-07-01' })).rejects.toThrow(
+      AuthError,
+    )
+    await expect(add({ ...base, units: '1', paid: 'abc' })).rejects.toThrow(AuthError)
+
+    // Removing the holding removes its buys.
+    await removeHolding(db, alex, first.id)
+    const [count] = (await db.execute(
+      raw`select count(*)::int as n from investment_transactions where account_id = ${account.id}`,
+    )) as unknown as { n: number }[]
+    expect(count!.n).toBe(0)
+  })
+
   it('lets the owner or holder edit and delete an account', async () => {
     const { alex, sam, robin } = await home()
     const account = await createInvestmentAccount(db, sam, {
@@ -353,7 +415,8 @@ describe('cleanHolding', () => {
       { currency: 'XYZ' },
       { units: '-1' },
       { symbol: '' },
-      { name: '' },
+      { name: 'x'.repeat(101) },
+      { paid: 'abc' },
       { assetClass: 'crypto' },
       { price: 'abc' },
       { cost: 'abc' },
