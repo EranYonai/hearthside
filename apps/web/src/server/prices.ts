@@ -12,6 +12,7 @@ import {
 import type { Db } from '@hearthside/db'
 import { schema } from '@hearthside/db'
 import { and, asc, desc, eq, gte } from 'drizzle-orm'
+import { type FundSource, localFund } from './local-funds'
 
 const { instruments, holdings, instrumentPrices } = schema
 
@@ -266,19 +267,30 @@ export interface TickerLookup {
  */
 export async function lookupTicker(
   symbol: string,
-  options: { url?: string | null; fetch?: typeof fetch } = {},
+  options: { url?: string | null; fetch?: typeof fetch; funds?: FundSource | null } = {},
 ): Promise<TickerLookup | null> {
   const url = options.url === undefined ? quoteSourceUrl() : options.url
-  if (!url) return null
-  const quoteSymbol = quoteSymbolFor(symbol, /^\d+$/.test(symbol) ? 'ILS' : 'USD')
-  const key = `${url}|${quoteSymbol}|1mo`
-  let h = historyCache.get(key)?.history
-  if (h === undefined) {
-    h = await fetchHistory(url, quoteSymbol, '1mo', options.fetch ?? fetch)
-    historyCache.set(key, { at: Date.now(), history: h })
+  const local = /^\d+$/.test(symbol)
+  let h: PriceHistory | null | undefined = null
+  if (url) {
+    const quoteSymbol = quoteSymbolFor(symbol, local ? 'ILS' : 'USD')
+    const key = `${url}|${quoteSymbol}|1mo`
+    h = historyCache.get(key)?.history
+    if (h === undefined) {
+      h = await fetchHistory(url, quoteSymbol, '1mo', options.fetch ?? fetch)
+      historyCache.set(key, { at: Date.now(), history: h })
+    }
   }
-  if (!h) return null
-  return { symbol, name: h.longName, currency: h.currency, price: h.points.at(-1)?.price ?? null }
+  if (h)
+    return { symbol, name: h.longName, currency: h.currency, price: h.points.at(-1)?.price ?? null }
+  // Local funds the feed doesn't know: at least the name, from the fund data service.
+  if (!local) return null
+  const fund = await localFund(
+    { symbol, currency: 'ILS' },
+    { source: options.funds, fetch: options.fetch },
+  )
+  const name = fund?.longName ?? fund?.name
+  return name ? { symbol, name, currency: 'ILS', price: null } : null
 }
 
 const STATS_TTL_MS = 24 * 60 * 60 * 1000

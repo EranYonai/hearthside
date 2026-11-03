@@ -57,9 +57,11 @@ services:
       FX_RATES_URL: ${FX_RATES_URL:-}
       # Delayed market prices (docs/self-hosting.md). "off" stops fetching.
       QUOTES_URL: ${QUOTES_URL:-}
+      # Local fund details (docs/self-hosting.md). Off while the key file is empty.
+      FUND_DATA_KEY_FILE: /run/secrets/fund_data_key
       # Makes encrypted backups on request for the owner to download (docs/backups.md).
       BACKUP_URL: http://backup:8080
-    secrets: [db_password, encryption_key]
+    secrets: [db_password, encryption_key, fund_data_key]
     ports:
       # Loopback only by default. WEB_BIND=0.0.0.0 in .env opens it to the LAN for testing.
       - ${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3300}:3000
@@ -147,6 +149,8 @@ secrets:
     file: ./secrets/db_password.txt
   encryption_key:
     file: ./secrets/encryption_key.txt
+  fund_data_key:
+    file: ./secrets/fund_data_key.txt
 
 volumes:
   db-data:
