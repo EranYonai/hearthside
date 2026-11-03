@@ -188,6 +188,69 @@ describe.skipIf(!url)('categorize (Postgres)', () => {
     ).toBe('kids')
   })
 
+  it('learns from enough manual picks to file similar, unseen descriptions', async () => {
+    const { member: alex } = await createHousehold(db, {
+      householdName: 'Our home',
+      ownerName: 'Alex',
+      passkey: passkey(),
+    })
+    const card = await createAccount(db, alex, {
+      name: 'Card',
+      kind: 'card',
+      visibility: 'household',
+    })
+    // Synthetic merchants that no keyword knows.
+    const towns = ['North', 'South', 'East', 'West', 'Harbor', 'Hill', 'Lake']
+    const picked: [string, string][] = [
+      ...towns.map((t) => [`Plimbo Wumble ${t}`, 'kids'] as [string, string]),
+      ...towns.map((t) => [`Vexor Pump ${t}`, 'car'] as [string, string]),
+      ...towns.map((t) => [`Quarrow Nook ${t}`, 'eating-out'] as [string, string]),
+    ]
+    const statement = parseStatement(
+      [
+        {
+          name: 'S',
+          rows: [
+            header,
+            ...picked.map(([d]) => ['20/10/2026', d, '25', '']),
+            ['21/10/2026', 'Plimbo Wumble Central', '40', ''],
+            ['21/10/2026', 'Vexor Pump Airport', '180', ''],
+          ],
+        },
+      ],
+      { spendingIsPositive: true },
+    ).transactions
+    await commitImport(db, alex, card, {
+      fileName: 'b.csv',
+      fileHash: 'b',
+      rows: await prepareImport(db, card, statement),
+      skipped: 0,
+    })
+    const list = async () =>
+      new Map(
+        (await listTransactions(db, alex, { month: '2026-10' })).map((r) => [r.t.description, r.t]),
+      )
+    const before = await list()
+    for (const [d, c] of picked) await setCategory(db, alex, before.get(d)!.id, c)
+    expect((await loadContext(db, alex.householdId)).learned?.size).toBe(picked.length)
+
+    const engine = fakeEngine({})
+    await recategorize(db, alex.householdId, 'uncategorized', engine)
+    const after = await list()
+    expect(after.get('Plimbo Wumble Central')).toMatchObject({
+      category: 'kids',
+      categorySource: 'auto',
+      categoryVia: 'learned',
+    })
+    expect(after.get('Vexor Pump Airport')).toMatchObject({
+      category: 'car',
+      categoryVia: 'learned',
+    })
+    // Manual picks stay manual, and the model wasn't needed.
+    expect(after.get('Plimbo Wumble North')).toMatchObject({ categorySource: 'manual' })
+    expect(engine.asked).toBe(0)
+  })
+
   it('re-runs on request, optionally redoing its own choices', async () => {
     const { alex, list } = await imported()
     await categorizePending(db, alex.householdId, fakeEngine({}))

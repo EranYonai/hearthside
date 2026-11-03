@@ -5,12 +5,13 @@ import {
   categorizeMany,
   historyFrom,
   httpEngine,
+  trainLearned,
   type CategorizeContext,
   type CategorySuggestion,
   type DecisionEngine,
 } from '@hearthside/core'
 import { schema } from '@hearthside/db'
-import { and, asc, eq, gt, isNull, or, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, isNotNull, isNull, or, sql } from 'drizzle-orm'
 import { listCustomCategories } from './categories'
 import type { audit } from './repo'
 
@@ -26,9 +27,12 @@ export function decisionEngine(): DecisionEngine | null {
   return engineCache
 }
 
-/** Rules and past manual choices for a household: everything but the model. */
+/**
+ * Rules, past manual choices and the classifier learned from them: everything but the model.
+ * Descriptions are decrypted into memory to train; they are never logged or stored elsewhere.
+ */
 export async function loadContext(db: Conn, householdId: string): Promise<CategorizeContext> {
-  const [rules, picks] = await Promise.all([
+  const [rules, picks, examples] = await Promise.all([
     db
       .select({ match: categoryRules.match, category: categoryRules.category })
       .from(categoryRules)
@@ -44,11 +48,27 @@ export async function loadContext(db: Conn, householdId: string): Promise<Catego
         and(eq(transactions.householdId, householdId), eq(transactions.categorySource, 'manual')),
       )
       .groupBy(transactions.descriptionKey, transactions.category),
+    db
+      .select({
+        description: transactions.description,
+        amountMinor: transactions.amountMinor,
+        category: sql<string>`${transactions.category}`,
+      })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.householdId, householdId),
+          eq(transactions.categorySource, 'manual'),
+          isNotNull(transactions.category),
+        ),
+      ),
   ])
   const custom = await listCustomCategories(db, householdId)
+  const set = categorySet(custom)
   return {
     rules: new Map(rules.map((r) => [r.match, r.category])),
-    history: historyFrom(picks, categorySet(custom)),
+    history: historyFrom(picks, set),
+    learned: trainLearned(examples.filter((e) => set.has(e.category))),
     custom,
   }
 }
