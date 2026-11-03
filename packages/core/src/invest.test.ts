@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  addDecimals,
   allocation,
   assetClassLabel,
   convertMinor,
@@ -13,6 +14,17 @@ import {
   valueMinor,
   type PricedHolding,
 } from './invest'
+
+describe('addDecimals', () => {
+  it('adds exactly, across scales', () => {
+    expect(addDecimals('10.5', '4.75')).toBe('15.25')
+    expect(addDecimals('0.1', '0.2')).toBe('0.3')
+    expect(addDecimals('12', '3')).toBe('15')
+    expect(addDecimals('0.5', '0.5')).toBe('1')
+    expect(addDecimals('0.001', '0.0002')).toBe('0.0012')
+    expect(addDecimals('999999999999.99999999', '0.00000001')).toBe('1000000000000')
+  })
+})
 
 describe('parseDecimal', () => {
   it('normalizes typed numbers', () => {

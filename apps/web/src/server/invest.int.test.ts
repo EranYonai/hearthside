@@ -16,6 +16,7 @@ import {
   removeHolding,
   saveHolding,
   updateInvestmentAccount,
+  type HoldingInput,
 } from './invest'
 import { acceptInvite, AuthError, createHousehold, createInvite, type NewPasskey } from './repo'
 
@@ -139,7 +140,7 @@ describe.skipIf(!url)('investments (Postgres)', () => {
       visibility: 'household',
     })
     const first = await saveHolding(db, alex, account.id, fund)
-    // Same symbol again replaces the units rather than adding a second row.
+    // Editing the same symbol replaces the units rather than adding a second row.
     const again = await saveHolding(
       db,
       alex,
@@ -184,6 +185,44 @@ describe.skipIf(!url)('investments (Postgres)', () => {
     await removeHolding(db, alex, first.id)
     expect((await listHoldings(db, alex)).map((h) => h.symbol)).toEqual(['ILS', 'NOPRICE'])
     await expect(removeHolding(db, alex, first.id)).rejects.toThrow(AuthError)
+  })
+
+  it('adds a second buy of the same symbol to the holding instead of replacing it', async () => {
+    const { alex } = await home()
+    const account = await createInvestmentAccount(db, alex, {
+      name: 'Long term',
+      currency: 'USD',
+      visibility: 'household',
+    })
+    const add = (input: HoldingInput) => saveHolding(db, alex, account.id, input, new Date(), 'add')
+    const first = await add({ ...fund, cost: '1000' })
+    const second = await add({ ...fund, units: '4.75', cost: '520.5' })
+    expect(second.id).toBe(first.id)
+    expect(second.units).toBe('15.25')
+    expect(second.costMinor).toBe(152050)
+    expect((await listHoldings(db, alex)).map((h) => [h.symbol, h.units])).toEqual([
+      ['TST1', '15.25'],
+    ])
+
+    // A buy without what was paid leaves the total unknown rather than wrong.
+    const third = await add({ ...fund, units: '1' })
+    expect([third.units, third.costMinor]).toEqual(['16.25', null])
+
+    // Cash adds up too.
+    await add({ kind: 'cash', currency: 'USD', units: '100' })
+    const cash = await add({ kind: 'cash', currency: 'USD', units: '50.5' })
+    expect(cash.units).toBe('150.5')
+
+    // Editing still sets the units as typed.
+    const edited = await saveHolding(
+      db,
+      alex,
+      account.id,
+      { ...fund, units: '20', cost: '2000' },
+      new Date(),
+      'replace',
+    )
+    expect([edited.units, edited.costMinor]).toEqual(['20', 200000])
   })
 
   it('lets the owner or holder edit and delete an account', async () => {

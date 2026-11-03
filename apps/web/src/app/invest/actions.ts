@@ -43,10 +43,21 @@ export async function deleteInvestmentAccountAction(id: string) {
   })
 }
 
-export async function saveHoldingAction(accountId: string, input: HoldingInput) {
+export async function saveHoldingAction(
+  accountId: string,
+  input: HoldingInput,
+  mode: 'add' | 'replace' = 'add',
+) {
   const { member } = await requireSession()
   return runAction([...PATHS, `/invest/${accountId}`], async () => {
-    await saveHolding(requireDb(), member, accountId, input)
+    await saveHolding(
+      requireDb(),
+      member,
+      accountId,
+      input,
+      new Date(),
+      mode === 'replace' ? 'replace' : 'add',
+    )
     return {}
   })
 }

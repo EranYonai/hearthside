@@ -204,16 +204,20 @@ export function HoldingForm(props: {
         e.preventDefault()
         run(
           () =>
-            saveHoldingAction(props.accountId, {
-              kind,
-              symbol,
-              name,
-              currency,
-              assetClass,
-              units,
-              price,
-              cost,
-            }),
+            saveHoldingAction(
+              props.accountId,
+              {
+                kind,
+                symbol,
+                name,
+                currency,
+                assetClass,
+                units,
+                price,
+                cost,
+              },
+              editing ? 'replace' : 'add',
+            ),
           () => {
             if (!editing) {
               setSymbol('')
@@ -328,6 +332,11 @@ export function HoldingForm(props: {
             value={cost}
             onChange={(e) => setCost(e.target.value)}
             autoComplete="off"
+            hint={
+              editing
+                ? undefined
+                : 'Already hold this one? The units and what you paid are added to it'
+            }
           />
         </>
       )}

@@ -67,6 +67,20 @@ export function valueMinor(units: string, price: string): Minor {
   return Number(roundDiv(u.n * p.n * 100n, u.scale + p.scale))
 }
 
+/** a + b for two non-negative decimal strings, exactly, in canonical form. */
+export function addDecimals(a: string, b: string): string {
+  const x = toScaled(a)
+  const y = toScaled(b)
+  const scale = Math.max(x.scale, y.scale)
+  const sum = (
+    x.n * 10n ** BigInt(scale - x.scale) +
+    y.n * 10n ** BigInt(scale - y.scale)
+  ).toString()
+  if (scale === 0) return sum
+  const padded = sum.padStart(scale + 1, '0')
+  return parseDecimal(`${padded.slice(0, -scale)}.${padded.slice(-scale)}`)!
+}
+
 /** A decimal string as minor units, e.g. a cash balance of "12.345" is 1235. */
 export function decimalToMinor(decimal: string): Minor {
   return valueMinor(decimal, '1')
