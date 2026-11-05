@@ -27,6 +27,9 @@ export async function registrationOptions(
     userID: user.id ? new TextEncoder().encode(user.id) : undefined,
     attestationType: 'none',
     authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+    // Save the passkey on this device (iCloud Keychain, Google Password Manager, Windows Hello).
+    // Without this, iPhones can jump straight to the "use another device" QR code.
+    preferredAuthenticatorType: 'localDevice',
     excludeCredentials: existing.map((p) => ({
       id: p.id,
       transports: p.transports as AuthenticatorTransport[],
