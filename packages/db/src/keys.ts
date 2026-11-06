@@ -103,6 +103,7 @@ export async function loadKeys(db: Db, masterKeys: readonly Buffer[]): Promise<K
 export const ENCRYPTED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   households: ['name', 'invest_settings'],
   members: ['name'],
+  invite_requests: ['email'],
   passkeys: ['name'],
   auth_challenges: ['payload'],
   audit_log: ['detail', 'ip'],
@@ -131,6 +132,7 @@ export const ENCRYPTED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
 /** Keyed-hash columns; their plaintext form was the value itself (or its SHA-256). */
 export const BLIND_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   audit_log: ['ip_hash'],
+  invite_requests: ['email_key'],
   import_batches: ['file_hash'],
   transactions: ['description_key', 'dedup_key'],
   category_rules: ['match'],

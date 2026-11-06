@@ -5,6 +5,8 @@ import { setSessionCookie, takeChallengeCookie } from '@/server/session'
 import { verifyAuthentication, type AuthenticationResponseJSON } from '@/server/webauthn'
 
 const NOT_RECOGNISED = 'That passkey isn’t recognised here'
+const STALE =
+  'That passkey is left over from before and no longer works here. Try again and pick another one.'
 
 export const POST = authRoute(async ({ request, db, config }) => {
   const body = await readJson<{ response?: AuthenticationResponseJSON }>(request)
@@ -18,7 +20,8 @@ export const POST = authRoute(async ({ request, db, config }) => {
       detail: { reason: 'unknown_passkey' },
       ip: clientIp(request),
     })
-    return fail(NOT_RECOGNISED, 401)
+    // Lets the browser tell the passkey manager to drop a stale passkey for this site.
+    return json({ error: STALE, unknownPasskey: true }, 401)
   }
   const counter = await verifyAuthentication(
     config,

@@ -74,15 +74,28 @@ describe.skipIf(!url)('repo (Postgres)', () => {
     await client?.sql.end()
   })
 
-  it('sets up exactly one household with an owner, passkey and ten recovery codes', async () => {
+  it('sets up a household with an owner, passkey and ten recovery codes; first-run only once', async () => {
     expect(await getHousehold(db)).toBeUndefined()
     const { household, member, recoveryCodes } = await setupHome()
     expect(member).toMatchObject({ name: 'Alex', role: 'owner', householdId: household.id })
     expect(recoveryCodes).toHaveLength(10)
     expect(await unusedRecoveryCodeCount(db, member.id)).toBe(10)
     expect(await listPasskeys(db, member.id)).toHaveLength(1)
-    await expect(setupHome()).rejects.toMatchObject({ code: 'household_exists' })
-    expect(await countRecent(db, 'household.created', new Date(0))).toBe(1)
+    await expect(
+      createHousehold(
+        db,
+        { householdName: 'Another', ownerName: 'Sam', passkey: passkey() },
+        { firstRunOnly: true },
+      ),
+    ).rejects.toMatchObject({ code: 'household_exists' })
+    // Outside first-run setup, a server can hold many homes.
+    const other = await createHousehold(db, {
+      householdName: 'Another',
+      ownerName: 'Sam',
+      passkey: passkey(),
+    })
+    expect(other.household.id).not.toBe(household.id)
+    expect(await countRecent(db, 'household.created', new Date(0))).toBe(2)
   })
 
   it('creates, slides and ends sessions', async () => {

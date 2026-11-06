@@ -25,7 +25,7 @@ export function LoginForm() {
             router.replace('/')
             router.refresh()
           } catch (err) {
-            setError(explain(err))
+            setError(explain(err, 'signin'))
           } finally {
             setBusy(false)
           }
@@ -37,6 +37,13 @@ export function LoginForm() {
       <Link href="/recover" className="justify-self-center text-body-strong text-brand-ink">
         Lost your passkey? Use a recovery code
       </Link>
+      <p className="text-center text-caption text-ink-muted">
+        New here? Hearthside is invite only.{' '}
+        <Link href="/" className="text-brand-ink">
+          Request an invite
+        </Link>{' '}
+        or open the link a friend sent you.
+      </p>
     </Card>
   )
 }

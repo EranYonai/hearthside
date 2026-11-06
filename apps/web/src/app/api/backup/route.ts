@@ -17,15 +17,17 @@ function serviceToken(): string {
 }
 
 /**
- * The owner downloads a fresh encrypted backup. It is made on the spot and passed
+ * The server admin downloads a fresh encrypted backup. It is made on the spot and passed
  * straight through; the server keeps no copy.
  */
 export const POST = authRoute(async ({ request, db }) => {
   const session = await currentSession()
   if (!session || session.session.viaRecovery) return fail('Please sign in again', 401)
   const { member } = session
-  if (!isApproved(member) || member.role !== 'owner')
-    return fail('Only the owner can download backups', 403)
+  // The dump holds the whole server, so only whoever runs it may take one until backups
+  // are made per home.
+  if (!isApproved(member) || member.role !== 'owner' || !member.serverAdmin)
+    return fail('Only whoever runs this server can download backups', 403)
 
   const key = await getBackupKey(db, member.householdId)
   const result = await fetchBackup(process.env.BACKUP_URL, serviceToken(), key?.recipient)
