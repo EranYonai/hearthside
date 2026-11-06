@@ -53,8 +53,8 @@ export default async function SettingsPage() {
       isOwner ? listOpenInvites(db, household.id) : Promise.resolve([]),
       isOwner ? recentAudit(db, household.id, 15) : Promise.resolve([]),
       listCustomCategories(db, household.id),
-      isOwner ? lastBackupDownload(db, household.id) : Promise.resolve(undefined),
-      isOwner ? getBackupKey(db, household.id) : Promise.resolve(undefined),
+      member.serverAdmin ? lastBackupDownload(db, household.id) : Promise.resolve(undefined),
+      member.serverAdmin ? getBackupKey(db, household.id) : Promise.resolve(undefined),
     ],
   )
   const [friends, requests, homes] = await Promise.all([
@@ -262,7 +262,7 @@ export default async function SettingsPage() {
         </Card>
       )}
 
-      {isOwner && (
+      {isOwner && member.serverAdmin && (
         <Card aria-labelledby="backups">
           <Label id="backups">Backups</Label>
           <BackupLine at={backup} />
