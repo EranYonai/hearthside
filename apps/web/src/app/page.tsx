@@ -31,6 +31,7 @@ import {
 } from '@/server/ledger'
 import { keepQuotesFresh } from '@/server/prices'
 import { listRecurring } from '@/server/recurring'
+import { Landing } from '@/components/landing/Landing'
 import { getHousehold, isApproved, listMembers } from '@/server/repo'
 import { currentSession, requireSession } from '@/server/session'
 import { wealth } from '@/server/wealth'
@@ -64,7 +65,11 @@ export default async function Home({
 }) {
   const asked = (await searchParams).range
   const range = isWealthRange(asked) ? asked : '6m'
-  if (!(await currentSession()) && !(await getHousehold(requireDb()))) redirect('/setup')
+  if (!(await currentSession())) {
+    // A fresh server goes to first-run setup; otherwise signed-out visitors see the public page.
+    if (!(await getHousehold(requireDb()))) redirect('/setup')
+    return <Landing />
+  }
   const { member, household } = await requireSession()
   if (!member.onboardedAt) redirect('/welcome')
   const db = requireDb()

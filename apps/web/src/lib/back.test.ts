@@ -3,6 +3,7 @@ import {
   markReset,
   MAX_TRAIL,
   nameOf,
+  outsideTrail,
   pageTitle,
   readTrail,
   takeReset,
@@ -67,6 +68,24 @@ describe('visit', () => {
     const t = walk(...Array.from({ length: MAX_TRAIL + 5 }, (_, i) => `/accounts/a${i}`))
     expect(t).toHaveLength(MAX_TRAIL)
     expect(t.at(-1)!.url).toBe(`/accounts/a${MAX_TRAIL + 4}`)
+  })
+})
+
+describe('outsideTrail', () => {
+  it('keeps sign-in, sign-up and welcome pages off the trail', () => {
+    for (const p of [
+      '/login',
+      '/setup',
+      '/recover',
+      '/recovered',
+      '/pending',
+      '/welcome',
+      '/invite/abc',
+      '/join/abc',
+    ])
+      expect(outsideTrail(p)).toBe(true)
+    for (const p of ['/', '/settings', '/accounts', '/invest', '/loginx', '/invite'])
+      expect(outsideTrail(p)).toBe(false)
   })
 })
 

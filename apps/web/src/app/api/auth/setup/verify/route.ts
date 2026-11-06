@@ -17,7 +17,11 @@ export const POST = authRoute(async ({ request, db, config }) => {
   )
   if (!passkey) return fail('The passkey could not be verified')
   const { householdName, name } = challenge.payload as { householdName: string; name: string }
-  const created = await createHousehold(db, { householdName, ownerName: name, passkey })
+  const created = await createHousehold(
+    db,
+    { householdName, ownerName: name, passkey },
+    { firstRunOnly: true },
+  )
   await setSessionCookie(await createSession(db, created.member.id))
   await audit(db, {
     householdId: created.household.id,
