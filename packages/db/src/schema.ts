@@ -55,26 +55,22 @@ const encJson = <T>(table: string, column: string) =>
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 const ts = (name: string) => timestamp(name, { withTimezone: true })
 
-/** One deployment serves exactly one household; the singleton index enforces it. */
-export const households = pgTable(
-  'households',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    name: encText('households', 'name').notNull(),
-    /** Investing preferences: target split, emergency months, check-up on or off. */
-    investSettings: encJson<{
-      stocksTarget?: number
-      emergencyMonths?: number
-      checkupOn?: boolean
-    }>('households', 'invest_settings'),
-    /** Public age key derived from the owner's passkey; backups are also encrypted to it. */
-    backupRecipient: text('backup_recipient'),
-    /** The passkey (credential id, base64url) that derives it. */
-    backupCredentialId: text('backup_credential_id'),
-    createdAt: createdAt(),
-  },
-  () => [uniqueIndex('households_singleton').on(sql`(true)`)],
-)
+/** A home. One server can hold many; every private row belongs to one. */
+export const households = pgTable('households', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: encText('households', 'name').notNull(),
+  /** Investing preferences: target split, emergency months, check-up on or off. */
+  investSettings: encJson<{
+    stocksTarget?: number
+    emergencyMonths?: number
+    checkupOn?: boolean
+  }>('households', 'invest_settings'),
+  /** Public age key derived from the owner's passkey; backups are also encrypted to it. */
+  backupRecipient: text('backup_recipient'),
+  /** The passkey (credential id, base64url) that derives it. */
+  backupCredentialId: text('backup_credential_id'),
+  createdAt: createdAt(),
+})
 
 export const members = pgTable(
   'members',

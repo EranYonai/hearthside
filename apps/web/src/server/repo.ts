@@ -1,6 +1,6 @@
 import type { Db, MemberRow, PasskeyRow } from '@hearthside/db'
 import { blindIndex, schema } from '@hearthside/db'
-import { and, asc, count, desc, eq, gt, isNotNull, isNull, lt } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, isNotNull, isNull, lt, sql } from 'drizzle-orm'
 import {
   CHALLENGE_TTL_MS,
   MAX_OPEN_CHALLENGES,
@@ -58,6 +58,7 @@ export class AuthError extends Error {
 
 // ---------- Household and members ----------
 
+/** Any home on this server: used to tell a fresh install (first-run setup) from a used one. */
 export async function getHousehold(db: Conn) {
   const [row] = await db.select().from(households).limit(1)
   return row
@@ -66,10 +67,15 @@ export async function getHousehold(db: Conn) {
 export async function createHousehold(
   db: Db,
   input: { householdName: string; ownerName: string; passkey: NewPasskey },
+  opts: { firstRunOnly?: boolean } = {},
 ) {
   return db.transaction(async (tx) => {
-    if (await getHousehold(tx))
-      throw new AuthError('household_exists', 'This home is already set up')
+    if (opts.firstRunOnly) {
+      // Serialize first-run setups so two at once can't both win.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('hearthside.first-run'))`)
+      if (await getHousehold(tx))
+        throw new AuthError('household_exists', 'This home is already set up')
+    }
     const [household] = await tx
       .insert(households)
       .values({ name: input.householdName })
