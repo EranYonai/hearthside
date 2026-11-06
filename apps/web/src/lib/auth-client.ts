@@ -1,6 +1,13 @@
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
 
-export class FlowError extends Error {}
+export class FlowError extends Error {
+  constructor(
+    message: string,
+    readonly data: { unknownPasskey?: boolean } = {},
+  ) {
+    super(message)
+  }
+}
 
 async function post<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -8,9 +15,24 @@ async function post<T>(url: string, body: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string }
-  if (!res.ok) throw new FlowError(data.error ?? 'Something went wrong. Please try again.')
+  const data = (await res.json().catch(() => ({}))) as T & {
+    error?: string
+    unknownPasskey?: boolean
+  }
+  if (!res.ok) throw new FlowError(data.error ?? 'Something went wrong. Please try again.', data)
   return data
+}
+
+type SignalingCredential = {
+  signalUnknownCredential?: (o: { rpId: string; credentialId: string }) => Promise<void>
+}
+
+/** Asks the passkey manager (where supported) to delete a passkey this site no longer knows. */
+async function forgetStalePasskey(rpId: string | undefined, credentialId: string) {
+  const pkc = (globalThis as { PublicKeyCredential?: SignalingCredential }).PublicKeyCredential
+  await pkc
+    ?.signalUnknownCredential?.({ rpId: rpId ?? location.hostname, credentialId })
+    .catch(() => {})
 }
 
 function isApple(): boolean {
@@ -52,7 +74,13 @@ export async function signInWithPasskey(): Promise<void> {
     {},
   )
   const response = await startAuthentication({ optionsJSON })
-  await post('/api/auth/login/verify', { response })
+  try {
+    await post('/api/auth/login/verify', { response })
+  } catch (err) {
+    if (err instanceof FlowError && err.data.unknownPasskey)
+      await forgetStalePasskey(optionsJSON.rpId, response.id)
+    throw err
+  }
 }
 
 export async function submitRecoveryCode(code: string): Promise<void> {
