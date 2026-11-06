@@ -15,12 +15,14 @@ import {
   recentAudit,
   unusedRecoveryCodeCount,
 } from '@/server/repo'
+import { appInviteSummary, countHomes, listInviteRequests } from '@/server/app-invites'
 import { backupAge, getBackupKey, lastBackupDownload } from '@/server/backups'
 import { listCustomCategories } from '@/server/categories'
 import { requireSession } from '@/server/session'
 import { ProfileForm, RestartWelcome } from '../welcome/client'
 import { CategoryManager } from './categories'
 import {
+  AppInviteCreator,
   DownloadBackup,
   InviteCreator,
   LinkPasskeyBackup,
@@ -28,6 +30,8 @@ import {
   PendingControls,
   RegenerateCodes,
   RemovePasskey,
+  RequestControls,
+  RevokeAppInvite,
   RevokeInvite,
 } from './client'
 
@@ -53,6 +57,11 @@ export default async function SettingsPage() {
       isOwner ? getBackupKey(db, household.id) : Promise.resolve(undefined),
     ],
   )
+  const [friends, requests, homes] = await Promise.all([
+    appInviteSummary(db, member),
+    member.serverAdmin ? listInviteRequests(db, member) : Promise.resolve([]),
+    member.serverAdmin ? countHomes(db, member) : Promise.resolve(0),
+  ])
   const editor = member.role !== 'viewer'
   const waiting = people.filter((p) => !isApproved(p))
   const current = people.filter(isApproved)
@@ -172,6 +181,12 @@ export default async function SettingsPage() {
         </ul>
         {isOwner && (
           <>
+            <div className="grid gap-1">
+              <h2 className="text-body-strong">Invite to our home</h2>
+              <p className="text-caption text-ink-muted">
+                For the people you live with. They join {household.name} and see what it shares.
+              </p>
+            </div>
             <InviteCreator />
             {invites.length > 0 && (
               <div className="grid gap-1">
@@ -194,6 +209,58 @@ export default async function SettingsPage() {
           </>
         )}
       </Card>
+
+      <Card aria-labelledby="friends-title">
+        <Label id="friends-title">Invite a friend to Hearthside</Label>
+        <p className="text-ink-muted">
+          Your friend creates their own, separate home. They never see yours, and you never see
+          theirs.
+        </p>
+        <AppInviteCreator />
+        {friends.open.length > 0 && (
+          <ul className="grid divide-y divide-line" data-testid="friend-invites">
+            {friends.open.map((i) => (
+              <li key={i.id} className="flex items-center justify-between gap-2 py-1 text-caption">
+                <span>Friend invite · expires {date.format(i.expiresAt)}</span>
+                <RevokeAppInvite id={i.id} />
+              </li>
+            ))}
+          </ul>
+        )}
+        {friends.joined > 0 && (
+          <p className="text-caption text-ink-muted">
+            {friends.joined === 1
+              ? '1 friend has started a home.'
+              : `${friends.joined} friends have started homes.`}
+          </p>
+        )}
+      </Card>
+
+      {member.serverAdmin && (
+        <Card aria-labelledby="requests-title">
+          <Label id="requests-title">Invite requests</Label>
+          <p className="text-caption text-ink-muted">
+            You run this server. It holds {homes === 1 ? '1 home' : `${homes} homes`}.
+          </p>
+          {requests.length === 0 ? (
+            <p className="text-ink-muted">No one is waiting for an invite.</p>
+          ) : (
+            <ul className="grid divide-y divide-line" data-testid="invite-requests">
+              {requests.map((r) => (
+                <li key={r.id} className="grid gap-2 py-2">
+                  <span>
+                    <span className="text-body-strong break-all">{r.email}</span>
+                    <span className="block text-caption text-ink-muted">
+                      Asked {date.format(r.createdAt)}
+                    </span>
+                  </span>
+                  <RequestControls id={r.id} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
 
       {isOwner && (
         <Card aria-labelledby="backups">

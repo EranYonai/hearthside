@@ -64,9 +64,46 @@ export async function getHousehold(db: Conn) {
   return row
 }
 
+export interface NewHome {
+  householdName: string
+  ownerName: string
+  passkey: NewPasskey
+}
+
+/** Inserts a home with its owner, passkey and recovery codes. Callers hold the transaction. */
+export async function insertHousehold(
+  tx: Conn,
+  input: NewHome,
+  opts: { serverAdmin?: boolean } = {},
+) {
+  const [household] = await tx.insert(households).values({ name: input.householdName }).returning()
+  const [member] = await tx
+    .insert(members)
+    .values({
+      householdId: household!.id,
+      name: input.ownerName,
+      role: 'owner',
+      approvedAt: new Date(),
+      serverAdmin: opts.serverAdmin ?? false,
+    })
+    .returning()
+  await tx.insert(passkeys).values({ ...input.passkey, memberId: member!.id })
+  const codes = await replaceRecoveryCodes(tx, member!.id)
+  await audit(tx, {
+    householdId: household!.id,
+    memberId: member!.id,
+    action: 'household.created',
+  })
+  return { household: household!, member: member!, recoveryCodes: codes }
+}
+
+/**
+ * First-run setup (`firstRunOnly`) works once per server, and its owner runs the server.
+ * Other homes come from friend invites (see app-invites.ts).
+ */
 export async function createHousehold(
   db: Db,
-  input: { householdName: string; ownerName: string; passkey: NewPasskey },
+  input: NewHome,
   opts: { firstRunOnly?: boolean } = {},
 ) {
   return db.transaction(async (tx) => {
@@ -76,27 +113,7 @@ export async function createHousehold(
       if (await getHousehold(tx))
         throw new AuthError('household_exists', 'This home is already set up')
     }
-    const [household] = await tx
-      .insert(households)
-      .values({ name: input.householdName })
-      .returning()
-    const [member] = await tx
-      .insert(members)
-      .values({
-        householdId: household!.id,
-        name: input.ownerName,
-        role: 'owner',
-        approvedAt: new Date(),
-      })
-      .returning()
-    await tx.insert(passkeys).values({ ...input.passkey, memberId: member!.id })
-    const codes = await replaceRecoveryCodes(tx, member!.id)
-    await audit(tx, {
-      householdId: household!.id,
-      memberId: member!.id,
-      action: 'household.created',
-    })
-    return { household: household!, member: member!, recoveryCodes: codes }
+    return insertHousehold(tx, input, { serverAdmin: opts.firstRunOnly ?? false })
   })
 }
 

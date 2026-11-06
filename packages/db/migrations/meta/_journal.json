@@ -155,6 +155,13 @@
       "when": 1793956953542,
       "tag": "0021_many_homes",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793957867887,
+      "tag": "0022_friend_invites",
+      "breakpoints": true
     }
   ]
 }

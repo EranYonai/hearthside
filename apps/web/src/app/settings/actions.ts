@@ -23,6 +23,7 @@ import {
   revokeInvite,
   type Role,
 } from '@/server/repo'
+import { createAppInvite, markRequestHandled, revokeAppInvite } from '@/server/app-invites'
 import { setBackupKey } from '@/server/backups'
 import { requireSession } from '@/server/session'
 
@@ -47,10 +48,49 @@ export async function createInviteAction(role: 'adult' | 'viewer') {
   return run(async () => {
     if (role !== 'adult' && role !== 'viewer') throw new AuthError('not_allowed', 'Pick a role')
     const { token } = await createInvite(requireDb(), member, role)
-    // Prefer the configured origin; fall back to the request host for local testing.
-    const host = (await headers()).get('host')
-    const origin = process.env.APP_ORIGIN ? authConfig().origin : `http://${host}`
-    return { url: `${origin}/invite/${token}` }
+    return { url: `${await appOrigin()}/invite/${token}` }
+  })
+}
+
+/** Prefer the configured origin; fall back to the request host for local testing. */
+async function appOrigin() {
+  const host = (await headers()).get('host')
+  return process.env.APP_ORIGIN ? authConfig().origin : `http://${host}`
+}
+
+/** "Invite a friend to Hearthside": any member; the friend creates their own home. */
+export async function createAppInviteAction() {
+  const { member } = await requireSession()
+  return run(async () => {
+    const { token } = await createAppInvite(requireDb(), member)
+    return { url: `${await appOrigin()}/join/${token}` }
+  })
+}
+
+export async function revokeAppInviteAction(id: string) {
+  const { member } = await requireSession()
+  return run(async () => {
+    await revokeAppInvite(requireDb(), member, id)
+    return {}
+  })
+}
+
+/** Server admin: answer a request from the public page with a friend invite link. */
+export async function answerRequestAction(id: string) {
+  const { member } = await requireSession()
+  return run(async () => {
+    const db = requireDb()
+    await markRequestHandled(db, member, id)
+    const { token } = await createAppInvite(db, member)
+    return { url: `${await appOrigin()}/join/${token}` }
+  })
+}
+
+export async function dismissRequestAction(id: string) {
+  const { member } = await requireSession()
+  return run(async () => {
+    await markRequestHandled(requireDb(), member, id)
+    return {}
   })
 }
 

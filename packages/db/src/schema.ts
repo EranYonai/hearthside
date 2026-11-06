@@ -87,6 +87,8 @@ export const members = pgTable(
     onboardedAt: ts('onboarded_at'),
     /** Set when the owner lets an invited member in. Until then they see nothing. */
     approvedAt: ts('approved_at'),
+    /** Runs this server: sees invite requests from the public page. */
+    serverAdmin: boolean('server_admin').notNull().default(false),
     createdAt: createdAt(),
     removedAt: ts('removed_at'),
   },
@@ -158,6 +160,42 @@ export const invites = pgTable(
   (t) => [uniqueIndex('invites_token_idx').on(t.tokenHash)],
 )
 
+/** "Invite a friend": a single-use link that lets someone create their own, separate home. */
+export const appInvites = pgTable(
+  'app_invites',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tokenHash: text('token_hash').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => members.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+    expiresAt: ts('expires_at').notNull(),
+    usedAt: ts('used_at'),
+    /** The home created with it. */
+    usedFor: uuid('used_for').references(() => households.id, { onDelete: 'set null' }),
+    revokedAt: ts('revoked_at'),
+  },
+  (t) => [
+    uniqueIndex('app_invites_token_idx').on(t.tokenHash),
+    index('app_invites_created_by_idx').on(t.createdBy),
+  ],
+)
+
+/** "Request an invite" from the public page. */
+export const inviteRequests = pgTable(
+  'invite_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: encText('invite_requests', 'email').notNull(),
+    /** blindIndex(lowercased email), so one address asks once. */
+    emailKey: text('email_key').notNull(),
+    createdAt: createdAt(),
+    handledAt: ts('handled_at'),
+  },
+  (t) => [uniqueIndex('invite_requests_email_idx').on(t.emailKey)],
+)
+
 export const recoveryCodes = pgTable(
   'recovery_codes',
   {
@@ -176,7 +214,9 @@ export const recoveryCodes = pgTable(
 export const authChallenges = pgTable('auth_challenges', {
   id: text('id').primaryKey(),
   challenge: text('challenge').notNull(),
-  purpose: text('purpose', { enum: ['setup', 'login', 'invite', 'add-passkey'] }).notNull(),
+  purpose: text('purpose', {
+    enum: ['setup', 'login', 'invite', 'join', 'add-passkey'],
+  }).notNull(),
   payload: encJson<Record<string, unknown>>('auth_challenges', 'payload').notNull(),
   expiresAt: ts('expires_at').notNull(),
 })

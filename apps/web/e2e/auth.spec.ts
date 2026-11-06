@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type Page } from '@playwright/test'
 import { makePdf } from '../../../packages/core/src/import/fixtures'
 
-// One household per deployment, so these steps share state and run in order
+// These steps share one database (the first home and its people) and run in order
 // against a fresh database. Chromium only: it has a virtual passkey device.
 test.describe.configure({ mode: 'serial', retries: 0 })
 test.skip(({ browserName }) => browserName !== 'chromium', 'needs the CDP virtual authenticator')
@@ -231,7 +231,7 @@ test('the owner can decline someone who joined by invite', async ({ browser }) =
   await expect(owner.getByTestId('member-list')).not.toContainText('Stranger')
 
   // Their session ends with it.
-  await page.goto('/')
+  await page.goto('/settings')
   await expect(page).toHaveURL(/\/login$/)
   await page.context().close()
 })
@@ -863,5 +863,65 @@ test('settings show the app version and sign-in activity', async () => {
   await expect(owner).toHaveURL(/\/welcome$/)
   await owner.getByRole('button', { name: 'Skip the rest' }).click()
   await expect(owner.getByRole('heading', { name: 'Hi Alex' })).toBeVisible()
+})
+
+test('a signed-out visitor sees the public page and can ask for an invite', async ({ browser }) => {
+  const visitor = await browser.newPage()
+  await visitor.goto('/')
+  await expect(
+    visitor.getByRole('heading', { name: /One home,\s*one clear picture/ }),
+  ).toBeVisible()
+  await visitor.getByLabel('Get an invite').fill('friend@example.com')
+  await visitor.getByRole('button', { name: 'Request an invite' }).click()
+  await expect(visitor.getByText(/We’ll email you an invite link/)).toBeVisible()
+  await visitor.getByRole('link', { name: 'Sign in', exact: true }).click()
+  await expect(visitor).toHaveURL(/\/login$/)
+  await visitor.context().close()
+
+  // The owner of the first home runs the server and sees the request.
+  await owner.goto('/settings')
+  await expect(owner.getByTestId('invite-requests')).toContainText('friend@example.com')
+})
+
+test('a friend invite starts a separate home', async ({ browser }) => {
+  await owner.goto('/settings')
+  await owner.getByRole('button', { name: 'Create a friend invite link' }).click()
+  const url = (await owner.getByTestId('friend-invite-url').textContent())!.trim()
+  expect(url).toMatch(/\/join\/[\w-]+$/)
+  const path = new URL(url).pathname
+
+  // It isn't a home invite.
+  const wrong = await browser.newPage()
+  await wrong.goto(path.replace('/join/', '/invite/'))
+  await expect(wrong.getByRole('heading', { name: 'This invite has expired' })).toBeVisible()
+  await wrong.context().close()
+
+  const friend = await newDevice(browser)
+  await friend.goto(path)
+  await expect(friend.getByRole('heading', { name: 'Create your own home' })).toBeVisible()
+  await friend.getByLabel('Name of your home').fill('Friend Home')
+  await friend.getByLabel('Your name').fill('Jordan')
+  await friend.getByRole('button', { name: 'Create passkey and home' }).click()
+  await expect(friend.getByTestId('recovery-codes').getByRole('listitem')).toHaveCount(10)
+  await friend.getByRole('button', { name: 'I’ve saved them' }).click()
+  await expect(friend.getByRole('heading', { name: 'Welcome, Jordan' })).toBeVisible()
+
+  // Jordan owns a home of their own and sees nobody from the first home.
+  await friend.goto('/settings')
+  await expect(friend.getByTestId('member-list')).toContainText('Jordan')
+  await expect(friend.getByTestId('member-list')).not.toContainText('Alex')
+  await expect(friend.getByTestId('invite-requests')).toHaveCount(0)
+
+  // The link works once.
+  const again = await newDevice(browser)
+  await again.goto(path)
+  await expect(again.getByRole('heading', { name: 'This invite has expired' })).toBeVisible()
+  await again.context().close()
+  await friend.context().close()
+
+  // And the first home is unchanged.
+  await owner.goto('/settings')
+  await expect(owner.getByTestId('member-list')).not.toContainText('Jordan')
+  await expect(owner.getByText('1 friend has started a home.')).toBeVisible()
   await owner.context().close()
 })

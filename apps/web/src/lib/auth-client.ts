@@ -18,9 +18,12 @@ function isApple(): boolean {
 }
 
 /** Turns browser WebAuthn errors into something a person can act on. */
-export function explain(err: unknown): string {
+export function explain(err: unknown, action: 'create' | 'signin' = 'create'): string {
   if (err instanceof FlowError) return err.message
   if (err instanceof Error && err.name === 'NotAllowedError') {
+    if (action === 'signin') {
+      return 'No passkey was used. New here? You need an invite link to create an account.'
+    }
     return isApple()
       ? 'The passkey wasn’t saved. Check that Passwords (iCloud Keychain) is on in Settings, then try again.'
       : 'The passkey prompt was closed or timed out. Try again when you’re ready.'
@@ -32,7 +35,7 @@ export function explain(err: unknown): string {
 }
 
 export async function registerPasskey<T>(
-  kind: 'setup' | 'invite' | 'passkeys',
+  kind: 'setup' | 'invite' | 'join' | 'passkeys',
   details: unknown = {},
 ): Promise<T> {
   const optionsJSON = await post<Parameters<typeof startRegistration>[0]['optionsJSON']>(

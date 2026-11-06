@@ -1,15 +1,19 @@
 'use client'
 
 import { Button, Notice } from '@hearthside/ui'
-import { Check, Copy, Download, Trash2, UserPlus, X } from 'lucide-react'
+import { Check, Copy, Download, Gift, Mail, Trash2, UserPlus, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { RecoveryCodes } from '@/components/RecoveryCodes'
 import { recipientFromSecret } from '@/lib/backup-key'
 import { passkeyBackupSecret } from '@/lib/passkey-prf'
 import {
+  answerRequestAction,
   approveMemberAction,
+  createAppInviteAction,
+  dismissRequestAction,
   linkBackupKeyAction,
+  revokeAppInviteAction,
   changeRoleAction,
   createInviteAction,
   regenerateCodesAction,
@@ -35,7 +39,6 @@ function useAction() {
 export function InviteCreator() {
   const [role, setRole] = useState<'adult' | 'viewer'>('adult')
   const [url, setUrl] = useState<string>()
-  const [copied, setCopied] = useState(false)
   const { pending, error, run } = useAction()
   return (
     <div className="grid gap-3">
@@ -69,7 +72,6 @@ export function InviteCreator() {
             const result = await createInviteAction(role)
             if (result.ok) {
               setUrl(result.url)
-              setCopied(false)
             }
             return result
           })
@@ -77,30 +79,108 @@ export function InviteCreator() {
       >
         Create invite link
       </Button>
-      {url && (
-        <div className="grid gap-2">
-          <output
-            className="block rounded-md bg-surface-2 px-3 py-2 text-caption break-all"
-            data-testid="invite-url"
-          >
-            {url}
-          </output>
-          <Button
-            variant="ghost"
-            icon={<Copy aria-hidden />}
-            className="justify-self-start"
-            onClick={async () => {
-              await navigator.clipboard?.writeText(url).catch(() => {})
-              setCopied(true)
-            }}
-          >
-            {copied ? 'Copied' : 'Copy link'}
-          </Button>
-          <p className="text-caption text-ink-muted">
-            Send it privately. It works once, for 7 days.
-          </p>
-        </div>
-      )}
+      {url && <InviteLink url={url} testId="invite-url" />}
+      {error && <Notice tone="negative">{error}</Notice>}
+    </div>
+  )
+}
+
+/** A fresh invite link with a copy button. */
+function InviteLink({ url, testId }: { url: string; testId: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="grid gap-2">
+      <output
+        className="block rounded-md bg-surface-2 px-3 py-2 text-caption break-all"
+        data-testid={testId}
+      >
+        {url}
+      </output>
+      <Button
+        variant="ghost"
+        icon={<Copy aria-hidden />}
+        className="justify-self-start"
+        onClick={async () => {
+          await navigator.clipboard?.writeText(url).catch(() => {})
+          setCopied(true)
+        }}
+      >
+        {copied ? 'Copied' : 'Copy link'}
+      </Button>
+      <p className="text-caption text-ink-muted">Send it privately. It works once, for 7 days.</p>
+    </div>
+  )
+}
+
+export function AppInviteCreator() {
+  const [url, setUrl] = useState<string>()
+  const { pending, error, run } = useAction()
+  return (
+    <div className="grid gap-3">
+      <Button
+        variant="secondary"
+        disabled={pending}
+        icon={<Gift aria-hidden />}
+        className="justify-self-start"
+        onClick={() =>
+          run(async () => {
+            const result = await createAppInviteAction()
+            if (result.ok) setUrl(result.url)
+            return result
+          })
+        }
+      >
+        Create a friend invite link
+      </Button>
+      {url && <InviteLink url={url} testId="friend-invite-url" />}
+      {error && <Notice tone="negative">{error}</Notice>}
+    </div>
+  )
+}
+
+export function RevokeAppInvite({ id }: { id: string }) {
+  const { pending, error, run } = useAction()
+  return (
+    <>
+      <Button
+        variant="ghost"
+        disabled={pending}
+        onClick={() => run(() => revokeAppInviteAction(id))}
+      >
+        Revoke
+      </Button>
+      {error && <Notice tone="negative">{error}</Notice>}
+    </>
+  )
+}
+
+export function RequestControls({ id }: { id: string }) {
+  const [url, setUrl] = useState<string>()
+  const { pending, error, run } = useAction()
+  if (url) return <InviteLink url={url} testId="request-invite-url" />
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        variant="secondary"
+        disabled={pending}
+        icon={<Mail aria-hidden />}
+        onClick={() =>
+          run(async () => {
+            const result = await answerRequestAction(id)
+            if (result.ok) setUrl(result.url)
+            return result
+          })
+        }
+      >
+        Create invite
+      </Button>
+      <Button
+        variant="ghost"
+        disabled={pending}
+        onClick={() => run(() => dismissRequestAction(id))}
+      >
+        Dismiss
+      </Button>
       {error && <Notice tone="negative">{error}</Notice>}
     </div>
   )
