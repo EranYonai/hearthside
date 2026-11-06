@@ -157,7 +157,17 @@ describe.skipIf(!url)('wealth (Postgres)', () => {
       ['Long term', 'invest', 400_000],
     ])
     expect(w.missing.map((m) => m.name)).toEqual(['Empty'])
-    expect(w.series).toHaveLength(27)
+    // The bank history starts the day before the first transaction, so the chart does too.
+    expect(w.since).toBe('2026-09-30')
+    expect(w.series.map((p) => p.on)).toEqual([
+      '2026-09-30',
+      '2026-10-03',
+      '2026-10-10',
+      '2026-10-17',
+      '2026-10-24',
+      '2026-10-31',
+    ])
+    expect(w.change).toEqual({ minor: 1_000_000, percent: 250 })
     expect(w.series.at(-1)).toEqual({
       on: '2026-10-31',
       totalMinor: 1_400_000,
@@ -170,14 +180,33 @@ describe.skipIf(!url)('wealth (Postgres)', () => {
     const mid = w.series.find((p) => p.on >= '2026-10-01' && p.on < '2026-10-20')!
     expect(mid.totalMinor - mid.investedMinor).toBe(1_500_000)
 
-    // Longer ranges: a year is weekly; years back start no earlier than the first data.
+    // Longer ranges start no earlier than the first data either.
     const year = await wealth(db, alex, rates, today, '1y')
-    expect(year).toMatchObject({ range: '1y' })
-    expect(year.series).toHaveLength(53)
+    expect(year).toMatchObject({ range: '1y', since: '2026-09-30' })
+    expect(year.series).toEqual(w.series)
     const all = await wealth(db, alex, rates, today, '5y')
     expect(all.series.at(-1)!.totalMinor).toBe(1_400_000)
-    expect(all.series[0]!.on <= '2026-10-01').toBe(true)
-    expect(all.series.length).toBeLessThan(10)
+    expect(all.series[0]!.on).toBe('2026-09-30')
+
+    // Short ranges go day by day, and the change covers only them.
+    const week = await wealth(db, alex, rates, today, '1w')
+    expect(week).toMatchObject({ range: '1w', since: null })
+    expect(week.series.map((p) => p.on)).toEqual([
+      '2026-10-24',
+      '2026-10-25',
+      '2026-10-26',
+      '2026-10-27',
+      '2026-10-28',
+      '2026-10-29',
+      '2026-10-30',
+      '2026-10-31',
+    ])
+    expect(week.change.minor).toBe(0)
+    const day = await wealth(db, alex, rates, today, '1d')
+    expect(day.series.map((p) => p.on)).toEqual(['2026-10-30', '2026-10-31'])
+    const earlier = await wealth(db, alex, rates, new Date('2026-10-21T12:00:00Z'), '1w')
+    // The rent went out on the 20th, within that week.
+    expect(earlier.change.minor).toBe(-500_000)
 
     // Sam's private account is Sam's alone.
     expect(w.missing.some((m) => m.name === 'Sam secret')).toBe(false)

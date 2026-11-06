@@ -7,6 +7,7 @@ import {
   isWealthRange,
   valuesOn,
   weeklyDays,
+  wealthRangeStart,
 } from './wealth'
 
 describe('closingBalance', () => {
@@ -94,28 +95,48 @@ describe('changeOver', () => {
 })
 
 describe('chartDays', () => {
-  it('goes weekly for a year or less', () => {
+  it('goes daily for two weeks or less', () => {
+    expect(chartDays('2026-11-06', '2026-11-05')).toEqual(['2026-11-05', '2026-11-06'])
+    expect(chartDays('2026-11-06', '2026-10-30')).toHaveLength(8)
+  })
+
+  it('goes weekly for a year or less, starting on the start', () => {
     const days = chartDays('2026-11-01', '2026-05-01')
+    expect(days[0]).toBe('2026-05-01')
+    expect(days[1]).toBe('2026-05-03')
     expect(days.at(-1)).toBe('2026-11-01')
-    expect(days[0]! <= '2026-05-01').toBe(true)
     expect(days).toHaveLength(28)
+    expect(chartDays('2026-11-01', weeklyDays('2026-11-01')[0]!)).toEqual(weeklyDays('2026-11-01'))
   })
 
   it('goes monthly past a year, ending today', () => {
     const days = chartDays('2026-11-01', '2024-03-17')
-    expect(days[0]).toBe('2024-03-01')
+    expect(days[0]).toBe('2024-03-17')
     expect(days[1]).toBe('2024-04-01')
     expect(days.at(-1)).toBe('2026-11-01')
     expect(new Set(days).size).toBe(days.length)
   })
 
-  it('copes with a start after today', () => {
-    expect(chartDays('2026-11-01', '2027-01-01')).toEqual(['2026-10-25', '2026-11-01'])
+  it('copes with a start on or after today', () => {
+    expect(chartDays('2026-11-01', '2027-01-01')).toEqual(['2026-11-01'])
+    expect(chartDays('2026-11-01', '2026-11-01')).toEqual(['2026-11-01'])
   })
 
   it('knows its ranges', () => {
+    expect(isWealthRange('1d')).toBe(true)
+    expect(isWealthRange('1w')).toBe(true)
     expect(isWealthRange('1y')).toBe(true)
     expect(isWealthRange('5y')).toBe(true)
     expect(isWealthRange('all')).toBe(false)
+  })
+})
+
+describe('wealthRangeStart', () => {
+  it('counts back from today', () => {
+    expect(wealthRangeStart('1d', '2026-11-06')).toBe('2026-11-05')
+    expect(wealthRangeStart('1w', '2026-11-06')).toBe('2026-10-30')
+    expect(wealthRangeStart('6m', '2026-11-06')).toBe(weeklyDays('2026-11-06')[0])
+    expect(wealthRangeStart('1y', '2026-11-06')).toBe(weeklyDays('2026-11-06', 52)[0])
+    expect(wealthRangeStart('5y', '2026-11-06')).toBe('2021-11-06')
   })
 })

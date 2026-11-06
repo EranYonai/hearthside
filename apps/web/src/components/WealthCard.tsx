@@ -15,6 +15,12 @@ const KIND_LABEL = {
   loan: 'Loan',
 } as const
 
+const sinceFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+})
+
 const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0)
 
 /** Neutral stand-ins for accounts with no color of their own. */
@@ -60,6 +66,10 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
     paint: p.color ?? FALLBACK[neutral++ % FALLBACK.length]!,
   }))
   const up = change.minor >= 0
+  // When the data starts later than the range, the change only covers what there is.
+  const over = wealth.since
+    ? `since ${sinceFormat.format(new Date(`${wealth.since}T00:00:00Z`))}`
+    : span.label
 
   return (
     <Card aria-labelledby="wealth-title" className="wealth-glow gap-4" data-testid="wealth">
@@ -77,7 +87,7 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
             {formatMoney(change.minor, { currency, whole: true, signed: true })}
             {change.percent !== null &&
               ` (${up ? '+' : '−'}${Math.abs(change.percent).toFixed(1)}%)`}
-            <span className="font-normal opacity-80">· {span.label}</span>
+            <span className="font-normal opacity-80">· {over}</span>
           </span>
         )}
       </div>
@@ -135,26 +145,26 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
         )}
       </div>
 
-      {wealth.series.length > 1 && (
-        <div data-private-hide className="grid gap-2">
-          <nav
-            aria-label="Chart range"
-            className="inline-flex gap-0.5 justify-self-end rounded-pill bg-surface-2 p-0.5"
-          >
-            {WEALTH_RANGES.map((r) => (
-              <Link
-                key={r.key}
-                href={r.key === '6m' ? '/' : `/?range=${r.key}`}
-                scroll={false}
-                aria-current={r.key === wealth.range ? 'page' : undefined}
-                className="rounded-pill px-2.5 py-0.5 text-[0.75rem] leading-5 font-semibold text-ink-muted aria-[current=page]:bg-surface-1 aria-[current=page]:text-ink aria-[current=page]:shadow-card"
-              >
-                {r.label}
-              </Link>
-            ))}
-          </nav>
+      <div data-private-hide className="grid gap-2">
+        <nav
+          aria-label="Chart range"
+          className="inline-flex gap-0.5 justify-self-end rounded-pill bg-surface-2 p-0.5"
+        >
+          {WEALTH_RANGES.map((r) => (
+            <Link
+              key={r.key}
+              href={r.key === '6m' ? '/' : `/?range=${r.key}`}
+              scroll={false}
+              aria-current={r.key === wealth.range ? 'page' : undefined}
+              className="rounded-pill px-2.5 py-0.5 text-[0.75rem] leading-5 font-semibold text-ink-muted aria-[current=page]:bg-surface-1 aria-[current=page]:text-ink aria-[current=page]:shadow-card"
+            >
+              {r.label}
+            </Link>
+          ))}
+        </nav>
+        {wealth.series.length > 1 ? (
           <LineChart
-            label={`What we own over ${span.label}`}
+            label={`What we own over ${over}`}
             kind="money"
             currency={currency}
             area
@@ -168,8 +178,12 @@ export function WealthCard({ wealth, editable }: { wealth: Wealth; editable: boo
               { label: 'Invested', color: 'chart-2', dashed: true },
             ]}
           />
-        </div>
-      )}
+        ) : (
+          <p className="text-caption text-ink-muted" data-testid="wealth-no-history">
+            No history yet. The chart starts once there’s more than a day of data.
+          </p>
+        )}
+      </div>
 
       {colored.length > 0 && (
         <div className="grid gap-2">
