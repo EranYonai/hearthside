@@ -65,7 +65,14 @@ export async function registerPasskey<T>(
     details,
   )
   const response = await startRegistration({ optionsJSON })
-  return post<T>(`/api/auth/${kind}/verify`, { response })
+  try {
+    return await post<T>(`/api/auth/${kind}/verify`, { response })
+  } catch (err) {
+    // The phone saved a passkey the server didn't keep: ask it to drop that one, or it
+    // comes up first at every sign-in and fails.
+    await forgetStalePasskey(optionsJSON.rp.id, response.id)
+    throw err
+  }
 }
 
 export async function signInWithPasskey(): Promise<void> {
