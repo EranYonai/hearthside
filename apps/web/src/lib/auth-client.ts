@@ -13,11 +13,17 @@ async function post<T>(url: string, body: unknown): Promise<T> {
   return data
 }
 
+function isApple(): boolean {
+  return typeof navigator !== 'undefined' && /iPhone|iPad|Macintosh/.test(navigator.userAgent)
+}
+
 /** Turns browser WebAuthn errors into something a person can act on. */
 export function explain(err: unknown): string {
   if (err instanceof FlowError) return err.message
   if (err instanceof Error && err.name === 'NotAllowedError') {
-    return 'The passkey prompt was closed or timed out. Try again when you’re ready.'
+    return isApple()
+      ? 'The passkey wasn’t saved. Check that Passwords (iCloud Keychain) is on in Settings, then try again.'
+      : 'The passkey prompt was closed or timed out. Try again when you’re ready.'
   }
   if (err instanceof Error && err.name === 'InvalidStateError') {
     return 'This device already has a passkey for you here.'
