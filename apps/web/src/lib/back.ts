@@ -21,6 +21,13 @@ export interface Visit {
 
 export const MAX_TRAIL = 30
 
+/** Sign-in, sign-up and welcome pages. They never go on the trail, so the app after them starts fresh. */
+const OUTSIDE = /^\/(login|setup|recover|recovered|pending|welcome)(\/|$)|^\/(invite|join)\//
+
+export function outsideTrail(path: string): boolean {
+  return OUTSIDE.test(path)
+}
+
 const pathOf = (url: string) => url.split(/[?#]/)[0] || '/'
 
 /** Where the trail goes after the tab shows `url`. `pop` is a browser back or forward. */

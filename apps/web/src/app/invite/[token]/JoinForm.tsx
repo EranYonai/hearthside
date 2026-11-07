@@ -4,6 +4,7 @@ import { Button, Card, Notice, TextField } from '@hearthside/ui'
 import { KeyRound } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { InAppBrowserNotice } from '@/components/InAppBrowserNotice'
 import { RecoveryCodes } from '@/components/RecoveryCodes'
 import { explain, registerPasskey } from '@/lib/auth-client'
 
@@ -37,6 +38,7 @@ export function JoinForm({ token }: { token: string }) {
           }
         }}
       >
+        <InAppBrowserNotice />
         <TextField
           label="Your name"
           name="name"

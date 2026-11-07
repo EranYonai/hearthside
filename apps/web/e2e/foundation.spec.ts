@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test'
 
-test('home sends visitors to setup or sign-in, with the mark and version', async ({ page }) => {
+test('home shows a fresh server’s setup, or the public page, with the mark and version', async ({
+  page,
+}) => {
   await page.goto('/')
-  await expect(page).toHaveURL(/\/(setup|login)$/)
+  await expect(page).toHaveURL(/\/(setup)?$/)
   await expect(page.getByRole('img', { name: 'Hearthside' })).toBeVisible()
   await expect(page.getByTestId('app-version')).toHaveText(/^Hearthside v\d+\.\d+\.\d+ · \S+$/)
   await expect(page.getByTestId('app-version')).not.toContainText('v0.0.0')

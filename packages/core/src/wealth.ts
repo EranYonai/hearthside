@@ -79,10 +79,12 @@ export function changeOver(values: readonly Minor[]): { minor: Minor; percent: n
 
 /** How far back the wealth chart reaches. */
 export const WEALTH_RANGES = [
-  { key: '6m', label: '6M', years: 0.5 },
-  { key: '1y', label: '1Y', years: 1 },
-  { key: '3y', label: '3Y', years: 3 },
-  { key: '5y', label: '5Y', years: 5 },
+  { key: '1d', label: '1D' },
+  { key: '1w', label: '1W' },
+  { key: '6m', label: '6M' },
+  { key: '1y', label: '1Y' },
+  { key: '3y', label: '3Y' },
+  { key: '5y', label: '5Y' },
 ] as const
 
 export type WealthRange = (typeof WEALTH_RANGES)[number]['key']
@@ -91,22 +93,44 @@ export function isWealthRange(value: unknown): value is WealthRange {
   return WEALTH_RANGES.some((r) => r.key === value)
 }
 
+const DAY = 86_400_000
+const iso = (t: number) => new Date(t).toISOString().slice(0, 10)
+
+/** The first day (YYYY-MM-DD) a wealth range covers, ending `today`. */
+export function wealthRangeStart(range: WealthRange, today: string): string {
+  const end = Date.parse(`${today}T00:00:00Z`)
+  if (range === '1d') return iso(end - DAY)
+  if (range === '1w') return iso(end - 7 * DAY)
+  if (range === '6m') return iso(end - 26 * 7 * DAY)
+  if (range === '1y') return iso(end - 52 * 7 * DAY)
+  const d = new Date(end)
+  d.setUTCFullYear(d.getUTCFullYear() - (range === '3y' ? 3 : 5))
+  return iso(d.getTime())
+}
+
 /**
- * Days for a long chart from `start` to `today`: weekly while it spans about a year or less,
- * then the first of each month, always ending today. Oldest first.
+ * Days for a wealth chart from `start` to `today`, oldest first, always starting on `start` and
+ * ending today: daily for two weeks or less, weekly (counted back from today) up to about a year,
+ * then the first of each month. A start on or after today gives just today.
  */
 export function chartDays(today: string, start: string): string[] {
   const end = Date.parse(`${today}T00:00:00Z`)
-  const from = Math.min(Date.parse(`${start}T00:00:00Z`), end)
-  const weeks = Math.ceil((end - from) / (7 * 86_400_000))
-  if (weeks <= 53) return weeklyDays(today, Math.max(weeks, 1))
-  const days: string[] = []
+  const from = Date.parse(`${start}T00:00:00Z`)
+  if (from >= end) return [today]
+  const span = Math.round((end - from) / DAY)
+  if (span <= 14) return Array.from({ length: span + 1 }, (_, i) => iso(from + i * DAY))
+  if (span <= 53 * 7) {
+    const weekly = weeklyDays(today, Math.floor(span / 7))
+    return weekly[0] === start ? weekly : [start, ...weekly]
+  }
+  const days = [start]
   const d = new Date(from)
   d.setUTCDate(1)
+  d.setUTCMonth(d.getUTCMonth() + 1)
   while (d.getTime() < end) {
-    days.push(d.toISOString().slice(0, 10))
+    days.push(iso(d.getTime()))
     d.setUTCMonth(d.getUTCMonth() + 1)
   }
-  if (days.at(-1) !== today) days.push(today)
+  days.push(today)
   return days
 }

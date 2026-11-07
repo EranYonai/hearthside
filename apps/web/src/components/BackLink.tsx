@@ -7,6 +7,7 @@ import { type ComponentProps, type MouseEvent, useEffect, useRef, useState } fro
 import {
   markReset,
   nameOf,
+  outsideTrail,
   pageTitle,
   readTrail,
   takeReset,
@@ -33,6 +34,12 @@ export function NavTracker() {
 
   useEffect(() => {
     const url = search ? `${pathname}?${search}` : pathname
+    if (outsideTrail(pathname)) {
+      // No "Back to Sign in" once you're in.
+      writeTrail([])
+      window.dispatchEvent(new Event(CHANGED))
+      return
+    }
     const trail = visit(readTrail(), url, { reset: takeReset(), pop: popped.current })
     popped.current = false
     writeTrail(trail)

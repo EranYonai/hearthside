@@ -21,6 +21,9 @@ describe('webauthn', () => {
     ])
     expect(options.rp).toEqual({ name: 'Hearthside', id: 'home.example.com' })
     expect(options.authenticatorSelection?.residentKey).toBe('required')
+    // Saved on this device, so iPhones don't jump to the cross-device QR code.
+    expect(options.authenticatorSelection?.authenticatorAttachment).toBe('platform')
+    expect(options.hints).toEqual(['client-device'])
     expect(options.excludeCredentials).toEqual([
       { id: 'abc', type: 'public-key', transports: ['internal'] },
     ])

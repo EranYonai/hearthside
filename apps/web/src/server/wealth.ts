@@ -8,7 +8,7 @@ import {
   chartDays,
   valuesOn,
   type WealthRange,
-  weeklyDays,
+  wealthRangeStart,
 } from '@hearthside/core'
 import { type MemberRow, schema } from '@hearthside/db'
 import { and, gt, inArray, min } from 'drizzle-orm'
@@ -62,11 +62,16 @@ export interface Wealth {
   missing: { id: string; name: string }[]
   /** Currencies with no rate to `currency`; those amounts are left out. */
   unconverted: string[]
-  /** Points over `range`, oldest first: weekly up to a year, then monthly. Empty when there's nothing to draw. */
   range: WealthRange
-  /** The chart's points, oldest first. */
+  /**
+   * The chart's points over `range`, oldest first: daily up to two weeks, weekly up to a year,
+   * then monthly. It starts later than the range when the household's data does. Empty when
+   * there's nothing to draw.
+   */
   series: WealthPoint[]
-  /** Change since the first point of the series. */
+  /** The day the series starts when that's later than the range's start, else null. */
+  since: string | null
+  /** Change from the first point of the series to today. */
   change: { minor: Minor; percent: number | null }
   /** True when anything is counted at all. */
   any: boolean
@@ -175,36 +180,40 @@ export async function wealth(
     estate.loans.length > 0
 
   let series: WealthPoint[] = []
+  let since: string | null = null
   if (any) {
     const today = dayOf(now)
+    // Ask for more investment history than the range, so a later first point means data starts late.
+    const trendRange = range === '1d' || range === '1w' ? '1m' : range === '6m' ? '1y' : 'all'
     const history =
       invest.accounts.length > 0
-        ? trends(db, member, range === '6m' || range === '1y' ? range : 'all', rates, now, {
-            currency,
-          })
-        : Promise.resolve(null)
-    let days: string[]
-    if (range === '6m') days = weeklyDays(today)
-    else if (range === '1y') days = weeklyDays(today, 52)
-    else {
-      // Years back, but no earlier than the household's first data, so the line isn't flat.
-      const back = new Date(now)
-      back.setUTCFullYear(back.getUTCFullYear() - (range === '3y' ? 3 : 5))
-      const first = await firstDay(db, member, today, (await history)?.series[0]?.on)
-      days = chartDays(today, [back.toISOString().slice(0, 10), first].sort().at(-1)!)
-    }
+        ? await trends(db, member, trendRange, rates, now, { currency })
+        : null
+    const rangeStart = wealthRangeStart(range, today)
+    // Days before any data starts would only repeat the first value, so the chart and its change
+    // start where the earliest data does.
+    const dataStart = [
+      known.length > 0 ? await firstCashDay(db, known) : null,
+      history ? (history.series[0]?.on ?? today) : null,
+    ]
+      .filter((d): d is string => !!d)
+      .sort()[0]
+    const start = dataStart && dataStart > rangeStart ? dataStart : rangeStart
+    if (start > rangeStart) since = start < today ? start : null
+    const days = chartDays(today, start)
     const [cash, invested] = await Promise.all([
       cashHistory(db, known, days, (m) => convertMinor(m, 'ILS', currency, rates) ?? 0),
-      history.then((t) =>
-        t
-          ? // Accounts were held before their first recorded value; carry it back.
-            valuesOn(
-              t.series.map((p) => ({ on: p.on, valueMinor: p.valueMinor })),
-              days,
-              { backfill: true },
-            )
-          : days.map(() => 0),
-      ),
+      history
+        ? // Accounts were held before their first recorded value; carry it back. With no history
+          // at all, today's value is the best guess for the past too.
+          valuesOn(
+            history.series.length > 0
+              ? history.series.map((p) => ({ on: p.on, valueMinor: p.valueMinor }))
+              : [{ on: today, valueMinor: investedMinor }],
+            days,
+            { backfill: true },
+          )
+        : days.map(() => 0),
     ])
     const convert = (minor: Minor, from: string) => convertMinor(minor, from, currency, rates) ?? 0
     series = days.map((on, i) => {
@@ -246,6 +255,7 @@ export async function wealth(
     unconverted: [...unconverted],
     range,
     series,
+    since,
     change: changeOver(series.map((p) => p.totalMinor)),
     any,
   }
@@ -283,15 +293,21 @@ async function cashHistory(
   return totals.map(convert)
 }
 
-/** The earliest day the household has data for: its first transaction or recorded value. */
-async function firstDay(db: Conn, member: MemberRow, today: string, investedFrom?: string) {
-  const visible = (await listAccounts(db, member)).map((a) => a.id)
-  const [row] = visible.length
-    ? await db
-        .select({ on: min(transactions.occurredOn) })
-        .from(transactions)
-        .where(inArray(transactions.accountId, visible))
-    : [{ on: null }]
-  const first = [row?.on, investedFrom].filter((d): d is string => !!d).sort()[0]
-  return first ?? today
+/**
+ * The earliest day the bank balances are known for: the eve of the first transaction they're
+ * worked back through, or the day of the oldest balance when there are none.
+ */
+async function firstCashDay(db: Conn, known: { id: string; on: string }[]): Promise<string> {
+  const [row] = await db
+    .select({ on: min(transactions.occurredOn) })
+    .from(transactions)
+    .where(
+      inArray(
+        transactions.accountId,
+        known.map((k) => k.id),
+      ),
+    )
+  const oldest = known.map((k) => k.on).sort()[0]!
+  if (!row?.on || row.on >= oldest) return oldest
+  return new Date(Date.parse(`${row.on}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10)
 }
