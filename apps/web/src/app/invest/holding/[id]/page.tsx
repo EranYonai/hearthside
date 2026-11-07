@@ -16,6 +16,7 @@ import { requireDb } from '@/lib/db'
 import { LocalTime } from '@/lib/LocalTime'
 import { currentRates } from '@/server/fx'
 import { getHolding, holdingBuys, listHoldings, mayManage } from '@/server/invest'
+import { localFund } from '@/server/local-funds'
 import { keepQuotesFresh, keyStats, priceHistory } from '@/server/prices'
 import { AuthError } from '@/server/repo'
 import { requireSession } from '@/server/session'
@@ -99,12 +100,13 @@ export default async function HoldingPage({
     throw err
   })
   const security = h.kind === 'security'
-  const [history, all, { rates }, lots, stats] = await Promise.all([
+  const [history, all, { rates }, lots, stats, local] = await Promise.all([
     security ? priceHistory(db, { ...h, id: h.instrumentId }, range) : null,
     listHoldings(db, member),
     currentRates(db),
     security ? holdingBuys(db, h) : null,
     security ? keyStats(h) : null,
+    security ? localFund(h) : null,
   ])
   const total = summarizePortfolio(all, member.displayCurrency, rates).totalMinor
   const mine =
@@ -232,7 +234,7 @@ export default async function HoldingPage({
         </Card>
       )}
 
-      {stats && (
+      {(stats || local) && (
         <Card aria-labelledby="stats-title">
           <h2 id="stats-title" className="font-display text-heading">
             Key stats
@@ -240,31 +242,60 @@ export default async function HoldingPage({
           <dl className="grid grid-cols-2 gap-3" data-testid="key-stats">
             {(
               [
-                ['Market cap', stats.marketCap !== null && compact(stats.marketCap, h.currency)],
-                ['Fund size', stats.fundSize !== null && compact(stats.fundSize, h.currency)],
-                ['P/E', stats.pe !== null && stats.pe.toFixed(1)],
-                ['Forward P/E', stats.forwardPe !== null && stats.forwardPe.toFixed(1)],
-                ['EPS', stats.eps !== null && priceText(String(stats.eps), h.currency)],
-                ['Revenue', stats.revenue !== null && compact(stats.revenue)],
-                ['Net income', stats.netIncome !== null && compact(stats.netIncome)],
-                ['Profit margin', stats.profitMargin !== null && ratioText(stats.profitMargin, 1)],
-                ['Dividend yield', stats.dividendYield !== null && ratioText(stats.dividendYield)],
-                [
-                  '52-week range',
-                  stats.low52 !== null &&
-                    stats.high52 !== null &&
-                    `${priceText(String(stats.low52), h.currency)} – ${priceText(String(stats.high52), h.currency)}`,
-                ],
-                ['Beta', stats.beta !== null && stats.beta.toFixed(2)],
-                ['Return this year', stats.ytdReturn !== null && percentText(stats.ytdReturn)],
-                [
-                  '5-year average return',
-                  stats.fiveYearReturn !== null && percentText(stats.fiveYearReturn),
-                ],
-                ['Sector', stats.sector],
-                ['Industry', stats.industry],
-                ['Category', stats.category],
-                ['Fund manager', stats.family],
+                ...(stats
+                  ? [
+                      [
+                        'Market cap',
+                        stats.marketCap !== null && compact(stats.marketCap, h.currency),
+                      ],
+                      ['Fund size', stats.fundSize !== null && compact(stats.fundSize, h.currency)],
+                      ['P/E', stats.pe !== null && stats.pe.toFixed(1)],
+                      ['Forward P/E', stats.forwardPe !== null && stats.forwardPe.toFixed(1)],
+                      ['EPS', stats.eps !== null && priceText(String(stats.eps), h.currency)],
+                      ['Revenue', stats.revenue !== null && compact(stats.revenue)],
+                      ['Net income', stats.netIncome !== null && compact(stats.netIncome)],
+                      [
+                        'Profit margin',
+                        stats.profitMargin !== null && ratioText(stats.profitMargin, 1),
+                      ],
+                      [
+                        'Dividend yield',
+                        stats.dividendYield !== null && ratioText(stats.dividendYield),
+                      ],
+                      [
+                        '52-week range',
+                        stats.low52 !== null &&
+                          stats.high52 !== null &&
+                          `${priceText(String(stats.low52), h.currency)} – ${priceText(String(stats.high52), h.currency)}`,
+                      ],
+                      ['Beta', stats.beta !== null && stats.beta.toFixed(2)],
+                      [
+                        'Return this year',
+                        stats.ytdReturn !== null && percentText(stats.ytdReturn),
+                      ],
+                      [
+                        '5-year average return',
+                        stats.fiveYearReturn !== null && percentText(stats.fiveYearReturn),
+                      ],
+                      ['Sector', stats.sector],
+                      ['Industry', stats.industry],
+                      ['Category', stats.category],
+                      ['Fund manager', stats.family],
+                    ]
+                  : []),
+                ...(local
+                  ? [
+                      ['Classification', local.classification.join(' · ')],
+                      ['Fund type', local.types.join(', ')],
+                      [
+                        'Share exposure',
+                        local.shareExposure ?? (local.exposure && `Profile ${local.exposure}`),
+                      ],
+                      ['Foreign currency exposure', local.currencyExposure],
+                      ['Invests in', local.underlying.join(', ')],
+                      ['ISIN', local.isin],
+                    ]
+                  : []),
               ] as [string, string | false | null][]
             )
               .filter((row): row is [string, string] => !!row[1])
@@ -275,7 +306,8 @@ export default async function HoldingPage({
               ))}
           </dl>
           <p className="text-caption text-ink-muted">
-            From the quote source, updated daily. Only the symbol is sent.
+            {stats && 'From the quote source, updated daily. Only the symbol is sent. '}
+            {local && 'Fund details from the local exchange’s fund list, updated daily.'}
           </p>
         </Card>
       )}

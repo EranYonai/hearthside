@@ -10,4 +10,6 @@ if [ ! -f secrets/encryption_key.txt ]; then
   (umask 077 && openssl rand -base64 32 > secrets/encryption_key.txt)
   echo "Created secrets/encryption_key.txt. Back it up offline: without it the data can't be read." >&2
 fi
+# Optional; empty keeps local fund details off (docs/self-hosting.md).
+[ -f secrets/fund_data_key.txt ] || (umask 077 && : > secrets/fund_data_key.txt)
 exec docker compose up -d --build "$@"

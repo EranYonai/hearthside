@@ -13,6 +13,7 @@ import {
 } from '../decide'
 import { normalizeDescription } from '../import/values'
 import { matchKeyword } from './keywords'
+import { LEARN_MIN_CONFIDENCE, type LearnedModel } from './learned'
 
 /** What the categorizer looks at. Only the description and the amount are required. */
 export interface CategorizeInput {
@@ -30,7 +31,7 @@ export interface CategorizeInput {
 }
 
 /** Where a category came from, strongest first. */
-export type CategoryVia = 'rule' | 'history' | 'keyword' | 'model'
+export type CategoryVia = 'rule' | 'history' | 'keyword' | 'learned' | 'model'
 
 export interface CategorySuggestion {
   /** null when nothing was sure enough. */
@@ -62,6 +63,10 @@ export interface CategorizeContext {
   history?: ReadonlyMap<string, HistoryEntry>
   /** The household's own categories; their keywords join the built-in list. */
   custom?: readonly CustomCategory[]
+  /** Trained on the household's manual picks (see trainLearned); null until there are enough. */
+  learned?: LearnedModel | null
+  /** Keep learned guesses at or above this probability. Default LEARN_MIN_CONFIDENCE. */
+  minLearnedConfidence?: number
   /** The model. Leave out to run rules, history and keywords only. */
   engine?: DecisionEngine | null
   /** Keep model answers at or above this probability. Default 0.6. */
@@ -178,6 +183,23 @@ export function categorizeFast(
     const hit = matchKeyword(normalizeDescription(input.description), input.amountMinor, ctx.custom)
     if (hit)
       return { category: hit.category, via: 'keyword', confidence: 0.8, reason: `“${hit.word}”` }
+  }
+  if (!skip.has('learned') && ctx.learned) {
+    const g = ctx.learned.guess(input.description, input.amountMinor)
+    if (
+      g &&
+      set.has(g.category) &&
+      g.confidence >= (ctx.minLearnedConfidence ?? LEARN_MIN_CONFIDENCE)
+    )
+      return {
+        category: g.category,
+        via: 'learned',
+        confidence: g.confidence,
+        reason: `like past picks with ${g.words
+          .slice(0, 3)
+          .map((w) => `“${w}”`)
+          .join(', ')}`,
+      }
   }
   return NONE
 }

@@ -86,6 +86,13 @@ The same feed fills in the add holding form (name, currency, price) and each hol
 and fund facts, which are cached for a day. For those it first picks up a session cookie from
 `QUOTES_COOKIE_URL` (the feed's default if unset). Again, only the ticker is sent.
 
+Local fund numbers often aren't known to that feed. For those, the app can show the fund's name,
+classification, share and foreign currency exposure and what it invests in, from the local
+exchange's fund data service. That service needs a free key: put it in
+`secrets/fund_data_key.txt` and restart. The app fetches the whole fund list once a day; the
+request is the same for everyone, so nothing about your holdings is sent. An empty file (what
+`pnpm stack` creates) or `FUND_DATA_URL=off` keeps it off.
+
 ## Backups
 
 See [Backups](backups.md). Set `BACKUP_RECIPIENT` before going live, then download backups from Settings.
